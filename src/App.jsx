@@ -4,7 +4,7 @@ import Login from './components/auth/Login';
 import Sidebar from './components/layout/Sidebar';
 import PMDashboard from './components/dashboards/PMDashboard';
 import CalendarPage from './components/calendar/CalendarPage';
-import TasksPage from './components/pages/TasksPage';
+import TasksPage from './components/dashboards/TasksPage';
 import './App.css';
 
 // ============================================================================
