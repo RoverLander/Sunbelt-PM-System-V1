@@ -1,7 +1,5 @@
 // ============================================================================
-// Floor Plans Components - Index
-// ============================================================================
-// Export all floor plan related components for easy importing
+// FLOOR PLANS COMPONENT EXPORTS
 // ============================================================================
 
 export { default as FloorPlansTab } from './FloorPlansTab';
