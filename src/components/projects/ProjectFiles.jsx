@@ -16,7 +16,9 @@ import {
   Calendar,
   User,
   X,
-  Loader
+  Loader,
+  Map,
+  MapPin
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -24,19 +26,24 @@ import { useAuth } from '../../context/AuthContext';
 function ProjectFiles({ projectId, onUpdate }) {
   const { user } = useAuth();
   const [attachments, setAttachments] = useState([]);
+  const [floorPlans, setFloorPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all'); // all, task, rfi, submittal, project
+  const [filterType, setFilterType] = useState('all'); // all, task, rfi, submittal, project, floorplan
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (projectId) {
       fetchAttachments();
+      fetchFloorPlans();
     }
   }, [projectId]);
 
+  // ==========================================================================
+  // FETCH ATTACHMENTS
+  // ==========================================================================
   const fetchAttachments = async () => {
     setLoading(true);
     try {
@@ -61,7 +68,33 @@ function ProjectFiles({ projectId, onUpdate }) {
     }
   };
 
-  const getFileIcon = (fileType) => {
+  // ==========================================================================
+  // FETCH FLOOR PLANS
+  // ==========================================================================
+  const fetchFloorPlans = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('floor_plans')
+        .select(`
+          *,
+          markers:floor_plan_markers(id)
+        `)
+        .eq('project_id', projectId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setFloorPlans(data || []);
+    } catch (error) {
+      console.error('Error fetching floor plans:', error);
+    }
+  };
+
+  // ==========================================================================
+  // HELPERS
+  // ==========================================================================
+  const getFileIcon = (fileType, isFloorPlan = false) => {
+    if (isFloorPlan) return <Map size={20} style={{ color: 'var(--sunbelt-orange)' }} />;
     if (fileType?.startsWith('image/')) return <Image size={20} style={{ color: 'var(--info)' }} />;
     if (fileType?.includes('pdf')) return <FileText size={20} style={{ color: '#ef4444' }} />;
     if (fileType?.includes('word') || fileType?.includes('document')) return <FileText size={20} style={{ color: '#3b82f6' }} />;
@@ -105,6 +138,9 @@ function ProjectFiles({ projectId, onUpdate }) {
     return { type: 'Project', label: 'General Project File', icon: FolderOpen, color: 'var(--sunbelt-orange)' };
   };
 
+  // ==========================================================================
+  // FILE UPLOAD
+  // ==========================================================================
   const handleFileSelect = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -154,7 +190,10 @@ function ProjectFiles({ projectId, onUpdate }) {
     }
   };
 
-  const handleDelete = async (attachment) => {
+  // ==========================================================================
+  // DELETE HANDLERS
+  // ==========================================================================
+  const handleDeleteAttachment = async (attachment) => {
     try {
       await supabase.storage.from('project-files').remove([attachment.storage_path]);
       await supabase.from('attachments').delete().eq('id', attachment.id);
@@ -168,15 +207,64 @@ function ProjectFiles({ projectId, onUpdate }) {
     }
   };
 
-  // Filter and search
+  const handleDeleteFloorPlan = async (plan) => {
+    try {
+      // Delete from storage
+      await supabase.storage.from('project-files').remove([plan.file_path]);
+      
+      // Soft delete the record
+      await supabase
+        .from('floor_plans')
+        .update({ is_active: false })
+        .eq('id', plan.id);
+      
+      setFloorPlans(prev => prev.filter(p => p.id !== plan.id));
+      setDeleteConfirm(null);
+      
+      if (onUpdate) onUpdate();
+    } catch (error) {
+      console.error('Error deleting floor plan:', error);
+    }
+  };
+
+  // ==========================================================================
+  // DOWNLOAD HANDLER
+  // ==========================================================================
+  const handleDownload = async (item, isFloorPlan = false) => {
+    try {
+      const storagePath = isFloorPlan ? item.file_path : item.storage_path;
+      const fileName = isFloorPlan ? item.file_name : item.file_name;
+      
+      const { data } = await supabase.storage
+        .from('project-files')
+        .download(storagePath);
+
+      if (data) {
+        const url = URL.createObjectURL(data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('Error downloading file:', error);
+    }
+  };
+
+  // ==========================================================================
+  // FILTER AND SEARCH
+  // ==========================================================================
   const filteredAttachments = attachments.filter(att => {
-    // Filter by type
-    if (filterType !== 'all') {
+    if (filterType === 'floorplan') return false;
+    
+    if (filterType !== 'all' && filterType !== 'floorplan') {
       const assocType = getAssociationType(att);
       if (filterType !== assocType) return false;
     }
 
-    // Search
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
       const matchesName = att.file_name?.toLowerCase().includes(search);
@@ -190,62 +278,60 @@ function ProjectFiles({ projectId, onUpdate }) {
     return true;
   });
 
-  // Count by type
-  const counts = {
-    all: attachments.length,
-    task: attachments.filter(a => a.task_id).length,
-    rfi: attachments.filter(a => a.rfi_id).length,
-    submittal: attachments.filter(a => a.submittal_id).length,
-    project: attachments.filter(a => !a.task_id && !a.rfi_id && !a.submittal_id).length
-  };
+  const filteredFloorPlans = floorPlans.filter(plan => {
+    if (filterType !== 'all' && filterType !== 'floorplan') return false;
 
-  if (loading) {
-    return (
-      <div style={{ 
-        padding: 'var(--space-2xl)', 
-        textAlign: 'center',
-        color: 'var(--text-secondary)'
-      }}>
-        <Loader size={32} className="spin" style={{ margin: '0 auto var(--space-md)' }} />
-        <p>Loading files...</p>
-        <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      if (!plan.name?.toLowerCase().includes(search) && !plan.file_name?.toLowerCase().includes(search)) {
+        return false;
+      }
+    }
 
+    return true;
+  });
+
+  // Combine for display
+  const showFloorPlans = filterType === 'all' || filterType === 'floorplan';
+  const showAttachments = filterType !== 'floorplan';
+
+  const totalCount = (showAttachments ? filteredAttachments.length : 0) + (showFloorPlans ? filteredFloorPlans.length : 0);
+
+  // ==========================================================================
+  // RENDER
+  // ==========================================================================
   return (
-    <div>
+    <div style={{ 
+      background: 'var(--bg-secondary)', 
+      borderRadius: 'var(--radius-lg)', 
+      padding: 'var(--space-lg)', 
+      border: '1px solid var(--border-color)' 
+    }}>
       {/* Header */}
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
-        alignItems: 'center',
-        marginBottom: 'var(--space-lg)'
+        alignItems: 'center', 
+        marginBottom: 'var(--space-lg)' 
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-          <FolderOpen size={24} style={{ color: 'var(--sunbelt-orange)' }} />
-          <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
-            Project Files
-          </h3>
-          <span style={{ 
-            background: 'var(--bg-tertiary)', 
-            color: 'var(--text-secondary)',
-            padding: '2px 10px',
-            borderRadius: '12px',
-            fontSize: '0.875rem',
-            fontWeight: '600'
-          }}>
-            {attachments.length}
-          </span>
-        </div>
-
+        <h3 style={{ 
+          fontSize: '1rem', 
+          fontWeight: '700', 
+          color: 'var(--text-primary)', 
+          margin: 0 
+        }}>
+          Project Files ({attachments.length + floorPlans.length})
+        </h3>
         <label style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 'var(--space-sm)',
-          padding: 'var(--space-sm) var(--space-md)',
-          background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+          gap: 'var(--space-xs)',
+          padding: '8px 16px',
+          background: uploading 
+            ? 'var(--bg-tertiary)' 
+            : 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
           color: 'white',
+          border: 'none',
           borderRadius: 'var(--radius-md)',
           cursor: uploading ? 'not-allowed' : 'pointer',
           fontWeight: '600',
@@ -312,10 +398,12 @@ function ProjectFiles({ projectId, onUpdate }) {
           background: 'var(--bg-secondary)',
           padding: '4px',
           borderRadius: 'var(--radius-md)',
-          border: '1px solid var(--border-color)'
+          border: '1px solid var(--border-color)',
+          flexWrap: 'wrap'
         }}>
           {[
             { key: 'all', label: 'All', icon: Paperclip },
+            { key: 'floorplan', label: 'Floor Plans', icon: Map },
             { key: 'task', label: 'Tasks', icon: CheckSquare },
             { key: 'rfi', label: 'RFIs', icon: MessageSquare },
             { key: 'submittal', label: 'Submittals', icon: ClipboardList },
@@ -335,270 +423,416 @@ function ProjectFiles({ projectId, onUpdate }) {
                   border: 'none',
                   borderRadius: 'var(--radius-sm)',
                   background: isActive ? 'var(--bg-primary)' : 'transparent',
-                  color: isActive ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
-                  fontWeight: '600',
-                  fontSize: '0.8125rem',
+                  color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
                   cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  boxShadow: isActive ? 'var(--shadow-sm)' : 'none'
+                  fontWeight: isActive ? '600' : '500',
+                  fontSize: '0.8125rem',
+                  transition: 'all 0.15s'
                 }}
               >
                 <Icon size={14} />
                 {filter.label}
-                <span style={{
-                  background: isActive ? 'rgba(255, 107, 53, 0.15)' : 'var(--bg-tertiary)',
-                  padding: '1px 6px',
-                  borderRadius: '10px',
-                  fontSize: '0.75rem'
-                }}>
-                  {counts[filter.key]}
-                </span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Files List */}
-      {filteredAttachments.length === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: 'var(--space-2xl)',
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border-color)'
+      {/* Loading State */}
+      {loading ? (
+        <div style={{ 
+          textAlign: 'center', 
+          padding: 'var(--space-2xl)', 
+          color: 'var(--text-secondary)' 
         }}>
-          <FolderOpen size={48} style={{ color: 'var(--text-tertiary)', marginBottom: 'var(--space-md)' }} />
+          <div className="loading-spinner" style={{ marginBottom: 'var(--space-md)' }}></div>
+          <p>Loading files...</p>
+        </div>
+      ) : totalCount === 0 ? (
+        /* Empty State */
+        <div style={{ 
+          textAlign: 'center', 
+          padding: 'var(--space-2xl)', 
+          color: 'var(--text-tertiary)' 
+        }}>
+          <FolderOpen size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
           <h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>
-            {searchTerm || filterType !== 'all' ? 'No files match your search' : 'No files yet'}
+            No files yet
           </h4>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-            {searchTerm || filterType !== 'all' 
-              ? 'Try adjusting your search or filter'
-              : 'Upload files or attach them to tasks, RFIs, and submittals'
-            }
-          </p>
+          <p>Upload files or attachments from Tasks, RFIs, and Submittals will appear here</p>
         </div>
       ) : (
-        <div style={{
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border-color)',
-          overflow: 'hidden'
-        }}>
-          {/* Table Header */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 180px 150px 100px 80px',
-            gap: 'var(--space-md)',
-            padding: 'var(--space-md) var(--space-lg)',
-            background: 'var(--bg-tertiary)',
-            borderBottom: '1px solid var(--border-color)',
-            fontSize: '0.75rem',
-            fontWeight: '600',
-            color: 'var(--text-secondary)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em'
-          }}>
-            <div>File Name</div>
-            <div>Associated With</div>
-            <div>Uploaded By</div>
-            <div>Size</div>
-            <div style={{ textAlign: 'right' }}>Actions</div>
-          </div>
+        /* File List */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+          
+          {/* Floor Plans Section */}
+          {showFloorPlans && filteredFloorPlans.length > 0 && (
+            <>
+              {filterType === 'all' && (
+                <div style={{ 
+                  fontSize: '0.75rem', 
+                  fontWeight: '600', 
+                  color: 'var(--text-tertiary)', 
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginTop: 'var(--space-sm)',
+                  marginBottom: 'var(--space-xs)'
+                }}>
+                  Floor Plans ({filteredFloorPlans.length})
+                </div>
+              )}
+              {filteredFloorPlans.map(plan => (
+                <div
+                  key={`fp-${plan.id}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-md)',
+                    padding: 'var(--space-md)',
+                    background: 'var(--bg-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  {/* Icon */}
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'rgba(255, 107, 53, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    {getFileIcon(plan.file_type, true)}
+                  </div>
 
-          {/* File Rows */}
-          {filteredAttachments.map(attachment => {
-            const association = getAssociationLabel(attachment);
-            const AssocIcon = association.icon;
-
-            return (
-              <div 
-                key={attachment.id}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 180px 150px 100px 80px',
-                  gap: 'var(--space-md)',
-                  padding: 'var(--space-md) var(--space-lg)',
-                  borderBottom: '1px solid var(--border-color)',
-                  alignItems: 'center',
-                  transition: 'background 0.15s'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.background = 'var(--bg-primary)'}
-                onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
-              >
-                {/* File Name */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', minWidth: 0 }}>
-                  {getFileIcon(attachment.file_type)}
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{
-                      fontWeight: '500',
+                  {/* File Info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ 
+                      fontWeight: '600', 
                       color: 'var(--text-primary)',
-                      whiteSpace: 'nowrap',
+                      marginBottom: '2px',
                       overflow: 'hidden',
-                      textOverflow: 'ellipsis'
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
                     }}>
-                      {attachment.file_name}
+                      {plan.name}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                      {formatDate(attachment.created_at)}
+                    <div style={{ 
+                      fontSize: '0.8125rem', 
+                      color: 'var(--text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-sm)',
+                      flexWrap: 'wrap'
+                    }}>
+                      <span>{formatFileSize(plan.file_size)}</span>
+                      <span>•</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <MapPin size={12} />
+                        {plan.markers?.length || 0} markers
+                      </span>
+                      {plan.page_count > 1 && (
+                        <>
+                          <span>•</span>
+                          <span>{plan.page_count} pages</span>
+                        </>
+                      )}
                     </div>
                   </div>
-                </div>
 
-                {/* Association */}
-                <div style={{ minWidth: 0 }}>
+                  {/* Association Badge */}
                   <div style={{
-                    display: 'inline-flex',
+                    display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
                     padding: '4px 10px',
-                    background: `${association.color}15`,
-                    borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(255, 107, 53, 0.1)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--sunbelt-orange)',
                     fontSize: '0.75rem',
-                    fontWeight: '600',
-                    color: association.color,
-                    maxWidth: '100%'
+                    fontWeight: '600'
                   }}>
-                    <AssocIcon size={12} />
-                    <span style={{
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
+                    <Map size={12} />
+                    Floor Plan
+                  </div>
+
+                  {/* Date */}
+                  <div style={{ 
+                    fontSize: '0.8125rem', 
+                    color: 'var(--text-tertiary)',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {formatDate(plan.created_at)}
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                      onClick={() => handleDownload(plan, true)}
+                      style={{
+                        padding: '8px',
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-md)',
+                        cursor: 'pointer',
+                        color: 'var(--text-secondary)',
+                        display: 'flex'
+                      }}
+                      title="Download"
+                    >
+                      <Download size={16} />
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirm({ type: 'floorplan', item: plan })}
+                      style={{
+                        padding: '8px',
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-md)',
+                        cursor: 'pointer',
+                        color: 'var(--danger)',
+                        display: 'flex'
+                      }}
+                      title="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* Attachments Section */}
+          {showAttachments && filteredAttachments.length > 0 && (
+            <>
+              {filterType === 'all' && filteredFloorPlans.length > 0 && (
+                <div style={{ 
+                  fontSize: '0.75rem', 
+                  fontWeight: '600', 
+                  color: 'var(--text-tertiary)', 
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginTop: 'var(--space-md)',
+                  marginBottom: 'var(--space-xs)'
+                }}>
+                  Attachments ({filteredAttachments.length})
+                </div>
+              )}
+              {filteredAttachments.map(attachment => {
+                const assoc = getAssociationLabel(attachment);
+                const AssocIcon = assoc.icon;
+                
+                return (
+                  <div
+                    key={attachment.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-md)',
+                      padding: 'var(--space-md)',
+                      background: 'var(--bg-primary)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-color)',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    {/* Icon */}
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--bg-tertiary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
                     }}>
-                      {association.type}
-                    </span>
-                  </div>
-                  <div style={{
-                    fontSize: '0.75rem',
-                    color: 'var(--text-secondary)',
-                    marginTop: '2px',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }}>
-                    {association.label}
-                  </div>
-                </div>
+                      {getFileIcon(attachment.file_type)}
+                    </div>
 
-                {/* Uploaded By */}
-                <div style={{
-                  fontSize: '0.875rem',
-                  color: 'var(--text-secondary)',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis'
-                }}>
-                  {attachment.uploader?.name || 'Unknown'}
-                </div>
+                    {/* File Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ 
+                        fontWeight: '600', 
+                        color: 'var(--text-primary)',
+                        marginBottom: '2px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {attachment.file_name}
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.8125rem', 
+                        color: 'var(--text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 'var(--space-sm)'
+                      }}>
+                        <span>{formatFileSize(attachment.file_size)}</span>
+                        {attachment.uploader && (
+                          <>
+                            <span>•</span>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <User size={12} />
+                              {attachment.uploader.name}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
 
-                {/* Size */}
-                <div style={{
-                  fontSize: '0.875rem',
-                  color: 'var(--text-secondary)'
-                }}>
-                  {formatFileSize(attachment.file_size)}
-                </div>
-
-                {/* Actions */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-xs)' }}>
-                  <button
-                    onClick={() => window.open(attachment.public_url, '_blank')}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      padding: '6px',
+                    {/* Association Badge */}
+                    <div style={{
                       display: 'flex',
-                      borderRadius: 'var(--radius-sm)',
-                      transition: 'all 0.15s'
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.color = 'var(--info)'}
-                    onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
-                    title="Download"
-                  >
-                    <Download size={16} />
-                  </button>
-                  <button
-                    onClick={() => setDeleteConfirm(attachment)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      padding: '6px',
-                      display: 'flex',
-                      borderRadius: 'var(--radius-sm)',
-                      transition: 'all 0.15s'
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.color = 'var(--danger)'}
-                    onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
-                    title="Delete"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '4px 10px',
+                      background: `${assoc.color}15`,
+                      borderRadius: 'var(--radius-md)',
+                      color: assoc.color,
+                      fontSize: '0.75rem',
+                      fontWeight: '600',
+                      maxWidth: '200px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      <AssocIcon size={12} />
+                      {assoc.type}
+                    </div>
+
+                    {/* Date */}
+                    <div style={{ 
+                      fontSize: '0.8125rem', 
+                      color: 'var(--text-tertiary)',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {formatDate(attachment.created_at)}
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <button
+                        onClick={() => handleDownload(attachment)}
+                        style={{
+                          padding: '8px',
+                          background: 'var(--bg-secondary)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-md)',
+                          cursor: 'pointer',
+                          color: 'var(--text-secondary)',
+                          display: 'flex'
+                        }}
+                        title="Download"
+                      >
+                        <Download size={16} />
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm({ type: 'attachment', item: attachment })}
+                        style={{
+                          padding: '8px',
+                          background: 'var(--bg-secondary)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-md)',
+                          cursor: 'pointer',
+                          color: 'var(--danger)',
+                          display: 'flex'
+                        }}
+                        title="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
       )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.7)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1001,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: 'var(--bg-primary)',
-            borderRadius: 'var(--radius-lg)',
-            padding: 'var(--space-xl)',
-            maxWidth: '400px',
-            width: '100%',
-            boxShadow: 'var(--shadow-xl)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
-              <div style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                background: 'var(--danger-light)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Trash2 size={20} style={{ color: 'var(--danger)' }} />
-              </div>
-              <h3 style={{ color: 'var(--text-primary)', margin: 0 }}>Delete File?</h3>
-            </div>
-
-            <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)', fontSize: '0.9375rem' }}>
-              Are you sure you want to delete <strong style={{ color: 'var(--text-primary)' }}>{deleteConfirm.file_name}</strong>? This action cannot be undone.
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}
+          onClick={() => setDeleteConfirm(null)}
+        >
+          <div
+            style={{
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-lg)',
+              padding: 'var(--space-xl)',
+              maxWidth: '400px',
+              width: '90%',
+              border: '1px solid var(--border-color)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ 
+              color: 'var(--text-primary)', 
+              marginBottom: 'var(--space-md)',
+              fontSize: '1.125rem'
+            }}>
+              Delete {deleteConfirm.type === 'floorplan' ? 'Floor Plan' : 'File'}?
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
+              Are you sure you want to delete "{deleteConfirm.type === 'floorplan' ? deleteConfirm.item.name : deleteConfirm.item.file_name}"?
+              {deleteConfirm.type === 'floorplan' && deleteConfirm.item.markers?.length > 0 && (
+                <span style={{ color: 'var(--warning)', display: 'block', marginTop: 'var(--space-sm)' }}>
+                  This will also remove {deleteConfirm.item.markers.length} marker(s) placed on this floor plan.
+                </span>
+              )}
             </p>
-
             <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'flex-end' }}>
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="btn btn-secondary"
+                style={{
+                  padding: '8px 16px',
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontWeight: '500'
+                }}
               >
                 Cancel
               </button>
               <button
-                onClick={() => handleDelete(deleteConfirm)}
-                className="btn btn-danger"
+                onClick={() => {
+                  if (deleteConfirm.type === 'floorplan') {
+                    handleDeleteFloorPlan(deleteConfirm.item);
+                  } else {
+                    handleDeleteAttachment(deleteConfirm.item);
+                  }
+                }}
+                style={{
+                  padding: '8px 16px',
+                  background: 'var(--danger)',
+                  border: 'none',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontWeight: '600'
+                }}
               >
-                <Trash2 size={16} />
                 Delete
               </button>
             </div>
