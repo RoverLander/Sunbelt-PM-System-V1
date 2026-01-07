@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft, Edit, Calendar, DollarSign, CheckSquare, MessageSquare,
   ClipboardList, FolderOpen, Plus, Building2, Target, AlertCircle,
-  Download, ChevronRight, Flag
+  Download, ChevronRight, Flag, Map
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -26,16 +26,12 @@ import ProjectFiles from './ProjectFiles';
 import ProjectCalendarWeek from './ProjectCalendarWeek';
 import ProjectCalendarMonth from './ProjectCalendarMonth';
 import TasksView from './TasksView';
+import { FloorPlansTab } from '../floorplans';
 
 // ============================================================================
 // MAIN COMPONENT
-// Props:
-//   - project: The project object to display
-//   - initialTab: Optional - which tab to open (Overview, Tasks, RFIs, Submittals, Calendar, Files)
-//   - onBack: Callback when back button is clicked
-//   - onUpdate: Callback when project is updated
 // ============================================================================
-function ProjectDetails({ project: initialProject, initialTab = 'Overview', onBack, onUpdate }) {
+function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab = 'Overview' }) {
   const { user } = useAuth();
 
   // ==========================================================================
@@ -50,7 +46,6 @@ function ProjectDetails({ project: initialProject, initialTab = 'Overview', onBa
 
   // ==========================================================================
   // STATE - UI CONTROLS
-  // Use initialTab prop to set the starting tab
   // ==========================================================================
   const [activeTab, setActiveTab] = useState(initialTab);
   const [toast, setToast] = useState(null);
@@ -74,20 +69,14 @@ function ProjectDetails({ project: initialProject, initialTab = 'Overview', onBa
   // ==========================================================================
   // CONSTANTS
   // ==========================================================================
-  const tabs = ['Overview', 'Tasks', 'RFIs', 'Submittals', 'Calendar', 'Files'];
+  const tabs = ['Overview', 'Tasks', 'RFIs', 'Submittals', 'Calendar', 'Files', 'Floor Plans'];
 
   // ==========================================================================
   // EFFECTS
   // ==========================================================================
   useEffect(() => { setProject(initialProject); }, [initialProject]);
   useEffect(() => { if (project?.id) fetchProjectData(); }, [project?.id]);
-  
-  // Update activeTab when initialTab prop changes (for deep navigation)
-  useEffect(() => { 
-    if (initialTab && tabs.includes(initialTab)) {
-      setActiveTab(initialTab); 
-    }
-  }, [initialTab]);
+  useEffect(() => { setActiveTab(initialTab); }, [initialTab]);
 
   // ==========================================================================
   // DATA FETCHING
@@ -126,25 +115,32 @@ function ProjectDetails({ project: initialProject, initialTab = 'Overview', onBa
   // FORMATTING HELPERS
   // ==========================================================================
   const formatCurrency = (amount) => !amount ? 'Not set' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
-  const formatDate = (dateString) => !dateString ? 'Not set' : new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const formatDate = (dateString) => !dateString ? 'Not set' : new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const calculateDaysOpen = (createdAt, status) => {
+    if (['Closed', 'Answered'].includes(status)) return 0;
+    const created = new Date(createdAt);
+    const now = new Date();
+    return Math.floor((now - created) / (1000 * 60 * 60 * 24));
+  };
 
   // ==========================================================================
   // STATUS COLOR HELPERS
   // ==========================================================================
-  const getStatusColor = (status) => ({ 'Planning': 'var(--info)', 'Pre-PM': 'var(--warning)', 'PM Handoff': 'var(--sunbelt-orange)', 'In Progress': 'var(--sunbelt-orange)', 'On Hold': 'var(--text-tertiary)', 'Completed': 'var(--success)', 'Cancelled': 'var(--danger)', 'Warranty': 'var(--info)' })[status] || 'var(--text-secondary)';
-  const getRFIStatusColor = (status) => ({ 'Open': 'var(--sunbelt-orange)', 'Pending': 'var(--warning)', 'Answered': 'var(--success)', 'Closed': 'var(--text-tertiary)' })[status] || 'var(--text-secondary)';
-  const getSubmittalStatusColor = (status) => ({ 'Pending': 'var(--text-tertiary)', 'Submitted': 'var(--sunbelt-orange)', 'Under Review': 'var(--warning)', 'Approved': 'var(--success)', 'Approved as Noted': 'var(--info)', 'Rejected': 'var(--danger)', 'Resubmit': 'var(--warning)' })[status] || 'var(--text-secondary)';
+  const getStatusColor = (status) => {
+    const colors = { 'Planning': 'var(--info)', 'Pre-PM': 'var(--warning)', 'In Progress': 'var(--sunbelt-orange)', 'On Hold': 'var(--text-tertiary)', 'Completed': 'var(--success)', 'Cancelled': 'var(--danger)', 'Warranty': 'var(--info)' };
+    return colors[status] || 'var(--text-secondary)';
+  };
+  const getRFIStatusColor = (status) => {
+    const colors = { 'Open': '#3b82f6', 'Pending': '#f59e0b', 'Answered': '#22c55e', 'Closed': '#64748b' };
+    return colors[status] || '#64748b';
+  };
+  const getSubmittalStatusColor = (status) => {
+    const colors = { 'Pending': '#f59e0b', 'Submitted': '#3b82f6', 'Under Review': '#8b5cf6', 'Approved': '#22c55e', 'Approved as Noted': '#22c55e', 'Revise & Resubmit': '#ef4444', 'Rejected': '#ef4444' };
+    return colors[status] || '#64748b';
+  };
 
   // ==========================================================================
-  // COMPUTED VALUES FOR STATS
-  // ==========================================================================
-  const completedTasks = tasks.filter(t => t.status === 'Completed').length;
-  const openRFIs = rfis.filter(r => r.status === 'Open').length;
-  const approvedSubmittals = submittals.filter(s => ['Approved', 'Approved as Noted'].includes(s.status)).length;
-  const calculateDaysOpen = (createdAt, status) => { if (status === 'Closed') return '-'; return Math.ceil(Math.abs(new Date() - new Date(createdAt)) / (1000 * 60 * 60 * 24)); };
-
-  // ==========================================================================
-  // EXPORT FUNCTIONS - CSV Downloads
+  // EXPORT FUNCTIONS
   // ==========================================================================
   const exportRFILog = () => {
     const headers = ['RFI #', 'Subject', 'Status', 'Sent To', 'Date Sent', 'Due Date', 'Days Open', 'Question', 'Answer'];
@@ -184,9 +180,23 @@ function ProjectDetails({ project: initialProject, initialTab = 'Overview', onBa
   };
 
   // ==========================================================================
+  // COMPUTED VALUES
+  // ==========================================================================
+  const completedTasks = tasks.filter(t => t.status === 'Completed').length;
+  const openRFIs = rfis.filter(r => r.status === 'Open').length;
+  const approvedSubmittals = submittals.filter(s => ['Approved', 'Approved as Noted'].includes(s.status)).length;
+
+  // ==========================================================================
   // LOADING STATE
   // ==========================================================================
-  if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '50vh' }}><div className="loading-spinner"></div></div>;
+  if (loading && !project) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '50vh' }}>
+        <div className="loading-spinner"></div>
+        <p style={{ marginTop: 'var(--space-md)', color: 'var(--text-secondary)' }}>Loading project...</p>
+      </div>
+    );
+  }
 
   // ==========================================================================
   // RENDER
@@ -194,34 +204,24 @@ function ProjectDetails({ project: initialProject, initialTab = 'Overview', onBa
   return (
     <div>
       {/* ================================================================== */}
-      {/* HEADER SECTION                                                    */}
+      {/* HEADER                                                            */}
       {/* ================================================================== */}
-      <div style={{ marginBottom: 'var(--space-xl)' }}>
-        <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 0, marginBottom: 'var(--space-md)', fontSize: '0.875rem' }}>
-          <ArrowLeft size={18} /> Back to Dashboard
-        </button>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', marginBottom: 'var(--space-xs)' }}>
-              <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>{project.name}</h1>
-              <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '600', background: `${getStatusColor(project.status)}20`, color: getStatusColor(project.status), textTransform: 'uppercase' }}>{project.status}</span>
-            </div>
-            <p style={{ color: 'var(--text-secondary)', margin: 0 }}>{project.project_number} • {project.factory || 'No factory assigned'}</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-xl)' }}>
+        <div>
+          <button type="button" onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', padding: '8px 16px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: '500', fontSize: '0.875rem', marginBottom: 'var(--space-md)' }}><ArrowLeft size={16} />Back to Projects</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>{project.name}</h1>
+            <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '600', background: `${getStatusColor(project.status)}20`, color: getStatusColor(project.status) }}>{project.status}</span>
           </div>
-          <button type="button" onClick={() => setShowEditProject(true)} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', padding: 'var(--space-sm) var(--space-lg)', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: '600', fontSize: '0.875rem' }}>
-            <Edit size={16} /> Edit Project
-          </button>
+          <p style={{ color: 'var(--text-secondary)', margin: 'var(--space-xs) 0 0 0' }}>{project.project_number} • {project.client_name || 'No client'}</p>
         </div>
+        <button type="button" onClick={() => setShowEditProject(true)} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', padding: '10px 20px', background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: '600', fontSize: '0.9375rem' }}><Edit size={18} />Edit Project</button>
       </div>
 
       {/* ================================================================== */}
-      {/* STATS CARDS                                                       */}
+      {/* STATS BAR                                                         */}
       {/* ================================================================== */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
-        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-lg)', border: '1px solid var(--border-color)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}><Target size={18} style={{ color: 'var(--sunbelt-orange)' }} /><span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Target Online</span></div>
-          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)' }}>{formatDate(project.target_online_date)}</div>
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
         <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-lg)', border: '1px solid var(--border-color)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}><DollarSign size={18} style={{ color: 'var(--sunbelt-orange)' }} /><span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Contract Value</span></div>
           <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)' }}>{formatCurrency(project.contract_value)}</div>
@@ -252,6 +252,7 @@ function ProjectDetails({ project: initialProject, initialTab = 'Overview', onBa
             {tab === 'Submittals' && <ClipboardList size={16} />}
             {tab === 'Calendar' && <Calendar size={16} />}
             {tab === 'Files' && <FolderOpen size={16} />}
+            {tab === 'Floor Plans' && <Map size={16} />}
             {tab}
             {tab === 'Tasks' && <span style={{ marginLeft: '4px', opacity: 0.7 }}>({tasks.length})</span>}
             {tab === 'RFIs' && <span style={{ marginLeft: '4px', opacity: 0.7 }}>({rfis.length})</span>}
@@ -276,9 +277,7 @@ function ProjectDetails({ project: initialProject, initialTab = 'Overview', onBa
               <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: 'var(--space-lg)' }}>Project Information</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)' }}>
                 <div><label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Client</label><p style={{ color: 'var(--text-primary)', margin: '4px 0 0 0', fontWeight: '500' }}>{project.client_name || 'Not specified'}</p></div>
-                <div><label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dealer</label><p style={{ color: 'var(--text-primary)', margin: '4px 0 0 0', fontWeight: '500' }}>{project.dealer || 'Not specified'}</p></div>
-                <div><label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Factory</label><p style={{ color: 'var(--text-primary)', margin: '4px 0 0 0', fontWeight: '500' }}>{project.factory || 'Not specified'}</p></div>
-                <div><label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Building Type</label><p style={{ color: 'var(--text-primary)', margin: '4px 0 0 0', fontWeight: '500' }}>{project.building_type || 'Not specified'}</p></div>
+                <div><label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contract Value</label><p style={{ color: 'var(--text-primary)', margin: '4px 0 0 0', fontWeight: '500' }}>{formatCurrency(project.contract_value)}</p></div>
                 <div><label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Square Footage</label><p style={{ color: 'var(--text-primary)', margin: '4px 0 0 0', fontWeight: '500' }}>{project.square_footage ? `${project.square_footage.toLocaleString()} sq ft` : 'Not specified'}</p></div>
                 <div><label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Module Count</label><p style={{ color: 'var(--text-primary)', margin: '4px 0 0 0', fontWeight: '500' }}>{project.module_count || 'Not specified'}</p></div>
                 <div><label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Target Online Date</label><p style={{ color: 'var(--text-primary)', margin: '4px 0 0 0', fontWeight: '500' }}>{formatDate(project.target_online_date)}</p></div>
@@ -295,11 +294,11 @@ function ProjectDetails({ project: initialProject, initialTab = 'Overview', onBa
                 <button type="button" onClick={() => setShowAddMilestone(true)} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', padding: '6px 12px', background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: '600', fontSize: '0.8125rem' }}><Plus size={14} />Add</button>
               </div>
               {milestones.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--text-tertiary)' }}><Flag size={32} style={{ marginBottom: 'var(--space-sm)', opacity: 0.5 }} /><p style={{ margin: 0 }}>No milestones yet</p></div>
+                <div style={{ textAlign: 'center', padding: 'var(--space-lg)', color: 'var(--text-tertiary)' }}><Flag size={32} style={{ marginBottom: 'var(--space-sm)', opacity: 0.5 }} /><p>No milestones yet</p></div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                   {milestones.map(milestone => (
-                    <div key={milestone.id} style={{ padding: 'var(--space-sm) var(--space-md)', background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)', borderLeft: `3px solid ${milestone.status === 'Completed' ? 'var(--success)' : 'var(--sunbelt-orange)'}` }}>
+                    <div key={milestone.id} style={{ padding: 'var(--space-sm) var(--space-md)', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', borderLeft: `3px solid ${milestone.status === 'Completed' ? 'var(--success)' : 'var(--sunbelt-orange)'}` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontWeight: '500', color: 'var(--text-primary)', fontSize: '0.875rem' }}>{milestone.name}</span>
                         <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '0.7rem', fontWeight: '600', background: milestone.status === 'Completed' ? 'var(--success-light)' : 'rgba(255, 107, 53, 0.1)', color: milestone.status === 'Completed' ? 'var(--success)' : 'var(--sunbelt-orange)' }}>{milestone.status}</span>
@@ -380,7 +379,7 @@ function ProjectDetails({ project: initialProject, initialTab = 'Overview', onBa
             </div>
           </div>
           {submittals.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--text-tertiary)' }}><ClipboardList size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} /><h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>No submittals yet</h4><p>Create your first submittal to get started</p></div>
+            <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--text-tertiary)' }}><ClipboardList size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} /><h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>No Submittals yet</h4><p>Create your first Submittal to get started</p></div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
               {submittals.map(submittal => (
@@ -413,7 +412,20 @@ function ProjectDetails({ project: initialProject, initialTab = 'Overview', onBa
       {/* ================================================================== */}
       {/* TAB CONTENT - FILES                                               */}
       {/* ================================================================== */}
-      {activeTab === 'Files' && <ProjectFiles projectId={project.id} />}
+      {activeTab === 'Files' && <ProjectFiles projectId={project.id} onUpdate={fetchProjectData} />}
+
+      {/* ================================================================== */}
+      {/* TAB CONTENT - FLOOR PLANS                                         */}
+      {/* ================================================================== */}
+      {activeTab === 'Floor Plans' && (
+        <FloorPlansTab
+          projectId={project.id}
+          projectNumber={project.project_number}
+          rfis={rfis}
+          submittals={submittals}
+          showToast={showToast}
+        />
+      )}
 
       {/* ================================================================== */}
       {/* MODALS - Edit Project                                             */}
