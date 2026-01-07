@@ -1,22 +1,6 @@
 // ============================================================================
-// Sidebar Component
+// Sidebar Component - Fixed Version
 // ============================================================================
-// Main navigation sidebar with dashboard switcher for Director/PM views.
-//
-// FEATURES:
-// - Dashboard role switcher (Director/PM) - visible for Directors/Admins
-// - Navigation links
-// - Quick stats (filtered by user's projects only)
-// - Toggle to include/exclude secondary project counts
-// - Dark/Light mode toggle
-// - User profile and logout
-//
-// FIXES:
-// - Role detection now works correctly
-// - Stats only count items from user's assigned projects
-// - Secondary project toggle for counts
-// ============================================================================
-
 import React, { useState, useEffect } from 'react';
 import {
   Building2,
@@ -32,16 +16,12 @@ import {
   LogOut,
   AlertCircle,
   ChevronDown,
-  User,
   ToggleLeft,
   ToggleRight
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
 function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType }) {
   const { user, signOut } = useAuth();
 
@@ -59,14 +39,13 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   const [overdueTasks, setOverdueTasks] = useState(0);
   const [showDashboardMenu, setShowDashboardMenu] = useState(false);
   
-  // ===== SECONDARY PROJECT TOGGLE =====
   const [includeSecondary, setIncludeSecondary] = useState(() => {
     const saved = localStorage.getItem('includeSecondaryInCounts');
     return saved !== null ? JSON.parse(saved) : false;
   });
 
   // ==========================================================================
-  // LOAD USER DATA
+  // EFFECTS
   // ==========================================================================
   useEffect(() => {
     if (user) {
@@ -74,18 +53,12 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     }
   }, [user]);
 
-  // ==========================================================================
-  // FETCH STATS WHEN USER OR TOGGLE CHANGES
-  // ==========================================================================
   useEffect(() => {
     if (currentUser) {
       fetchStats();
     }
   }, [currentUser, includeSecondary]);
 
-  // ==========================================================================
-  // DARK MODE EFFECT
-  // ==========================================================================
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
     localStorage.setItem('darkMode', JSON.stringify(darkMode));
@@ -108,7 +81,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       }
 
       if (userData) {
-        console.log('User data loaded:', userData.name, 'Role:', userData.role);
+        console.log('Sidebar: User loaded -', userData.name, 'Role:', userData.role);
         setCurrentUser(userData);
       }
     } catch (error) {
@@ -117,33 +90,37 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   };
 
   // ==========================================================================
-  // FETCH STATS (FILTERED BY USER'S PROJECTS)
+  // FETCH STATS
   // ==========================================================================
   const fetchStats = async () => {
     if (!currentUser) return;
 
     try {
-      // ===== GET USER'S PROJECTS =====
-      let projectQuery = supabase
+      // Get user's projects
+      const { data: projects, error: projectError } = await supabase
         .from('projects')
         .select('id')
-        .in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']);
-
-      // Filter by PM assignment (primary or secondary based on toggle)
-      if (includeSecondary) {
-        projectQuery = projectQuery.or(`pm_id.eq.${currentUser.id},secondary_pm_id.eq.${currentUser.id}`);
-      } else {
-        projectQuery = projectQuery.eq('pm_id', currentUser.id);
-      }
-
-      const { data: projects, error: projectError } = await projectQuery;
+        .in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'])
+        .or(`pm_id.eq.${currentUser.id},secondary_pm_id.eq.${currentUser.id}`);
 
       if (projectError) {
         console.error('Error fetching projects:', projectError);
         return;
       }
 
-      const projectIds = projects?.map(p => p.id) || [];
+      // Filter based on toggle
+      let filteredProjects = projects || [];
+      if (!includeSecondary) {
+        // Re-fetch only primary projects
+        const { data: primaryOnly } = await supabase
+          .from('projects')
+          .select('id')
+          .in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'])
+          .eq('pm_id', currentUser.id);
+        filteredProjects = primaryOnly || [];
+      }
+
+      const projectIds = filteredProjects.map(p => p.id);
       setActiveProjects(projectIds.length);
 
       if (projectIds.length === 0) {
@@ -152,26 +129,19 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         return;
       }
 
-      // ===== GET TASKS FOR USER'S PROJECTS =====
-      const { data: tasksList, error: taskError } = await supabase
+      // Get tasks for user's projects
+      const { data: tasksList } = await supabase
         .from('tasks')
         .select('id, status, due_date, assignee_id, internal_owner_id, project_id')
         .in('project_id', projectIds)
         .in('status', ['Not Started', 'In Progress', 'Blocked']);
 
-      if (taskError) {
-        console.error('Error fetching tasks:', taskError);
-        return;
-      }
-
-      // Filter to tasks assigned to this user or owned by this user
-      const myTasksList = tasksList?.filter(t => 
+      const myTasksList = (tasksList || []).filter(t => 
         t.assignee_id === currentUser.id || t.internal_owner_id === currentUser.id
-      ) || [];
+      );
 
       setMyTasks(myTasksList.length);
 
-      // Count overdue
       const today = new Date().toISOString().split('T')[0];
       const overdueCount = myTasksList.filter(t => t.due_date && t.due_date < today).length;
       setOverdueTasks(overdueCount);
@@ -203,10 +173,14 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   };
 
   const handleDashboardSwitch = (type) => {
-    setDashboardType(type);
-    localStorage.setItem('dashboardType', type);
+    if (setDashboardType) {
+      setDashboardType(type);
+      localStorage.setItem('dashboardType', type);
+    }
     setShowDashboardMenu(false);
-    setCurrentView('dashboard');
+    if (setCurrentView) {
+      setCurrentView('dashboard');
+    }
   };
 
   // ==========================================================================
@@ -214,22 +188,14 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   // ==========================================================================
   const displayUser = currentUser || user;
   
-  // ===== CHECK IF USER CAN SWITCH DASHBOARDS =====
-  // Must be Director or Admin role (case-insensitive check)
-  // IMPORTANT: Only check after currentUser is loaded (has role from DB)
-  const userRole = currentUser?.role?.toLowerCase() || '';
+  // Check if user can switch dashboards (Director or Admin)
+  const userRole = (currentUser?.role || '').toLowerCase();
   const canSwitchDashboard = currentUser && (userRole === 'director' || userRole === 'admin');
 
-  // Debug logging (remove in production)
-  console.log('Dashboard switch check:', {
-    currentUserLoaded: !!currentUser,
-    role: currentUser?.role,
-    userRole,
-    canSwitchDashboard
-  });
+  console.log('Sidebar: canSwitchDashboard =', canSwitchDashboard, 'role =', currentUser?.role);
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: dashboardType === 'director' ? BarChart3 : LayoutDashboard },
+    { id: 'dashboard', label: 'Dashboard', icon: (dashboardType === 'director') ? BarChart3 : LayoutDashboard },
     { id: 'projects', label: 'Projects', icon: FolderKanban },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare },
@@ -242,9 +208,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   // ==========================================================================
   return (
     <aside className="sidebar">
-      {/* ================================================================== */}
-      {/* LOGO                                                              */}
-      {/* ================================================================== */}
+      {/* LOGO */}
       <div className="sidebar-logo">
         <div style={{
           width: '40px',
@@ -269,11 +233,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         </div>
       </div>
 
-      {/* ================================================================== */}
-      {/* DASHBOARD SWITCHER (Directors/Admins Only)                        */}
-      {/* ================================================================== */}
+      {/* DASHBOARD SWITCHER - Only for Directors/Admins */}
       {canSwitchDashboard && (
-        <div style={{ padding: '0 var(--space-md)', marginBottom: 'var(--space-md)' }}>
+        <div style={{ padding: 'var(--space-sm) var(--space-md)', marginBottom: 'var(--space-sm)' }}>
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => setShowDashboardMenu(!showDashboardMenu)}
@@ -282,17 +244,17 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: 'var(--space-sm) var(--space-md)',
+                padding: '10px 12px',
                 background: dashboardType === 'director' 
                   ? 'linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(255, 107, 53, 0.05))'
                   : 'var(--bg-tertiary)',
-                border: `1px solid ${dashboardType === 'director' ? 'var(--sunbelt-orange)' : 'var(--border-color)'}`,
+                border: dashboardType === 'director' ? '1px solid var(--sunbelt-orange)' : '1px solid var(--border-color)',
                 borderRadius: 'var(--radius-md)',
                 cursor: 'pointer',
                 color: 'var(--text-primary)'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {dashboardType === 'director' ? (
                   <BarChart3 size={18} style={{ color: 'var(--sunbelt-orange)' }} />
                 ) : (
@@ -312,7 +274,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
               />
             </button>
 
-            {/* Dropdown Menu */}
+            {/* Dropdown */}
             {showDashboardMenu && (
               <div style={{
                 position: 'absolute',
@@ -333,8 +295,8 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                     width: '100%',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 'var(--space-sm)',
-                    padding: 'var(--space-sm) var(--space-md)',
+                    gap: '8px',
+                    padding: '10px 12px',
                     background: dashboardType === 'director' ? 'rgba(255, 107, 53, 0.1)' : 'transparent',
                     border: 'none',
                     cursor: 'pointer',
@@ -346,8 +308,8 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                   <BarChart3 size={18} />
                   <div>
                     <div style={{ fontWeight: '600' }}>Director View</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                      Portfolio overview & risk
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>
+                      Portfolio overview
                     </div>
                   </div>
                 </button>
@@ -357,8 +319,8 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                     width: '100%',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 'var(--space-sm)',
-                    padding: 'var(--space-sm) var(--space-md)',
+                    gap: '8px',
+                    padding: '10px 12px',
                     background: dashboardType === 'pm' ? 'rgba(255, 107, 53, 0.1)' : 'transparent',
                     border: 'none',
                     cursor: 'pointer',
@@ -370,8 +332,8 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                   <LayoutDashboard size={18} />
                   <div>
                     <div style={{ fontWeight: '600' }}>PM View</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                      My projects & tasks
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>
+                      My projects
                     </div>
                   </div>
                 </button>
@@ -381,61 +343,60 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         </div>
       )}
 
-      {/* ================================================================== */}
-      {/* STATS CARDS                                                       */}
-      {/* ================================================================== */}
+      {/* STATS CARDS */}
       <div style={{ padding: '0 var(--space-md)', marginBottom: 'var(--space-md)' }}>
         {/* Active Projects */}
         <div style={{
-          padding: 'var(--space-md)',
+          padding: '12px 14px',
           background: 'var(--bg-secondary)',
           borderRadius: 'var(--radius-md)',
-          marginBottom: 'var(--space-sm)',
+          marginBottom: '8px',
           border: '1px solid var(--border-color)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-            <FolderKanban size={18} style={{ color: 'var(--sunbelt-orange)', flexShrink: 0 }} />
-            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>My Projects</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <FolderKanban size={16} style={{ color: 'var(--sunbelt-orange)', flexShrink: 0 }} />
+            <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>My Projects</span>
           </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
+          <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
             {activeProjects}
           </div>
         </div>
 
         {/* My Tasks */}
         <div style={{
-          padding: 'var(--space-md)',
+          padding: '12px 14px',
           background: 'var(--bg-secondary)',
           borderRadius: 'var(--radius-md)',
-          marginBottom: 'var(--space-sm)',
+          marginBottom: '8px',
           border: '1px solid var(--border-color)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-            <CheckSquare size={18} style={{ color: 'var(--sunbelt-orange)', flexShrink: 0 }} />
-            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>My Tasks</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CheckSquare size={16} style={{ color: 'var(--sunbelt-orange)', flexShrink: 0 }} />
+            <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>My Tasks</span>
           </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
+          <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
             {myTasks}
           </div>
         </div>
 
-        {/* Overdue Tasks */}
+        {/* Overdue */}
         <div style={{
-          padding: 'var(--space-md)',
+          padding: '12px 14px',
           background: overdueTasks > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)',
           borderRadius: 'var(--radius-md)',
+          marginBottom: '8px',
           border: overdueTasks > 0 ? '1px solid var(--danger)' : '1px solid var(--border-color)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-            <AlertCircle size={18} style={{ color: overdueTasks > 0 ? 'var(--danger)' : 'var(--sunbelt-orange)', flexShrink: 0 }} />
-            <span style={{ fontSize: '0.875rem', color: overdueTasks > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>Overdue</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={16} style={{ color: overdueTasks > 0 ? 'var(--danger)' : 'var(--sunbelt-orange)', flexShrink: 0 }} />
+            <span style={{ fontSize: '0.8125rem', color: overdueTasks > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>Overdue</span>
           </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: overdueTasks > 0 ? 'var(--danger)' : 'var(--text-primary)', marginTop: '4px' }}>
+          <div style={{ fontSize: '1.375rem', fontWeight: '700', color: overdueTasks > 0 ? 'var(--danger)' : 'var(--text-primary)', marginTop: '4px' }}>
             {overdueTasks}
           </div>
         </div>
 
-        {/* Secondary Projects Toggle */}
+        {/* Secondary Toggle */}
         <button
           onClick={toggleIncludeSecondary}
           style={{
@@ -443,8 +404,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: 'var(--space-sm) var(--space-md)',
-            marginTop: 'var(--space-sm)',
+            padding: '8px 12px',
             background: 'transparent',
             border: '1px dashed var(--border-color)',
             borderRadius: 'var(--radius-md)',
@@ -455,16 +415,14 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         >
           <span>Include backup projects</span>
           {includeSecondary ? (
-            <ToggleRight size={20} style={{ color: 'var(--sunbelt-orange)' }} />
+            <ToggleRight size={18} style={{ color: 'var(--sunbelt-orange)' }} />
           ) : (
-            <ToggleLeft size={20} />
+            <ToggleLeft size={18} />
           )}
         </button>
       </div>
 
-      {/* ================================================================== */}
-      {/* NAVIGATION                                                        */}
-      {/* ================================================================== */}
+      {/* NAVIGATION */}
       <nav className="sidebar-nav">
         {navItems.map(item => {
           const Icon = item.icon;
@@ -490,11 +448,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       </nav>
 
       {/* Spacer */}
-      <div style={{ flex: 1 }}></div>
+      <div style={{ flex: 1 }} />
 
-      {/* ================================================================== */}
-      {/* DARK MODE TOGGLE                                                  */}
-      {/* ================================================================== */}
+      {/* DARK MODE TOGGLE */}
       <div style={{ padding: '0 var(--space-md)', marginBottom: 'var(--space-md)' }}>
         <button
           onClick={toggleDarkMode}
@@ -503,45 +459,28 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 'var(--space-sm)',
-            padding: 'var(--space-sm) var(--space-md)',
+            gap: '8px',
+            padding: '10px',
             background: 'var(--bg-secondary)',
             border: '1px solid var(--border-color)',
             borderRadius: 'var(--radius-md)',
             color: 'var(--text-secondary)',
             cursor: 'pointer',
             fontSize: '0.875rem',
-            fontWeight: '500',
-            transition: 'all 0.15s'
+            fontWeight: '500'
           }}
         >
-          {darkMode ? (
-            <>
-              <Sun size={18} />
-              <span>Light Mode</span>
-            </>
-          ) : (
-            <>
-              <Moon size={18} />
-              <span>Dark Mode</span>
-            </>
-          )}
+          {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+          <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
         </button>
       </div>
 
-      {/* ================================================================== */}
-      {/* USER PROFILE                                                      */}
-      {/* ================================================================== */}
+      {/* USER PROFILE */}
       <div style={{ 
         padding: 'var(--space-md)', 
-        borderTop: '1px solid var(--border-color)',
-        marginTop: 'auto'
+        borderTop: '1px solid var(--border-color)'
       }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-sm)'
-        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             width: '36px',
             height: '36px',
@@ -570,10 +509,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
             </div>
             <div style={{ 
               fontSize: '0.75rem', 
-              color: 'var(--text-secondary)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
+              color: 'var(--text-secondary)'
             }}>
               {displayUser?.role || 'Team Member'}
             </div>
@@ -587,12 +523,8 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
               cursor: 'pointer',
               padding: '8px',
               display: 'flex',
-              borderRadius: '6px',
-              transition: 'all 0.15s',
-              flexShrink: 0
+              borderRadius: '6px'
             }}
-            onMouseOver={(e) => e.currentTarget.style.color = 'var(--danger)'}
-            onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
             title="Logout"
           >
             <LogOut size={18} />
@@ -600,7 +532,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         </div>
       </div>
 
-      {/* ===== CLICK OUTSIDE TO CLOSE MENU ===== */}
+      {/* Click outside to close dropdown */}
       {showDashboardMenu && (
         <div 
           style={{
