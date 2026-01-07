@@ -26,21 +26,13 @@ export function useFloorPlans(projectId) {
     setError(null);
     
     try {
+      // Fetch floor plans with pages and markers (without RFI/Submittal joins)
       const { data, error: fetchError } = await supabase
         .from('floor_plans')
         .select(`
           *,
           pages:floor_plan_pages(*),
-          markers:floor_plan_markers(
-            *,
-            rfi:rfis!floor_plan_markers_item_id_fkey(
-              id, rfi_number, subject, status, due_date, sent_to
-            ),
-            submittal:submittals!floor_plan_markers_item_id_fkey(
-              id, submittal_number, title, status, due_date, sent_to, submittal_type
-            )
-          ),
-          uploaded_by_user:users!floor_plans_uploaded_by_fkey(name)
+          markers:floor_plan_markers(*)
         `)
         .eq('project_id', projectId)
         .eq('is_active', true)
@@ -48,16 +40,7 @@ export function useFloorPlans(projectId) {
 
       if (fetchError) throw fetchError;
       
-      // Process markers to attach the correct item data
-      const processedData = (data || []).map(plan => ({
-        ...plan,
-        markers: (plan.markers || []).map(marker => ({
-          ...marker,
-          item: marker.item_type === 'rfi' ? marker.rfi : marker.submittal
-        }))
-      }));
-      
-      setFloorPlans(processedData);
+      setFloorPlans(data || []);
     } catch (err) {
       console.error('Error fetching floor plans:', err);
       setError(err.message);
