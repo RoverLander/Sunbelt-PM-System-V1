@@ -1,8 +1,8 @@
 // ============================================================================
 // FloorPlansTab Component
 // ============================================================================
-// Main container for the Floor Plans feature. Shows a list of floor plans
-// and allows viewing/editing with markers for RFIs and Submittals.
+// Main container for the Floor Plans feature. Shows a grid of floor plans
+// and opens a full-screen viewer modal when a plan is selected.
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -17,10 +17,11 @@ import {
   Edit3,
   Eye,
   MapPin,
-  ChevronRight,
-  ArrowLeft,
+  MessageSquare,
+  ClipboardList,
   AlertCircle
 } from 'lucide-react';
+import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { useFloorPlans } from '../../hooks/useFloorPlans';
 import FloorPlanViewer from './FloorPlanViewer';
@@ -54,17 +55,44 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
   const [editingPlan, setEditingPlan] = useState(null);
   const [menuOpen, setMenuOpen] = useState(null);
   const [isPM, setIsPM] = useState(false);
+  const [thumbnails, setThumbnails] = useState({});
 
   // ==========================================================================
   // CHECK PM STATUS
   // ==========================================================================
-  // Uses the user's global role from the users table
   useEffect(() => {
     if (user) {
-      // Check if user has PM role (from AuthContext user object)
       setIsPM(user.role === 'PM');
     }
   }, [user]);
+
+  // ==========================================================================
+  // LOAD THUMBNAILS
+  // ==========================================================================
+  useEffect(() => {
+    const loadThumbnails = async () => {
+      const newThumbnails = {};
+      for (const plan of floorPlans) {
+        if (!plan.file_type?.includes('pdf')) {
+          try {
+            const { data } = await supabase.storage
+              .from('project-files')
+              .getPublicUrl(plan.file_path);
+            if (data?.publicUrl) {
+              newThumbnails[plan.id] = data.publicUrl;
+            }
+          } catch (err) {
+            console.error('Error loading thumbnail:', err);
+          }
+        }
+      }
+      setThumbnails(newThumbnails);
+    };
+
+    if (floorPlans.length > 0) {
+      loadThumbnails();
+    }
+  }, [floorPlans]);
 
   // ==========================================================================
   // HANDLERS
@@ -103,8 +131,9 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
     setSelectedPlan(plan);
   };
 
-  const handleBackToList = () => {
+  const handleCloseViewer = () => {
     setSelectedPlan(null);
+    fetchFloorPlans(); // Refresh to get updated markers
   };
 
   // ==========================================================================
@@ -118,40 +147,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
   };
 
   // ==========================================================================
-  // GET FILE ICON
-  // ==========================================================================
-  const getFileIcon = (fileType) => {
-    if (fileType?.includes('pdf')) {
-      return <FileText size={24} style={{ color: '#ef4444' }} />;
-    }
-    return <Image size={24} style={{ color: 'var(--info)' }} />;
-  };
-
-  // ==========================================================================
-  // RENDER - VIEWER MODE
-  // ==========================================================================
-  if (selectedPlan) {
-    return (
-      <FloorPlanViewer
-        floorPlan={selectedPlan}
-        projectId={projectId}
-        projectNumber={projectNumber}
-        rfis={rfis}
-        submittals={submittals}
-        isPM={isPM}
-        onBack={handleBackToList}
-        onMarkerCreate={createMarker}
-        onMarkerUpdate={updateMarkerPosition}
-        onMarkerDelete={deleteMarker}
-        onPageRename={updatePageName}
-        showToast={showToast}
-        onRefresh={fetchFloorPlans}
-      />
-    );
-  }
-
-  // ==========================================================================
-  // RENDER - LIST MODE
+  // RENDER
   // ==========================================================================
   return (
     <div>
@@ -166,12 +162,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
           <Map size={24} style={{ color: 'var(--sunbelt-orange)' }} />
-          <h3 style={{ 
-            fontSize: '1.125rem', 
-            fontWeight: '700', 
-            color: 'var(--text-primary)', 
-            margin: 0 
-          }}>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
             Floor Plans
           </h3>
           <span style={{
@@ -193,15 +184,14 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
               display: 'flex',
               alignItems: 'center',
               gap: 'var(--space-xs)',
-              padding: '10px 20px',
+              padding: '8px 16px',
               background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
               color: 'white',
               border: 'none',
               borderRadius: 'var(--radius-md)',
               cursor: 'pointer',
               fontWeight: '600',
-              fontSize: '0.875rem',
-              transition: 'all 0.15s'
+              fontSize: '0.875rem'
             }}
           >
             <Upload size={16} />
@@ -216,10 +206,10 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
       {error && (
         <div style={{
           padding: 'var(--space-md)',
-          background: 'var(--danger-light)',
-          border: '1px solid var(--danger)',
+          background: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
           borderRadius: 'var(--radius-md)',
-          color: 'var(--danger)',
+          color: '#ef4444',
           marginBottom: 'var(--space-lg)',
           display: 'flex',
           alignItems: 'center',
@@ -256,24 +246,11 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
           borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--border-color)'
         }}>
-          <Map size={64} style={{ 
-            color: 'var(--text-tertiary)', 
-            opacity: 0.5, 
-            marginBottom: 'var(--space-md)' 
-          }} />
-          <h4 style={{ 
-            color: 'var(--text-primary)', 
-            marginBottom: 'var(--space-sm)',
-            fontSize: '1.125rem'
-          }}>
+          <Map size={64} style={{ color: 'var(--text-tertiary)', opacity: 0.5, marginBottom: 'var(--space-md)' }} />
+          <h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)', fontSize: '1.125rem' }}>
             No Floor Plans Yet
           </h4>
-          <p style={{ 
-            color: 'var(--text-secondary)', 
-            marginBottom: 'var(--space-lg)',
-            maxWidth: '400px',
-            margin: '0 auto var(--space-lg)'
-          }}>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)', maxWidth: '400px', margin: '0 auto var(--space-lg)' }}>
             Upload floor plans to mark RFI and Submittal locations directly on your drawings.
           </p>
           {isPM && (
@@ -304,12 +281,14 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
         /* ================================================================== */
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
           gap: 'var(--space-lg)'
         }}>
           {floorPlans.map(plan => {
             const counts = getMarkerCounts(plan);
             const isMenuOpen = menuOpen === plan.id;
+            const isPdf = plan.file_type?.includes('pdf');
+            const thumbnailUrl = thumbnails[plan.id];
 
             return (
               <div
@@ -326,23 +305,40 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                 onMouseOver={(e) => {
                   e.currentTarget.style.borderColor = 'var(--sunbelt-orange)';
                   e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
                 }}
                 onMouseOut={(e) => {
                   e.currentTarget.style.borderColor = 'var(--border-color)';
                   e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
                 }}
               >
                 {/* Preview Area */}
                 <div style={{
-                  height: '140px',
+                  height: '180px',
                   background: 'var(--bg-tertiary)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderBottom: '1px solid var(--border-color)',
-                  position: 'relative'
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  {getFileIcon(plan.file_type)}
+                  {thumbnailUrl ? (
+                    <img
+                      src={thumbnailUrl}
+                      alt={plan.name}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover'
+                      }}
+                    />
+                  ) : isPdf ? (
+                    <FileText size={48} style={{ color: '#ef4444', opacity: 0.5 }} />
+                  ) : (
+                    <Image size={48} style={{ color: 'var(--info)', opacity: 0.5 }} />
+                  )}
                   
                   {/* Page count badge */}
                   {plan.page_count > 1 && (
@@ -350,16 +346,65 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                       position: 'absolute',
                       top: 'var(--space-sm)',
                       right: 'var(--space-sm)',
-                      padding: '2px 8px',
-                      background: 'rgba(0,0,0,0.6)',
-                      borderRadius: 'var(--radius-sm)',
-                      fontSize: '0.6875rem',
+                      padding: '4px 10px',
+                      background: 'rgba(0,0,0,0.7)',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: '0.75rem',
                       color: 'white',
                       fontWeight: '600'
                     }}>
                       {plan.page_count} pages
                     </div>
                   )}
+
+                  {/* PDF Badge */}
+                  {isPdf && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 'var(--space-sm)',
+                      left: 'var(--space-sm)',
+                      padding: '4px 10px',
+                      background: '#ef4444',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: '0.75rem',
+                      color: 'white',
+                      fontWeight: '600'
+                    }}>
+                      PDF
+                    </div>
+                  )}
+
+                  {/* View overlay */}
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'rgba(0,0,0,0)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s'
+                  }}
+                  className="view-overlay"
+                  >
+                    <div style={{
+                      padding: '8px 16px',
+                      background: 'var(--sunbelt-orange)',
+                      color: 'white',
+                      borderRadius: 'var(--radius-md)',
+                      fontWeight: '600',
+                      fontSize: '0.875rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      opacity: 0,
+                      transition: 'opacity 0.2s'
+                    }}
+                    className="view-button"
+                    >
+                      <Eye size={16} />
+                      View Floor Plan
+                    </div>
+                  </div>
                 </div>
 
                 {/* Info Area */}
@@ -384,11 +429,8 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                           }
                         }}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.target.blur();
-                          } else if (e.key === 'Escape') {
-                            setEditingPlan(null);
-                          }
+                          if (e.key === 'Enter') e.target.blur();
+                          else if (e.key === 'Escape') setEditingPlan(null);
                         }}
                         style={{
                           flex: 1,
@@ -427,8 +469,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                             padding: '4px',
                             cursor: 'pointer',
                             color: 'var(--text-secondary)',
-                            borderRadius: 'var(--radius-sm)',
-                            display: 'flex'
+                            borderRadius: 'var(--radius-sm)'
                           }}
                         >
                           <MoreVertical size={16} />
@@ -443,7 +484,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                               background: 'var(--bg-primary)',
                               border: '1px solid var(--border-color)',
                               borderRadius: 'var(--radius-md)',
-                              boxShadow: 'var(--shadow-lg)',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                               zIndex: 100,
                               minWidth: '140px',
                               overflow: 'hidden'
@@ -484,12 +525,12 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                                 padding: 'var(--space-sm) var(--space-md)',
                                 background: 'none',
                                 border: 'none',
-                                color: 'var(--danger)',
+                                color: '#ef4444',
                                 fontSize: '0.875rem',
                                 cursor: 'pointer',
                                 textAlign: 'left'
                               }}
-                              onMouseOver={(e) => e.currentTarget.style.background = 'var(--danger-light)'}
+                              onMouseOver={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
                               onMouseOut={(e) => e.currentTarget.style.background = 'none'}
                             >
                               <Trash2 size={14} />
@@ -511,47 +552,20 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <MapPin size={14} />
-                      {counts.total} marker{counts.total !== 1 ? 's' : ''}
+                      <span>{counts.total} markers</span>
                     </div>
                     {counts.rfiCount > 0 && (
-                      <span style={{ 
-                        padding: '2px 6px', 
-                        background: 'rgba(59, 130, 246, 0.15)', 
-                        color: '#3b82f6',
-                        borderRadius: '4px',
-                        fontSize: '0.6875rem',
-                        fontWeight: '600'
-                      }}>
-                        {counts.rfiCount} RFI
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#3b82f6' }}>
+                        <MessageSquare size={14} />
+                        <span>{counts.rfiCount}</span>
+                      </div>
                     )}
                     {counts.submittalCount > 0 && (
-                      <span style={{ 
-                        padding: '2px 6px', 
-                        background: 'rgba(255, 107, 53, 0.15)', 
-                        color: 'var(--sunbelt-orange)',
-                        borderRadius: '4px',
-                        fontSize: '0.6875rem',
-                        fontWeight: '600'
-                      }}>
-                        {counts.submittalCount} SUB
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#8b5cf6' }}>
+                        <ClipboardList size={14} />
+                        <span>{counts.submittalCount}</span>
+                      </div>
                     )}
-                  </div>
-
-                  {/* View Button */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    marginTop: 'var(--space-sm)',
-                    color: 'var(--sunbelt-orange)',
-                    fontSize: '0.8125rem',
-                    fontWeight: '600'
-                  }}>
-                    <Eye size={14} style={{ marginRight: '4px' }} />
-                    View Plan
-                    <ChevronRight size={14} />
                   </div>
                 </div>
               </div>
@@ -574,20 +588,36 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
         />
       )}
 
-      {/* Close menu when clicking outside */}
-      {menuOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 50
-          }}
-          onClick={() => setMenuOpen(null)}
+      {/* ================================================================== */}
+      {/* VIEWER MODAL                                                      */}
+      {/* ================================================================== */}
+      {selectedPlan && (
+        <FloorPlanViewer
+          floorPlan={selectedPlan}
+          projectId={projectId}
+          projectNumber={projectNumber}
+          rfis={rfis}
+          submittals={submittals}
+          isPM={isPM}
+          onClose={handleCloseViewer}
+          onMarkerCreate={createMarker}
+          onMarkerUpdate={updateMarkerPosition}
+          onMarkerDelete={deleteMarker}
+          onPageRename={updatePageName}
+          showToast={showToast}
+          onRefresh={fetchFloorPlans}
         />
       )}
+
+      {/* Hover styles */}
+      <style>{`
+        .view-overlay:hover {
+          background: rgba(0,0,0,0.4) !important;
+        }
+        .view-overlay:hover .view-button {
+          opacity: 1 !important;
+        }
+      `}</style>
     </div>
   );
 }

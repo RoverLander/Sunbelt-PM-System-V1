@@ -1,17 +1,16 @@
 // ============================================================================
 // FloorPlanViewer Component
 // ============================================================================
-// Full-screen viewer for floor plans with marker support.
-// Uses browser's native PDF viewer for PDFs, img for images.
-// Markers work on both - positioned as percentage overlays.
+// Full-screen modal viewer for floor plans with marker support.
+// Features: zoom, pan, marker placement, filters, and item detail panel.
 // ============================================================================
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  ArrowLeft,
+  X,
   ZoomIn,
   ZoomOut,
-  Plus,
+  RotateCcw,
   Filter,
   ChevronLeft,
   ChevronRight,
@@ -20,19 +19,21 @@ import {
   MessageSquare,
   ClipboardList,
   ExternalLink,
-  X,
-  Check
+  Check,
+  Maximize2,
+  Move,
+  MousePointer,
+  Trash2
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
-import FloorPlanMarker from './FloorPlanMarker';
 import AddMarkerModal from './AddMarkerModal';
 import ItemDetailPanel from './ItemDetailPanel';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 2;
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.25;
 
 // ============================================================================
@@ -45,7 +46,7 @@ function FloorPlanViewer({
   rfis,
   submittals,
   isPM,
-  onBack,
+  onClose,
   onMarkerCreate,
   onMarkerUpdate,
   onMarkerDelete,
@@ -67,6 +68,7 @@ function FloorPlanViewer({
   const [zoom, setZoom] = useState(1);
   const [fileUrl, setFileUrl] = useState(null);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [mode, setMode] = useState('view'); // 'view' or 'addMarker'
 
   // ==========================================================================
   // STATE - MARKERS
@@ -75,6 +77,7 @@ function FloorPlanViewer({
   const [filterType, setFilterType] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [hoveredMarker, setHoveredMarker] = useState(null);
 
   // ==========================================================================
   // STATE - MODALS
@@ -165,7 +168,7 @@ function FloorPlanViewer({
         ? rfis?.find(r => r.id === marker.item_id)
         : submittals?.find(s => s.id === marker.item_id);
       return { ...marker, item };
-    }).filter(m => m.item); // Only show markers with valid items
+    }).filter(m => m.item);
 
     setMarkers(enrichedMarkers);
   }, [floorPlan.markers, currentPage, filterType, filterStatus, rfis, submittals]);
@@ -175,6 +178,7 @@ function FloorPlanViewer({
   // ==========================================================================
   const handleZoomIn = () => setZoom(z => Math.min(z + ZOOM_STEP, MAX_ZOOM));
   const handleZoomOut = () => setZoom(z => Math.max(z - ZOOM_STEP, MIN_ZOOM));
+  const handleResetZoom = () => setZoom(1);
 
   // ==========================================================================
   // HANDLERS - PAGE NAVIGATION
@@ -186,11 +190,9 @@ function FloorPlanViewer({
   // HANDLERS - MARKER PLACEMENT
   // ==========================================================================
   const handleImageClick = (e) => {
-    if (!isPM || isPdf) return; // Can't place markers on PDF view
+    if (!isPM || mode !== 'addMarker' || isPdf) return;
 
-    const rect = imageRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
+    const rect = e.currentTarget.getBoundingClientRect();
     const x_percent = ((e.clientX - rect.left) / rect.width) * 100;
     const y_percent = ((e.clientY - rect.top) / rect.height) * 100;
 
@@ -213,6 +215,7 @@ function FloorPlanViewer({
       showToast?.('Marker added');
       setShowAddMarker(false);
       setPendingMarkerPosition(null);
+      setMode('view');
       onRefresh?.();
     } catch (err) {
       console.error('Error creating marker:', err);
@@ -220,20 +223,13 @@ function FloorPlanViewer({
     }
   };
 
-  const handleMarkerDrag = async (markerId, x_percent, y_percent) => {
-    try {
-      await onMarkerUpdate(markerId, x_percent, y_percent);
-      onRefresh?.();
-    } catch (err) {
-      console.error('Error updating marker:', err);
-      showToast?.('Error moving marker', 'error');
-    }
-  };
-
   const handleMarkerDelete = async (markerId) => {
+    if (!confirm('Remove this marker?')) return;
+    
     try {
       await onMarkerDelete(markerId);
       showToast?.('Marker removed');
+      setSelectedMarker(null);
       onRefresh?.();
     } catch (err) {
       console.error('Error deleting marker:', err);
@@ -264,20 +260,44 @@ function FloorPlanViewer({
   };
 
   // ==========================================================================
-  // IMAGE LOAD HANDLER
+  // GET MARKER COLOR
   // ==========================================================================
-  const handleImageLoad = (e) => {
-    setImageDimensions({
-      width: e.target.naturalWidth,
-      height: e.target.naturalHeight
-    });
+  const getMarkerColor = (marker) => {
+    if (!marker.item) return '#64748b';
+    
+    const status = marker.item.status;
+    const isOverdue = marker.item.due_date && new Date(marker.item.due_date) < new Date();
+    
+    if (isOverdue && !['Closed', 'Answered', 'Approved', 'Approved as Noted'].includes(status)) {
+      return '#ef4444';
+    }
+
+    if (marker.item_type === 'rfi') {
+      const colors = { 'Open': '#3b82f6', 'Pending': '#f59e0b', 'Answered': '#22c55e', 'Closed': '#64748b' };
+      return colors[status] || '#64748b';
+    } else {
+      const colors = { 'Pending': '#f59e0b', 'Submitted': '#3b82f6', 'Under Review': '#8b5cf6', 'Approved': '#22c55e', 'Approved as Noted': '#22c55e', 'Revise & Resubmit': '#ef4444', 'Rejected': '#ef4444' };
+      return colors[status] || '#64748b';
+    }
   };
 
   // ==========================================================================
   // RENDER
   // ==========================================================================
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '600px' }}>
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.9)',
+        zIndex: 1000,
+        display: 'flex',
+        flexDirection: 'column'
+      }}
+    >
       {/* ================================================================== */}
       {/* TOOLBAR                                                           */}
       {/* ================================================================== */}
@@ -286,40 +306,21 @@ function FloorPlanViewer({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: 'var(--space-md)',
+          padding: 'var(--space-md) var(--space-lg)',
           background: 'var(--bg-secondary)',
           borderBottom: '1px solid var(--border-color)',
           gap: 'var(--space-md)',
           flexWrap: 'wrap'
         }}
       >
-        {/* Left - Back & Title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-          <button
-            onClick={onBack}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-xs)',
-              padding: '8px 12px',
-              background: 'var(--bg-primary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              fontWeight: '500'
-            }}
-          >
-            <ArrowLeft size={16} />
-            Back
-          </button>
-
+        {/* Left - Title & Page */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)' }}>
           <div>
-            <h2 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
+            <h2 style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
               {floorPlan.name}
             </h2>
             {pageCount > 1 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', marginTop: '2px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', marginTop: '4px' }}>
                 {editingPageName ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <input
@@ -328,164 +329,144 @@ function FloorPlanViewer({
                       onChange={(e) => setPageName(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSavePageName()}
                       style={{
-                        padding: '2px 8px',
-                        fontSize: '0.8125rem',
+                        padding: '4px 8px',
+                        fontSize: '0.875rem',
                         background: 'var(--bg-primary)',
-                        border: '1px solid var(--border-color)',
+                        border: '1px solid var(--sunbelt-orange)',
                         borderRadius: 'var(--radius-sm)',
                         color: 'var(--text-primary)',
-                        width: '120px'
+                        width: '150px'
                       }}
                       autoFocus
                     />
-                    <button
-                      onClick={handleSavePageName}
-                      style={{
-                        background: 'var(--success)',
-                        border: 'none',
-                        borderRadius: 'var(--radius-sm)',
-                        color: 'white',
-                        cursor: 'pointer',
-                        padding: '4px'
-                      }}
-                    >
-                      <Check size={12} />
+                    <button onClick={handleSavePageName} style={{ background: 'var(--success)', border: 'none', borderRadius: 'var(--radius-sm)', color: 'white', cursor: 'pointer', padding: '6px' }}>
+                      <Check size={14} />
                     </button>
-                    <button
-                      onClick={() => setEditingPageName(false)}
-                      style={{
-                        background: 'var(--bg-tertiary)',
-                        border: 'none',
-                        borderRadius: 'var(--radius-sm)',
-                        color: 'var(--text-secondary)',
-                        cursor: 'pointer',
-                        padding: '4px'
-                      }}
-                    >
-                      <X size={12} />
+                    <button onClick={() => setEditingPageName(false)} style={{ background: 'var(--bg-tertiary)', border: 'none', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', cursor: 'pointer', padding: '6px' }}>
+                      <X size={14} />
                     </button>
                   </div>
                 ) : (
-                  <>
-                    <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                      {currentPageName}
-                    </span>
+                  <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {currentPageName}
                     {isPM && (
-                      <button
-                        onClick={handleStartRename}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: 'var(--text-tertiary)',
-                          padding: '2px'
-                        }}
-                        title="Rename page"
-                      >
-                        <Edit3 size={12} />
+                      <button onClick={handleStartRename} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: '2px' }} title="Rename page">
+                        <Edit3 size={14} />
                       </button>
                     )}
-                  </>
+                  </span>
                 )}
               </div>
             )}
           </div>
+
+          {/* Page Navigation */}
+          {pageCount > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+              <button onClick={handlePrevPage} disabled={currentPage === 1} style={{ padding: '6px', background: 'none', border: 'none', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.3 : 1, color: 'var(--text-primary)' }}>
+                <ChevronLeft size={20} />
+              </button>
+              <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)', minWidth: '80px', textAlign: 'center', fontWeight: '500' }}>
+                {currentPage} / {pageCount}
+              </span>
+              <button onClick={handleNextPage} disabled={currentPage === pageCount} style={{ padding: '6px', background: 'none', border: 'none', cursor: currentPage === pageCount ? 'not-allowed' : 'pointer', opacity: currentPage === pageCount ? 0.3 : 1, color: 'var(--text-primary)' }}>
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Center - Page Navigation */}
-        {pageCount > 1 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-            <button
-              onClick={handlePrevPage}
-              disabled={currentPage === 1}
-              style={{
-                padding: '6px',
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                opacity: currentPage === 1 ? 0.5 : 1,
-                color: 'var(--text-secondary)'
-              }}
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)', minWidth: '80px', textAlign: 'center' }}>
-              Page {currentPage} / {pageCount}
-            </span>
-            <button
-              onClick={handleNextPage}
-              disabled={currentPage === pageCount}
-              style={{
-                padding: '6px',
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                cursor: currentPage === pageCount ? 'not-allowed' : 'pointer',
-                opacity: currentPage === pageCount ? 0.5 : 1,
-                color: 'var(--text-secondary)'
-              }}
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        )}
-
-        {/* Right - Zoom & Filters */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-          {/* Zoom (only for images) */}
+        {/* Center - Zoom & Mode */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+          {/* Zoom Controls */}
           {!isPdf && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <button
-                onClick={handleZoomOut}
-                disabled={zoom <= MIN_ZOOM}
-                style={{
-                  padding: '6px',
-                  background: 'var(--bg-primary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: zoom <= MIN_ZOOM ? 'not-allowed' : 'pointer',
-                  opacity: zoom <= MIN_ZOOM ? 0.5 : 1,
-                  color: 'var(--text-secondary)'
-                }}
-              >
-                <ZoomOut size={16} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+              <button onClick={handleZoomOut} disabled={zoom <= MIN_ZOOM} style={{ padding: '6px', background: 'none', border: 'none', cursor: zoom <= MIN_ZOOM ? 'not-allowed' : 'pointer', opacity: zoom <= MIN_ZOOM ? 0.3 : 1, color: 'var(--text-primary)' }}>
+                <ZoomOut size={18} />
               </button>
-              <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', minWidth: '45px', textAlign: 'center' }}>
+              <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)', minWidth: '50px', textAlign: 'center', fontWeight: '500' }}>
                 {Math.round(zoom * 100)}%
               </span>
-              <button
-                onClick={handleZoomIn}
-                disabled={zoom >= MAX_ZOOM}
-                style={{
-                  padding: '6px',
-                  background: 'var(--bg-primary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: zoom >= MAX_ZOOM ? 'not-allowed' : 'pointer',
-                  opacity: zoom >= MAX_ZOOM ? 0.5 : 1,
-                  color: 'var(--text-secondary)'
-                }}
-              >
-                <ZoomIn size={16} />
+              <button onClick={handleZoomIn} disabled={zoom >= MAX_ZOOM} style={{ padding: '6px', background: 'none', border: 'none', cursor: zoom >= MAX_ZOOM ? 'not-allowed' : 'pointer', opacity: zoom >= MAX_ZOOM ? 0.3 : 1, color: 'var(--text-primary)' }}>
+                <ZoomIn size={18} />
+              </button>
+              <div style={{ width: '1px', height: '20px', background: 'var(--border-color)', margin: '0 4px' }} />
+              <button onClick={handleResetZoom} style={{ padding: '6px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} title="Reset zoom">
+                <RotateCcw size={16} />
               </button>
             </div>
           )}
 
-          {/* Filter Toggle */}
+          {/* Mode Toggle (PM only) */}
+          {isPM && !isPdf && (
+            <div style={{ display: 'flex', background: 'var(--bg-primary)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+              <button
+                onClick={() => setMode('view')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  background: mode === 'view' ? 'var(--bg-secondary)' : 'transparent',
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  color: mode === 'view' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  fontWeight: mode === 'view' ? '600' : '500',
+                  fontSize: '0.875rem'
+                }}
+              >
+                <MousePointer size={16} />
+                View
+              </button>
+              <button
+                onClick={() => setMode('addMarker')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  background: mode === 'addMarker' ? 'rgba(255, 107, 53, 0.2)' : 'transparent',
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  color: mode === 'addMarker' ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+                  fontWeight: mode === 'addMarker' ? '600' : '500',
+                  fontSize: '0.875rem'
+                }}
+              >
+                <MapPin size={16} />
+                Add Marker
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Right - Filters & Close */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+          {/* Marker Stats */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', marginRight: 'var(--space-md)', fontSize: '0.8125rem' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>
+              <MapPin size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+              {markers.length} markers
+            </span>
+          </div>
+
+          {/* Filter Button */}
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => setShowFilters(!showFilters)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
-                padding: '6px 12px',
+                gap: '6px',
+                padding: '8px 12px',
                 background: showFilters ? 'rgba(255, 107, 53, 0.1)' : 'var(--bg-primary)',
                 border: `1px solid ${showFilters ? 'var(--sunbelt-orange)' : 'var(--border-color)'}`,
                 borderRadius: 'var(--radius-md)',
                 cursor: 'pointer',
-                color: showFilters ? 'var(--sunbelt-orange)' : 'var(--text-secondary)'
+                color: showFilters ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+                fontWeight: '500'
               }}
             >
               <Filter size={16} />
@@ -498,30 +479,22 @@ function FloorPlanViewer({
                   position: 'absolute',
                   top: '100%',
                   right: 0,
-                  marginTop: '4px',
+                  marginTop: '8px',
                   background: 'var(--bg-secondary)',
                   border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-md)',
+                  borderRadius: 'var(--radius-lg)',
                   padding: 'var(--space-md)',
                   zIndex: 100,
-                  minWidth: '200px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                  minWidth: '220px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
                 }}
               >
-                <div style={{ marginBottom: 'var(--space-sm)' }}>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', display: 'block', marginBottom: '4px' }}>Type</label>
+                <div style={{ marginBottom: 'var(--space-md)' }}>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', display: 'block', marginBottom: '6px', fontWeight: '600', textTransform: 'uppercase' }}>Type</label>
                   <select
                     value={filterType}
                     onChange={(e) => setFilterType(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '6px 8px',
-                      background: 'var(--bg-primary)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: 'var(--radius-sm)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.875rem'
-                    }}
+                    style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.875rem' }}
                   >
                     <option value="all">All Types</option>
                     <option value="rfi">RFIs Only</option>
@@ -529,19 +502,11 @@ function FloorPlanViewer({
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', display: 'block', marginBottom: '4px' }}>Status</label>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', display: 'block', marginBottom: '6px', fontWeight: '600', textTransform: 'uppercase' }}>Status</label>
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '6px 8px',
-                      background: 'var(--bg-primary)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: 'var(--radius-sm)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.875rem'
-                    }}
+                    style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.875rem' }}
                   >
                     <option value="all">All Status</option>
                     <option value="open">Open/Pending</option>
@@ -552,7 +517,7 @@ function FloorPlanViewer({
             )}
           </div>
 
-          {/* Open in New Tab (for PDFs) */}
+          {/* Open PDF External */}
           {isPdf && fileUrl && (
             <a
               href={fileUrl}
@@ -561,14 +526,15 @@ function FloorPlanViewer({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
-                padding: '6px 12px',
+                gap: '6px',
+                padding: '8px 12px',
                 background: 'var(--bg-primary)',
                 border: '1px solid var(--border-color)',
                 borderRadius: 'var(--radius-md)',
                 color: 'var(--text-secondary)',
                 textDecoration: 'none',
-                fontSize: '0.875rem'
+                fontSize: '0.875rem',
+                fontWeight: '500'
               }}
             >
               <ExternalLink size={16} />
@@ -576,59 +542,43 @@ function FloorPlanViewer({
             </a>
           )}
 
-          {/* Add Marker Button (PM only, images only) */}
-          {isPM && !isPdf && (
-            <button
-              onClick={() => {}}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '6px 12px',
-                background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
-                border: 'none',
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-                color: 'white',
-                fontWeight: '500',
-                fontSize: '0.875rem'
-              }}
-              title="Click on the floor plan to add a marker"
-            >
-              <MapPin size={16} />
-              Click to Add Marker
-            </button>
-          )}
+          {/* Close Button */}
+          <button
+            onClick={onClose}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              color: 'var(--text-primary)',
+              fontWeight: '600',
+              fontSize: '0.875rem'
+            }}
+          >
+            <X size={18} />
+            Close
+          </button>
         </div>
       </div>
 
-      {/* ================================================================== */}
-      {/* MARKER STATS BAR                                                  */}
-      {/* ================================================================== */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-lg)',
-          padding: 'var(--space-sm) var(--space-md)',
-          background: 'var(--bg-primary)',
-          borderBottom: '1px solid var(--border-color)',
-          fontSize: '0.8125rem'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
-          <MapPin size={14} />
-          <span>{markers.length} markers on this page</span>
+      {/* Mode Instruction Banner */}
+      {mode === 'addMarker' && !isPdf && (
+        <div style={{
+          background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+          color: 'white',
+          padding: 'var(--space-sm) var(--space-lg)',
+          textAlign: 'center',
+          fontWeight: '500',
+          fontSize: '0.875rem'
+        }}>
+          <MapPin size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'middle' }} />
+          Click anywhere on the floor plan to place a marker
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#3b82f6' }}>
-          <MessageSquare size={14} />
-          <span>{markers.filter(m => m.item_type === 'rfi').length} RFIs</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#8b5cf6' }}>
-          <ClipboardList size={14} />
-          <span>{markers.filter(m => m.item_type === 'submittal').length} Submittals</span>
-        </div>
-      </div>
+      )}
 
       {/* ================================================================== */}
       {/* VIEWER AREA                                                       */}
@@ -638,12 +588,11 @@ function FloorPlanViewer({
         style={{
           flex: 1,
           overflow: 'auto',
-          background: '#1a1a2e',
+          background: '#0a0a14',
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          padding: 'var(--space-lg)'
+          justifyContent: 'center'
         }}
       >
         {loading ? (
@@ -652,58 +601,132 @@ function FloorPlanViewer({
             <p>Loading floor plan...</p>
           </div>
         ) : isPdf ? (
-          /* PDF - Show embedded viewer */
-          <div style={{ width: '100%', height: '100%', minHeight: '500px' }}>
+          <div style={{ width: '100%', height: '100%', padding: 'var(--space-lg)' }}>
             <iframe
               src={`${fileUrl}#page=${currentPage}`}
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-                borderRadius: 'var(--radius-md)'
-              }}
+              style={{ width: '100%', height: '100%', border: 'none', borderRadius: 'var(--radius-lg)' }}
               title={floorPlan.name}
             />
-            <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)', marginTop: 'var(--space-sm)', fontSize: '0.8125rem' }}>
-              Tip: For best marker support, upload floor plans as images (PNG, JPG)
+            <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', marginTop: 'var(--space-md)', fontSize: '0.8125rem' }}>
+              💡 For marker support, upload floor plans as images (PNG, JPG)
             </p>
           </div>
         ) : fileUrl ? (
-          /* Image - Show with markers */
           <div
             style={{
               position: 'relative',
               transform: `scale(${zoom})`,
               transformOrigin: 'center center',
-              transition: 'transform 0.2s ease'
+              transition: 'transform 0.15s ease',
+              margin: '40px'
             }}
           >
             <img
               ref={imageRef}
               src={fileUrl}
               alt={floorPlan.name}
-              onLoad={handleImageLoad}
               onClick={handleImageClick}
               style={{
                 maxWidth: '100%',
-                maxHeight: '100%',
                 display: 'block',
-                cursor: isPM ? 'crosshair' : 'default',
-                borderRadius: 'var(--radius-md)'
+                cursor: mode === 'addMarker' ? 'crosshair' : 'default',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
               }}
             />
 
-            {/* Markers Overlay */}
-            {markers.map(marker => (
-              <FloorPlanMarker
-                key={marker.id}
-                marker={marker}
-                isPM={isPM}
-                onClick={() => setSelectedMarker(marker)}
-                onDrag={(x, y) => handleMarkerDrag(marker.id, x, y)}
-                onDelete={() => handleMarkerDelete(marker.id)}
-              />
-            ))}
+            {/* Markers */}
+            {markers.map(marker => {
+              const color = getMarkerColor(marker);
+              const isHovered = hoveredMarker === marker.id;
+              const isSelected = selectedMarker?.id === marker.id;
+
+              return (
+                <div
+                  key={marker.id}
+                  style={{
+                    position: 'absolute',
+                    left: `${marker.x_percent}%`,
+                    top: `${marker.y_percent}%`,
+                    transform: 'translate(-50%, -100%)',
+                    cursor: 'pointer',
+                    zIndex: isHovered || isSelected ? 50 : 10
+                  }}
+                  onMouseEnter={() => setHoveredMarker(marker.id)}
+                  onMouseLeave={() => setHoveredMarker(null)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedMarker(marker);
+                  }}
+                >
+                  {/* Pin */}
+                  <div style={{
+                    width: isHovered || isSelected ? '32px' : '28px',
+                    height: isHovered || isSelected ? '32px' : '28px',
+                    background: color,
+                    borderRadius: '50% 50% 50% 0',
+                    transform: 'rotate(-45deg)',
+                    border: '3px solid white',
+                    boxShadow: `0 2px 8px rgba(0,0,0,0.4), 0 0 0 ${isSelected ? '3px' : '0px'} ${color}40`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.15s'
+                  }}>
+                    <div style={{ transform: 'rotate(45deg)' }}>
+                      {marker.item_type === 'rfi' ? (
+                        <MessageSquare size={isHovered || isSelected ? 14 : 12} color="white" />
+                      ) : (
+                        <ClipboardList size={isHovered || isSelected ? 14 : 12} color="white" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Hover Card */}
+                  {isHovered && !selectedMarker && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: '100%',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        marginBottom: '8px',
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: 'var(--space-sm) var(--space-md)',
+                        minWidth: '200px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                        whiteSpace: 'nowrap',
+                        zIndex: 100
+                      }}
+                    >
+                      <div style={{ fontWeight: '600', color: 'var(--text-primary)', marginBottom: '4px', fontSize: '0.875rem' }}>
+                        {marker.item_type === 'rfi' ? marker.item.rfi_number : marker.item.submittal_number}
+                      </div>
+                      <div style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem', marginBottom: '4px', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {marker.item_type === 'rfi' ? marker.item.subject : marker.item.title}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          fontSize: '0.6875rem',
+                          fontWeight: '600',
+                          background: `${color}20`,
+                          color: color
+                        }}>
+                          {marker.item.status}
+                        </span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                          Click for details
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
             {/* Pending Marker */}
             {pendingMarkerPosition && (
@@ -713,18 +736,19 @@ function FloorPlanViewer({
                   left: `${pendingMarkerPosition.x_percent}%`,
                   top: `${pendingMarkerPosition.y_percent}%`,
                   transform: 'translate(-50%, -100%)',
-                  pointerEvents: 'none'
+                  pointerEvents: 'none',
+                  zIndex: 100
                 }}
               >
                 <div
                   style={{
-                    width: '24px',
-                    height: '24px',
+                    width: '32px',
+                    height: '32px',
                     background: 'var(--sunbelt-orange)',
                     borderRadius: '50% 50% 50% 0',
                     transform: 'rotate(-45deg)',
-                    border: '2px solid white',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                    border: '3px solid white',
+                    boxShadow: '0 2px 12px rgba(255, 107, 53, 0.5)',
                     animation: 'pulse 1s infinite'
                   }}
                 />
@@ -737,6 +761,149 @@ function FloorPlanViewer({
           </div>
         )}
       </div>
+
+      {/* ================================================================== */}
+      {/* SELECTED MARKER DETAIL PANEL                                      */}
+      {/* ================================================================== */}
+      {selectedMarker && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: '400px',
+            background: 'var(--bg-secondary)',
+            borderLeft: '1px solid var(--border-color)',
+            boxShadow: '-4px 0 24px rgba(0,0,0,0.3)',
+            display: 'flex',
+            flexDirection: 'column',
+            zIndex: 200
+          }}
+        >
+          {/* Panel Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: 'var(--space-md) var(--space-lg)',
+            borderBottom: '1px solid var(--border-color)'
+          }}>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+              {selectedMarker.item_type === 'rfi' ? 'RFI Details' : 'Submittal Details'}
+            </h3>
+            <button
+              onClick={() => setSelectedMarker(null)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px' }}
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Panel Content */}
+          <div style={{ flex: 1, overflow: 'auto', padding: 'var(--space-lg)' }}>
+            {selectedMarker.item && (
+              <>
+                <div style={{ marginBottom: 'var(--space-lg)' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>
+                    {selectedMarker.item_type === 'rfi' ? 'RFI Number' : 'Submittal Number'}
+                  </div>
+                  <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--sunbelt-orange)' }}>
+                    {selectedMarker.item_type === 'rfi' ? selectedMarker.item.rfi_number : selectedMarker.item.submittal_number}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 'var(--space-lg)' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>
+                    {selectedMarker.item_type === 'rfi' ? 'Subject' : 'Title'}
+                  </div>
+                  <div style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '500' }}>
+                    {selectedMarker.item_type === 'rfi' ? selectedMarker.item.subject : selectedMarker.item.title}
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>Status</div>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '4px 12px',
+                      borderRadius: '20px',
+                      fontSize: '0.8125rem',
+                      fontWeight: '600',
+                      background: `${getMarkerColor(selectedMarker)}20`,
+                      color: getMarkerColor(selectedMarker)
+                    }}>
+                      {selectedMarker.item.status}
+                    </span>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>Due Date</div>
+                    <div style={{ fontSize: '0.9375rem', color: 'var(--text-primary)' }}>
+                      {selectedMarker.item.due_date ? new Date(selectedMarker.item.due_date).toLocaleDateString() : 'Not set'}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedMarker.item.sent_to && (
+                  <div style={{ marginBottom: 'var(--space-lg)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>Sent To</div>
+                    <div style={{ fontSize: '0.9375rem', color: 'var(--text-primary)' }}>{selectedMarker.item.sent_to}</div>
+                  </div>
+                )}
+
+                {selectedMarker.item_type === 'rfi' && selectedMarker.item.question && (
+                  <div style={{ marginBottom: 'var(--space-lg)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>Question</div>
+                    <div style={{ fontSize: '0.9375rem', color: 'var(--text-primary)', lineHeight: '1.5', background: 'var(--bg-primary)', padding: 'var(--space-md)', borderRadius: 'var(--radius-md)' }}>
+                      {selectedMarker.item.question}
+                    </div>
+                  </div>
+                )}
+
+                {selectedMarker.item_type === 'submittal' && selectedMarker.item.description && (
+                  <div style={{ marginBottom: 'var(--space-lg)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>Description</div>
+                    <div style={{ fontSize: '0.9375rem', color: 'var(--text-primary)', lineHeight: '1.5', background: 'var(--bg-primary)', padding: 'var(--space-md)', borderRadius: 'var(--radius-md)' }}>
+                      {selectedMarker.item.description}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Panel Footer */}
+          {isPM && (
+            <div style={{
+              padding: 'var(--space-md) var(--space-lg)',
+              borderTop: '1px solid var(--border-color)'
+            }}>
+              <button
+                onClick={() => handleMarkerDelete(selectedMarker.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  padding: '10px',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: 'var(--radius-md)',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '0.875rem'
+                }}
+              >
+                <Trash2 size={16} />
+                Remove Marker from Floor Plan
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ================================================================== */}
       {/* ADD MARKER MODAL                                                  */}
@@ -755,19 +922,13 @@ function FloorPlanViewer({
         />
       )}
 
-      {/* ================================================================== */}
-      {/* ITEM DETAIL PANEL                                                 */}
-      {/* ================================================================== */}
-      {selectedMarker && (
-        <ItemDetailPanel
-          marker={selectedMarker}
-          onClose={() => setSelectedMarker(null)}
-          onDelete={isPM ? () => {
-            handleMarkerDelete(selectedMarker.id);
-            setSelectedMarker(null);
-          } : null}
-        />
-      )}
+      {/* Pulse Animation */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+          50% { opacity: 0.8; transform: translate(-50%, -100%) scale(1.1); }
+        }
+      `}</style>
     </div>
   );
 }
