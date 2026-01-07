@@ -24,7 +24,7 @@ import { buildCalendarItems, getProjectColor } from '../../utils/calendarUtils';
 // ============================================================================
 // PM DASHBOARD COMPONENT
 // Main dashboard showing projects, tasks, RFIs, submittals overview
-// Layout: Stats → Calendar → Kanban Board → Quick Actions → Projects/Overdue
+// Layout: Stats → Quick Actions → Calendar → Kanban Board → Projects/Overdue
 // ============================================================================
 
 function PMDashboard() {
@@ -429,75 +429,7 @@ function PMDashboard() {
       </div>
 
       {/* ================================================================== */}
-      {/* 3. CALENDAR WEEK VIEW                                              */}
-      {/* ================================================================== */}
-      <div style={{ marginBottom: 'var(--space-xl)' }}>
-        <CalendarWeekView
-          items={calendarItems}
-          projects={projects}
-          onItemClick={handleCalendarItemClick}
-          onViewChange={handleCalendarViewChange}
-          compact={false}
-        />
-      </div>
-
-      {/* ================================================================== */}
-      {/* 4. KANBAN BOARD - ALL TASKS ACROSS PROJECTS                       */}
-      {/* ================================================================== */}
-      <div style={{
-        background: 'var(--bg-secondary)',
-        borderRadius: 'var(--radius-lg)',
-        padding: 'var(--space-lg)',
-        marginBottom: 'var(--space-xl)',
-        border: '1px solid var(--border-color)'
-      }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'space-between',
-          marginBottom: 'var(--space-lg)' 
-        }}>
-          <h3 style={{ 
-            fontSize: '1rem', 
-            fontWeight: '700', 
-            color: 'var(--text-primary)', 
-            margin: 0,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-sm)'
-          }}>
-            <LayoutGrid size={20} style={{ color: 'var(--sunbelt-orange)' }} />
-            All Tasks Board
-          </h3>
-          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-            {activeTasks.length} tasks across {projects.length} projects
-          </span>
-        </div>
-        
-        {activeTasks.length === 0 ? (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: 'var(--space-2xl)', 
-            color: 'var(--text-tertiary)' 
-          }}>
-            <CheckSquare size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
-            <h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>
-              No tasks yet
-            </h4>
-            <p>Create a project and add tasks to see them here</p>
-          </div>
-        ) : (
-          <KanbanBoard
-            tasks={activeTasks}
-            onStatusChange={handleTaskStatusChange}
-            onTaskClick={handleKanbanTaskClick}
-            showProject={true}
-          />
-        )}
-      </div>
-
-      {/* ================================================================== */}
-      {/* 5. QUICK ACTIONS (Moved below Kanban Board)                        */}
+      {/* 3. QUICK ACTIONS (Back to original position)                       */}
       {/* ================================================================== */}
       <div style={{
         background: 'var(--bg-secondary)',
@@ -570,6 +502,74 @@ function PMDashboard() {
             New Submittal
           </button>
         </div>
+      </div>
+
+      {/* ================================================================== */}
+      {/* 4. CALENDAR WEEK VIEW                                              */}
+      {/* ================================================================== */}
+      <div style={{ marginBottom: 'var(--space-xl)' }}>
+        <CalendarWeekView
+          items={calendarItems}
+          projects={projects}
+          onItemClick={handleCalendarItemClick}
+          onViewChange={handleCalendarViewChange}
+          compact={false}
+        />
+      </div>
+
+      {/* ================================================================== */}
+      {/* 5. KANBAN BOARD - ALL TASKS ACROSS PROJECTS                       */}
+      {/* ================================================================== */}
+      <div style={{
+        background: 'var(--bg-secondary)',
+        borderRadius: 'var(--radius-lg)',
+        padding: 'var(--space-lg)',
+        marginBottom: 'var(--space-xl)',
+        border: '1px solid var(--border-color)'
+      }}>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          marginBottom: 'var(--space-lg)' 
+        }}>
+          <h3 style={{ 
+            fontSize: '1rem', 
+            fontWeight: '700', 
+            color: 'var(--text-primary)', 
+            margin: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-sm)'
+          }}>
+            <LayoutGrid size={20} style={{ color: 'var(--sunbelt-orange)' }} />
+            All Tasks Board
+          </h3>
+          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+            {activeTasks.length} tasks across {projects.length} projects
+          </span>
+        </div>
+        
+        {activeTasks.length === 0 ? (
+          <div style={{ 
+            textAlign: 'center', 
+            padding: 'var(--space-2xl)', 
+            color: 'var(--text-tertiary)' 
+          }}>
+            <CheckSquare size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
+            <h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>
+              No tasks yet
+            </h4>
+            <p>Create a project and add tasks to see them here</p>
+          </div>
+        ) : (
+          <KanbanBoard
+            tasks={activeTasks}
+            onStatusChange={handleTaskStatusChange}
+            onTaskClick={handleKanbanTaskClick}
+            showProject={true}
+          />
+        )}
       </div>
 
       {/* ================================================================== */}

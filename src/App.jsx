@@ -6,10 +6,18 @@ import PMDashboard from './components/dashboards/PMDashboard';
 import CalendarPage from './components/calendar/CalendarPage';
 import './App.css';
 
+// ============================================================================
+// APP CONTENT COMPONENT
+// Main authenticated app layout with sidebar navigation
+// ============================================================================
+
 function AppContent() {
   const { user, loading } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
 
+  // =========================================================================
+  // LOADING STATE
+  // =========================================================================
   if (loading) {
     return (
       <div style={{
@@ -32,32 +40,47 @@ function AppContent() {
     );
   }
 
+  // =========================================================================
+  // UNAUTHENTICATED - SHOW LOGIN
+  // =========================================================================
   if (!user) {
     return <Login />;
   }
 
+  // =========================================================================
+  // RENDER CONTENT BASED ON CURRENT VIEW
+  // Using key prop to reset component state when switching views
+  // This ensures clicking "Dashboard" resets back to main view even if
+  // you were inside a ProjectDetails view
+  // =========================================================================
   const renderContent = () => {
     switch (currentView) {
       case 'calendar':
         return <CalendarPage />;
       case 'projects':
-        // For now, dashboard handles projects view
-        return <PMDashboard />;
+        // Projects view - shows PMDashboard with projects focus
+        // Key ensures state resets when switching between views
+        return <PMDashboard key="projects" />;
       case 'tasks':
         // Future: dedicated tasks page
-        return <PMDashboard />;
+        return <PMDashboard key="tasks" />;
       case 'rfis':
         // Future: dedicated RFIs page
-        return <PMDashboard />;
+        return <PMDashboard key="rfis" />;
       case 'submittals':
         // Future: dedicated submittals page
-        return <PMDashboard />;
+        return <PMDashboard key="submittals" />;
       case 'dashboard':
       default:
-        return <PMDashboard />;
+        // Dashboard view - key="dashboard" ensures clicking Dashboard
+        // from sidebar resets PMDashboard's internal state (selectedProject)
+        return <PMDashboard key="dashboard" />;
     }
   };
 
+  // =========================================================================
+  // RENDER - MAIN LAYOUT
+  // =========================================================================
   return (
     <div style={{
       display: 'flex',
@@ -79,6 +102,11 @@ function AppContent() {
     </div>
   );
 }
+
+// ============================================================================
+// APP ROOT COMPONENT
+// Wraps everything in AuthProvider for authentication context
+// ============================================================================
 
 function App() {
   return (

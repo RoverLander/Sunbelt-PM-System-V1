@@ -1,6 +1,7 @@
 // ===== TASKS VIEW COMPONENT =====
 // Provides list/board toggle view for tasks within a project
 // Includes filtering, status updates, and integrates KanbanBoard
+// IMPORTANT: Maintains consistent layout/size between view modes
 
 import React, { useState } from 'react';
 import { 
@@ -31,7 +32,7 @@ function TasksView({
   showToast 
 }) {
   // ===== VIEW STATE =====
-  const [viewMode, setViewMode] = useState('board'); // 'list' or 'board'
+  const [viewMode, setViewMode] = useState('board'); // Default to board view
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
 
@@ -97,17 +98,20 @@ function TasksView({
     <div style={{
       background: 'var(--bg-secondary)',
       borderRadius: 'var(--radius-lg)',
-      padding: 'var(--space-lg)',
-      border: '1px solid var(--border-color)'
+      border: '1px solid var(--border-color)',
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: '600px' // Consistent minimum height
     }}>
       {/* ================================================================== */}
-      {/* HEADER WITH CONTROLS                                              */}
+      {/* HEADER WITH CONTROLS - Fixed position                             */}
       {/* ================================================================== */}
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center', 
-        marginBottom: 'var(--space-lg)',
+        padding: 'var(--space-lg)',
+        borderBottom: '1px solid var(--border-color)',
         flexWrap: 'wrap',
         gap: 'var(--space-md)'
       }}>
@@ -246,158 +250,179 @@ function TasksView({
       </div>
 
       {/* ================================================================== */}
-      {/* EMPTY STATE                                                       */}
+      {/* CONTENT AREA - Fixed height container for consistent layout       */}
       {/* ================================================================== */}
-      {tasks.length === 0 ? (
-        <div style={{ 
-          textAlign: 'center', 
-          padding: 'var(--space-2xl)', 
-          color: 'var(--text-tertiary)' 
-        }}>
-          <CheckSquare size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
-          <h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>
-            No tasks yet
-          </h4>
-          <p>Create your first task to get started</p>
-        </div>
-      ) : filteredTasks.length === 0 ? (
-        <div style={{ 
-          textAlign: 'center', 
-          padding: 'var(--space-2xl)', 
-          color: 'var(--text-tertiary)' 
-        }}>
-          <Filter size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
-          <h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>
-            No tasks match filters
-          </h4>
-          <p>Try adjusting your filters</p>
-        </div>
-      ) : viewMode === 'board' ? (
-        /* ================================================================== */
-        /* KANBAN BOARD VIEW                                                  */
-        /* ================================================================== */
-        <KanbanBoard
-          tasks={filteredTasks}
-          onStatusChange={handleStatusChange}
-          onTaskClick={onTaskClick}
-          showProject={false}
-        />
-      ) : (
-        /* ================================================================== */
-        /* LIST VIEW                                                          */
-        /* ================================================================== */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-          {filteredTasks.map(task => {
-            const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed';
-            
-            return (
-              <div
-                key={task.id}
-                onClick={() => onTaskClick(task)}
-                style={{
-                  padding: 'var(--space-md)',
-                  background: 'var(--bg-primary)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-color)',
-                  borderLeft: isOverdue ? '3px solid #ef4444' : '3px solid var(--border-color)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--sunbelt-orange)';
-                  e.currentTarget.style.transform = 'translateX(4px)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--border-color)';
-                  e.currentTarget.style.transform = 'translateX(0)';
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: 'var(--space-sm)', 
-                    marginBottom: '4px',
-                    flexWrap: 'wrap'
-                  }}>
-                    {/* External indicator */}
-                    {(task.external_assignee_email || task.external_assignee_name) && (
-                      <ExternalLink size={14} color="var(--sunbelt-orange)" title="External Task" />
-                    )}
-                    
-                    {/* Title */}
-                    <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
-                      {task.title}
-                    </span>
-                    
-                    {/* Status Badge */}
-                    <span style={{
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                      fontSize: '0.7rem',
-                      fontWeight: '600',
-                      background: `${getStatusColor(task.status)}20`,
-                      color: getStatusColor(task.status)
+      <div style={{ 
+        flex: 1,
+        padding: 'var(--space-lg)',
+        minHeight: '500px', // Consistent content area height
+        overflow: 'auto'
+      }}>
+        {/* Empty State */}
+        {tasks.length === 0 ? (
+          <div style={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            minHeight: '400px',
+            color: 'var(--text-tertiary)' 
+          }}>
+            <CheckSquare size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
+            <h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>
+              No tasks yet
+            </h4>
+            <p>Create your first task to get started</p>
+          </div>
+        ) : filteredTasks.length === 0 ? (
+          <div style={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            minHeight: '400px',
+            color: 'var(--text-tertiary)' 
+          }}>
+            <Filter size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
+            <h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>
+              No tasks match filters
+            </h4>
+            <p>Try adjusting your filters</p>
+          </div>
+        ) : viewMode === 'board' ? (
+          /* ================================================================== */
+          /* KANBAN BOARD VIEW                                                  */
+          /* ================================================================== */
+          <KanbanBoard
+            tasks={filteredTasks}
+            onStatusChange={handleStatusChange}
+            onTaskClick={onTaskClick}
+            showProject={false}
+          />
+        ) : (
+          /* ================================================================== */
+          /* LIST VIEW - Same container height as board                         */
+          /* ================================================================== */
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: 'var(--space-sm)',
+            minHeight: '400px' // Match board minimum height
+          }}>
+            {filteredTasks.map(task => {
+              const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed';
+              
+              return (
+                <div
+                  key={task.id}
+                  onClick={() => onTaskClick(task)}
+                  style={{
+                    padding: 'var(--space-md)',
+                    background: 'var(--bg-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)',
+                    borderLeft: isOverdue ? '3px solid #ef4444' : '3px solid var(--border-color)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--sunbelt-orange)';
+                    e.currentTarget.style.transform = 'translateX(4px)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border-color)';
+                    e.currentTarget.style.transform = 'translateX(0)';
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 'var(--space-sm)', 
+                      marginBottom: '4px',
+                      flexWrap: 'wrap'
                     }}>
-                      {task.status}
-                    </span>
+                      {/* External indicator */}
+                      {(task.external_assignee_email || task.external_assignee_name) && (
+                        <ExternalLink size={14} color="var(--sunbelt-orange)" title="External Task" />
+                      )}
+                      
+                      {/* Title */}
+                      <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
+                        {task.title}
+                      </span>
+                      
+                      {/* Status Badge */}
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        fontSize: '0.7rem',
+                        fontWeight: '600',
+                        background: `${getStatusColor(task.status)}20`,
+                        color: getStatusColor(task.status)
+                      }}>
+                        {task.status}
+                      </span>
+                      
+                      {/* Priority Badge */}
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        fontSize: '0.7rem',
+                        fontWeight: '600',
+                        background: `${getPriorityColor(task.priority)}20`,
+                        color: getPriorityColor(task.priority)
+                      }}>
+                        {task.priority}
+                      </span>
+                    </div>
                     
-                    {/* Priority Badge */}
-                    <span style={{
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                      fontSize: '0.7rem',
-                      fontWeight: '600',
-                      background: `${getPriorityColor(task.priority)}20`,
-                      color: getPriorityColor(task.priority)
+                    <div style={{ 
+                      fontSize: '0.8125rem', 
+                      color: 'var(--text-secondary)', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 'var(--space-md)' 
                     }}>
-                      {task.priority}
-                    </span>
+                      {/* Assignee */}
+                      {(task.assignee?.name || task.external_assignee_name) && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <User size={12} />
+                          {task.assignee?.name || task.external_assignee_name}
+                        </span>
+                      )}
+                      
+                      {/* Due Date */}
+                      {task.due_date && (
+                        <>
+                          <span>•</span>
+                          <span style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '4px',
+                            color: isOverdue ? '#ef4444' : 'var(--text-secondary)'
+                          }}>
+                            <Calendar size={12} />
+                            Due: {formatDate(task.due_date)}
+                            {isOverdue && ' (Overdue)'}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                   
-                  <div style={{ 
-                    fontSize: '0.8125rem', 
-                    color: 'var(--text-secondary)', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: 'var(--space-md)' 
-                  }}>
-                    {/* Assignee */}
-                    {(task.assignee?.name || task.external_assignee_name) && (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <User size={12} />
-                        {task.assignee?.name || task.external_assignee_name}
-                      </span>
-                    )}
-                    
-                    {/* Due Date */}
-                    {task.due_date && (
-                      <>
-                        <span>•</span>
-                        <span style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: '4px',
-                          color: isOverdue ? '#ef4444' : 'var(--text-secondary)'
-                        }}>
-                          <Calendar size={12} />
-                          Due: {formatDate(task.due_date)}
-                          {isOverdue && ' (Overdue)'}
-                        </span>
-                      </>
-                    )}
-                  </div>
+                  <ChevronRight size={20} style={{ color: 'var(--text-tertiary)' }} />
                 </div>
-                
-                <ChevronRight size={20} style={{ color: 'var(--text-tertiary)' }} />
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
