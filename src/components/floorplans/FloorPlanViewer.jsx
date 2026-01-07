@@ -2,10 +2,11 @@
 // FloorPlanViewer Component
 // ============================================================================
 // Full-screen viewer for floor plans with marker support.
-// Renders PDFs using PDF.js and supports pan, zoom, and marker placement.
+// Uses browser's native PDF viewer for PDFs, img for images.
+// Markers work on both - positioned as percentage overlays.
 // ============================================================================
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft,
   ZoomIn,
@@ -18,24 +19,20 @@ import {
   MapPin,
   MessageSquare,
   ClipboardList,
-  Maximize2,
-  RotateCw,
-  Settings,
-  X
+  ExternalLink,
+  X,
+  Check
 } from 'lucide-react';
-import * as pdfjsLib from 'pdfjs-dist';
+import { supabase } from '../../utils/supabaseClient';
 import FloorPlanMarker from './FloorPlanMarker';
 import AddMarkerModal from './AddMarkerModal';
 import ItemDetailPanel from './ItemDetailPanel';
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-const MIN_ZOOM = 0.25;
-const MAX_ZOOM = 3;
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.25;
 
 // ============================================================================
@@ -60,8 +57,7 @@ function FloorPlanViewer({
   // REFS
   // ==========================================================================
   const containerRef = useRef(null);
-  const canvasRef = useRef(null);
-  const pdfDocRef = useRef(null);
+  const imageRef = useRef(null);
 
   // ==========================================================================
   // STATE - VIEWER
@@ -69,216 +65,140 @@ function FloorPlanViewer({
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [zoom, setZoom] = useState(1);
-  const [pdfDoc, setPdfDoc] = useState(null);
-  const [renderedPage, setRenderedPage] = useState(null);
-  const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
+  const [fileUrl, setFileUrl] = useState(null);
+  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
 
   // ==========================================================================
   // STATE - MARKERS
   // ==========================================================================
   const [markers, setMarkers] = useState([]);
-  const [filterType, setFilterType] = useState('all'); // 'all', 'rfi', 'submittal'
-  const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'open', 'closed'
-  const [hoveredMarker, setHoveredMarker] = useState(null);
-  const [selectedMarker, setSelectedMarker] = useState(null);
-  const [draggingMarker, setDraggingMarker] = useState(null);
+  const [filterType, setFilterType] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [showFilters, setShowFilters] = useState(false);
 
   // ==========================================================================
   // STATE - MODALS
   // ==========================================================================
   const [showAddMarker, setShowAddMarker] = useState(false);
   const [pendingMarkerPosition, setPendingMarkerPosition] = useState(null);
-  const [showDetailPanel, setShowDetailPanel] = useState(false);
-  const [detailItem, setDetailItem] = useState(null);
-  const [editingPageName, setEditingPageName] = useState(false);
+  const [selectedMarker, setSelectedMarker] = useState(null);
 
   // ==========================================================================
-  // LOAD PDF/IMAGE
+  // STATE - PAGE RENAME
+  // ==========================================================================
+  const [editingPageName, setEditingPageName] = useState(false);
+  const [pageName, setPageName] = useState('');
+
+  // ==========================================================================
+  // DERIVED VALUES
+  // ==========================================================================
+  const isPdf = floorPlan.file_type === 'application/pdf';
+  const pageCount = floorPlan.page_count || 1;
+  const currentPageData = floorPlan.pages?.find(p => p.page_number === currentPage);
+  const currentPageName = currentPageData?.name || `Page ${currentPage}`;
+
+  // ==========================================================================
+  // LOAD FILE URL
   // ==========================================================================
   useEffect(() => {
-    const loadDocument = async () => {
+    const loadFile = async () => {
       setLoading(true);
-
       try {
-        if (floorPlan.file_type === 'application/pdf') {
-          // Load PDF
-          const { data } = await supabase.storage
-            .from('project-files')
-            .download(floorPlan.file_path);
+        const { data } = await supabase.storage
+          .from('project-files')
+          .getPublicUrl(floorPlan.file_path);
 
-          const arrayBuffer = await data.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          pdfDocRef.current = pdf;
-          setPdfDoc(pdf);
+        if (data?.publicUrl) {
+          setFileUrl(data.publicUrl);
         }
       } catch (err) {
-        console.error('Error loading document:', err);
-        showToast('Failed to load floor plan', 'error');
+        console.error('Error loading file:', err);
+        showToast?.('Error loading floor plan', 'error');
       } finally {
         setLoading(false);
       }
     };
 
-    loadDocument();
-
-    return () => {
-      pdfDocRef.current = null;
-    };
-  }, [floorPlan]);
-
-  // ==========================================================================
-  // RENDER PDF PAGE
-  // ==========================================================================
-  useEffect(() => {
-    const renderPage = async () => {
-      if (!pdfDoc || !canvasRef.current) return;
-
-      try {
-        const page = await pdfDoc.getPage(currentPage);
-        const viewport = page.getViewport({ scale: zoom });
-
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
-
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-
-        setCanvasDimensions({ width: viewport.width, height: viewport.height });
-
-        await page.render({
-          canvasContext: context,
-          viewport: viewport
-        }).promise;
-
-        setRenderedPage(currentPage);
-      } catch (err) {
-        console.error('Error rendering page:', err);
-      }
-    };
-
-    renderPage();
-  }, [pdfDoc, currentPage, zoom]);
-
-  // ==========================================================================
-  // LOAD MARKERS FOR CURRENT PAGE
-  // ==========================================================================
-  useEffect(() => {
-    const pageMarkers = (floorPlan.markers || []).filter(
-      m => m.page_number === currentPage
-    );
-    setMarkers(pageMarkers);
-  }, [floorPlan.markers, currentPage]);
+    if (floorPlan.file_path) {
+      loadFile();
+    }
+  }, [floorPlan.file_path]);
 
   // ==========================================================================
   // FILTER MARKERS
   // ==========================================================================
-  const filteredMarkers = markers.filter(marker => {
-    // Type filter
-    if (filterType !== 'all' && marker.item_type !== filterType) {
-      return false;
+  useEffect(() => {
+    let filtered = floorPlan.markers || [];
+
+    // Filter by current page
+    filtered = filtered.filter(m => m.page_number === currentPage);
+
+    // Filter by type
+    if (filterType !== 'all') {
+      filtered = filtered.filter(m => m.item_type === filterType);
     }
 
-    // Status filter
+    // Filter by status
     if (filterStatus !== 'all') {
-      const item = marker.item;
-      if (!item) return false;
-      
-      const isOpen = ['Open', 'Pending', 'In Progress', 'Submitted', 'Under Review'].includes(item.status);
-      if (filterStatus === 'open' && !isOpen) return false;
-      if (filterStatus === 'closed' && isOpen) return false;
+      filtered = filtered.filter(marker => {
+        const item = marker.item_type === 'rfi'
+          ? rfis?.find(r => r.id === marker.item_id)
+          : submittals?.find(s => s.id === marker.item_id);
+
+        if (!item) return false;
+
+        if (filterStatus === 'open') {
+          return marker.item_type === 'rfi'
+            ? ['Open', 'Pending'].includes(item.status)
+            : ['Pending', 'Submitted', 'Under Review'].includes(item.status);
+        } else {
+          return marker.item_type === 'rfi'
+            ? ['Answered', 'Closed'].includes(item.status)
+            : ['Approved', 'Approved as Noted', 'Rejected', 'Revise & Resubmit'].includes(item.status);
+        }
+      });
     }
 
-    return true;
-  });
+    // Enrich markers with item data
+    const enrichedMarkers = filtered.map(marker => {
+      const item = marker.item_type === 'rfi'
+        ? rfis?.find(r => r.id === marker.item_id)
+        : submittals?.find(s => s.id === marker.item_id);
+      return { ...marker, item };
+    }).filter(m => m.item); // Only show markers with valid items
+
+    setMarkers(enrichedMarkers);
+  }, [floorPlan.markers, currentPage, filterType, filterStatus, rfis, submittals]);
 
   // ==========================================================================
   // HANDLERS - ZOOM
   // ==========================================================================
-  const handleZoomIn = () => {
-    setZoom(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM));
-  };
-
-  const handleZoomOut = () => {
-    setZoom(prev => Math.max(prev - ZOOM_STEP, MIN_ZOOM));
-  };
-
-  const handleZoomReset = () => {
-    setZoom(1);
-  };
+  const handleZoomIn = () => setZoom(z => Math.min(z + ZOOM_STEP, MAX_ZOOM));
+  const handleZoomOut = () => setZoom(z => Math.max(z - ZOOM_STEP, MIN_ZOOM));
 
   // ==========================================================================
   // HANDLERS - PAGE NAVIGATION
   // ==========================================================================
-  const handlePrevPage = () => {
-    setCurrentPage(prev => Math.max(prev - 1, 1));
-  };
-
-  const handleNextPage = () => {
-    setCurrentPage(prev => Math.min(prev + 1, floorPlan.page_count));
-  };
+  const handlePrevPage = () => setCurrentPage(p => Math.max(1, p - 1));
+  const handleNextPage = () => setCurrentPage(p => Math.min(pageCount, p + 1));
 
   // ==========================================================================
-  // HANDLERS - CANVAS CLICK (for adding markers)
+  // HANDLERS - MARKER PLACEMENT
   // ==========================================================================
-  const handleCanvasClick = (e) => {
-    if (!isPM || draggingMarker) return;
+  const handleImageClick = (e) => {
+    if (!isPM || isPdf) return; // Can't place markers on PDF view
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const rect = imageRef.current?.getBoundingClientRect();
+    if (!rect) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x_percent = ((e.clientX - rect.left) / rect.width) * 100;
+    const y_percent = ((e.clientY - rect.top) / rect.height) * 100;
 
-    // Convert to percentage
-    const xPercent = (x / rect.width) * 100;
-    const yPercent = (y / rect.height) * 100;
-
-    setPendingMarkerPosition({ x: xPercent, y: yPercent });
+    setPendingMarkerPosition({ x_percent, y_percent });
     setShowAddMarker(true);
   };
 
-  // ==========================================================================
-  // HANDLERS - MARKER ACTIONS
-  // ==========================================================================
-  const handleMarkerClick = (marker) => {
-    setDetailItem(marker.item);
-    setShowDetailPanel(true);
-  };
-
-  const handleMarkerDragStart = (marker) => {
-    if (!isPM) return;
-    setDraggingMarker(marker);
-  };
-
-  const handleMarkerDragEnd = async (marker, newX, newY) => {
-    if (!isPM) return;
-
-    try {
-      await onMarkerUpdate(marker.id, newX, newY);
-      showToast('Marker position updated', 'success');
-    } catch (err) {
-      showToast('Failed to update marker position', 'error');
-    }
-
-    setDraggingMarker(null);
-  };
-
-  const handleMarkerDelete = async (marker) => {
-    if (!confirm('Remove this marker from the floor plan?')) return;
-
-    try {
-      await onMarkerDelete(marker.id);
-      showToast('Marker removed', 'success');
-    } catch (err) {
-      showToast('Failed to remove marker', 'error');
-    }
-  };
-
-  // ==========================================================================
-  // HANDLERS - ADD MARKER
-  // ==========================================================================
-  const handleAddMarker = async (itemType, itemId) => {
+  const handleMarkerSelect = async (itemType, itemId) => {
     if (!pendingMarkerPosition) return;
 
     try {
@@ -287,83 +207,93 @@ function FloorPlanViewer({
         page_number: currentPage,
         item_type: itemType,
         item_id: itemId,
-        x_percent: pendingMarkerPosition.x,
-        y_percent: pendingMarkerPosition.y,
-        created_by: null // Will be set by RLS
+        x_percent: pendingMarkerPosition.x_percent,
+        y_percent: pendingMarkerPosition.y_percent
       });
-
-      showToast('Marker added', 'success');
+      showToast?.('Marker added');
       setShowAddMarker(false);
       setPendingMarkerPosition(null);
-      await onRefresh();
+      onRefresh?.();
     } catch (err) {
-      showToast('Failed to add marker', 'error');
+      console.error('Error creating marker:', err);
+      showToast?.('Error adding marker', 'error');
     }
   };
 
-  // ==========================================================================
-  // HANDLERS - PAGE NAME
-  // ==========================================================================
-  const handlePageNameSave = async (newName) => {
+  const handleMarkerDrag = async (markerId, x_percent, y_percent) => {
     try {
-      await onPageRename(floorPlan.id, currentPage, newName);
-      showToast('Page renamed', 'success');
-      setEditingPageName(false);
-      await onRefresh();
+      await onMarkerUpdate(markerId, x_percent, y_percent);
+      onRefresh?.();
     } catch (err) {
-      showToast('Failed to rename page', 'error');
+      console.error('Error updating marker:', err);
+      showToast?.('Error moving marker', 'error');
+    }
+  };
+
+  const handleMarkerDelete = async (markerId) => {
+    try {
+      await onMarkerDelete(markerId);
+      showToast?.('Marker removed');
+      onRefresh?.();
+    } catch (err) {
+      console.error('Error deleting marker:', err);
+      showToast?.('Error removing marker', 'error');
     }
   };
 
   // ==========================================================================
-  // GET CURRENT PAGE NAME
+  // HANDLERS - PAGE RENAME
   // ==========================================================================
-  const getCurrentPageName = () => {
-    const pages = floorPlan.pages || [];
-    const page = pages.find(p => p.page_number === currentPage);
-    return page?.name || `Page ${currentPage}`;
+  const handleStartRename = () => {
+    setPageName(currentPageName);
+    setEditingPageName(true);
+  };
+
+  const handleSavePageName = async () => {
+    if (!pageName.trim()) return;
+
+    try {
+      await onPageRename(floorPlan.id, currentPage, pageName.trim());
+      showToast?.('Page renamed');
+      setEditingPageName(false);
+      onRefresh?.();
+    } catch (err) {
+      console.error('Error renaming page:', err);
+      showToast?.('Error renaming page', 'error');
+    }
   };
 
   // ==========================================================================
-  // RENDER - IMAGE FLOOR PLAN
+  // IMAGE LOAD HANDLER
   // ==========================================================================
-  const renderImage = () => {
-    const { data } = supabase.storage
-      .from('project-files')
-      .getPublicUrl(floorPlan.file_path);
-
-    return (
-      <img
-        src={data.publicUrl}
-        alt={floorPlan.name}
-        style={{
-          maxWidth: '100%',
-          maxHeight: '100%',
-          transform: `scale(${zoom})`,
-          transformOrigin: 'center center'
-        }}
-        onClick={handleCanvasClick}
-      />
-    );
+  const handleImageLoad = (e) => {
+    setImageDimensions({
+      width: e.target.naturalWidth,
+      height: e.target.naturalHeight
+    });
   };
 
   // ==========================================================================
   // RENDER
   // ==========================================================================
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '600px' }}>
       {/* ================================================================== */}
-      {/* HEADER                                                            */}
+      {/* TOOLBAR                                                           */}
       {/* ================================================================== */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 'var(--space-md) var(--space-lg)',
-        borderBottom: '1px solid var(--border-color)',
-        background: 'var(--bg-secondary)'
-      }}>
-        {/* Left: Back & Title */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: 'var(--space-md)',
+          background: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border-color)',
+          gap: 'var(--space-md)',
+          flexWrap: 'wrap'
+        }}
+      >
+        {/* Left - Back & Title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
           <button
             onClick={onBack}
@@ -377,8 +307,7 @@ function FloorPlanViewer({
               borderRadius: 'var(--radius-md)',
               color: 'var(--text-secondary)',
               cursor: 'pointer',
-              fontWeight: '500',
-              fontSize: '0.875rem'
+              fontWeight: '500'
             }}
           >
             <ArrowLeft size={16} />
@@ -386,111 +315,115 @@ function FloorPlanViewer({
           </button>
 
           <div>
-            <h2 style={{ 
-              fontSize: '1.125rem', 
-              fontWeight: '700', 
-              color: 'var(--text-primary)',
-              margin: 0
-            }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
               {floorPlan.name}
             </h2>
-            {floorPlan.page_count > 1 && (
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 'var(--space-sm)',
-                marginTop: '2px'
-              }}>
+            {pageCount > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', marginTop: '2px' }}>
                 {editingPageName ? (
-                  <input
-                    type="text"
-                    defaultValue={getCurrentPageName()}
-                    autoFocus
-                    onBlur={(e) => handlePageNameSave(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handlePageNameSave(e.target.value);
-                      if (e.key === 'Escape') setEditingPageName(false);
-                    }}
-                    style={{
-                      padding: '2px 8px',
-                      fontSize: '0.8125rem',
-                      border: '1px solid var(--sunbelt-orange)',
-                      borderRadius: 'var(--radius-sm)',
-                      background: 'var(--bg-primary)',
-                      color: 'var(--text-primary)'
-                    }}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input
+                      type="text"
+                      value={pageName}
+                      onChange={(e) => setPageName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSavePageName()}
+                      style={{
+                        padding: '2px 8px',
+                        fontSize: '0.8125rem',
+                        background: 'var(--bg-primary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-sm)',
+                        color: 'var(--text-primary)',
+                        width: '120px'
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleSavePageName}
+                      style={{
+                        background: 'var(--success)',
+                        border: 'none',
+                        borderRadius: 'var(--radius-sm)',
+                        color: 'white',
+                        cursor: 'pointer',
+                        padding: '4px'
+                      }}
+                    >
+                      <Check size={12} />
+                    </button>
+                    <button
+                      onClick={() => setEditingPageName(false)}
+                      style={{
+                        background: 'var(--bg-tertiary)',
+                        border: 'none',
+                        borderRadius: 'var(--radius-sm)',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        padding: '4px'
+                      }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
                 ) : (
-                  <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                    {getCurrentPageName()}
-                  </span>
-                )}
-                {isPM && !editingPageName && (
-                  <button
-                    onClick={() => setEditingPageName(true)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      padding: '2px',
-                      cursor: 'pointer',
-                      color: 'var(--text-tertiary)',
-                      display: 'flex'
-                    }}
-                    title="Rename page"
-                  >
-                    <Edit3 size={12} />
-                  </button>
+                  <>
+                    <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                      {currentPageName}
+                    </span>
+                    {isPM && (
+                      <button
+                        onClick={handleStartRename}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--text-tertiary)',
+                          padding: '2px'
+                        }}
+                        title="Rename page"
+                      >
+                        <Edit3 size={12} />
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}
           </div>
         </div>
 
-        {/* Center: Page Navigation */}
-        {floorPlan.page_count > 1 && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-sm)',
-            background: 'var(--bg-primary)',
-            padding: '4px',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-color)'
-          }}>
+        {/* Center - Page Navigation */}
+        {pageCount > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
             <button
               onClick={handlePrevPage}
               disabled={currentPage === 1}
               style={{
-                background: 'none',
-                border: 'none',
                 padding: '6px',
+                background: 'var(--bg-primary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
                 cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                color: currentPage === 1 ? 'var(--text-tertiary)' : 'var(--text-secondary)',
-                display: 'flex',
-                borderRadius: 'var(--radius-sm)'
+                opacity: currentPage === 1 ? 0.5 : 1,
+                color: 'var(--text-secondary)'
               }}
             >
               <ChevronLeft size={18} />
             </button>
-            <span style={{
-              padding: '0 var(--space-sm)',
-              fontSize: '0.875rem',
-              fontWeight: '600',
-              color: 'var(--text-primary)'
-            }}>
-              {currentPage} / {floorPlan.page_count}
+            <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)', minWidth: '80px', textAlign: 'center' }}>
+              Page {currentPage} / {pageCount}
             </span>
             <button
               onClick={handleNextPage}
-              disabled={currentPage === floorPlan.page_count}
+              disabled={currentPage === pageCount}
               style={{
-                background: 'none',
-                border: 'none',
                 padding: '6px',
-                cursor: currentPage === floorPlan.page_count ? 'not-allowed' : 'pointer',
-                color: currentPage === floorPlan.page_count ? 'var(--text-tertiary)' : 'var(--text-secondary)',
-                display: 'flex',
-                borderRadius: 'var(--radius-sm)'
+                background: 'var(--bg-primary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                cursor: currentPage === pageCount ? 'not-allowed' : 'pointer',
+                opacity: currentPage === pageCount ? 0.5 : 1,
+                color: 'var(--text-secondary)'
               }}
             >
               <ChevronRight size={18} />
@@ -498,178 +431,203 @@ function FloorPlanViewer({
           </div>
         )}
 
-        {/* Right: Zoom & Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-          {/* Zoom Controls */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-xs)',
-            background: 'var(--bg-primary)',
-            padding: '4px',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-color)'
-          }}>
+        {/* Right - Zoom & Filters */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+          {/* Zoom (only for images) */}
+          {!isPdf && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <button
+                onClick={handleZoomOut}
+                disabled={zoom <= MIN_ZOOM}
+                style={{
+                  padding: '6px',
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: zoom <= MIN_ZOOM ? 'not-allowed' : 'pointer',
+                  opacity: zoom <= MIN_ZOOM ? 0.5 : 1,
+                  color: 'var(--text-secondary)'
+                }}
+              >
+                <ZoomOut size={16} />
+              </button>
+              <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', minWidth: '45px', textAlign: 'center' }}>
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                onClick={handleZoomIn}
+                disabled={zoom >= MAX_ZOOM}
+                style={{
+                  padding: '6px',
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: zoom >= MAX_ZOOM ? 'not-allowed' : 'pointer',
+                  opacity: zoom >= MAX_ZOOM ? 0.5 : 1,
+                  color: 'var(--text-secondary)'
+                }}
+              >
+                <ZoomIn size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* Filter Toggle */}
+          <div style={{ position: 'relative' }}>
             <button
-              onClick={handleZoomOut}
-              disabled={zoom <= MIN_ZOOM}
+              onClick={() => setShowFilters(!showFilters)}
               style={{
-                background: 'none',
-                border: 'none',
-                padding: '6px',
-                cursor: zoom <= MIN_ZOOM ? 'not-allowed' : 'pointer',
-                color: zoom <= MIN_ZOOM ? 'var(--text-tertiary)' : 'var(--text-secondary)',
                 display: 'flex',
-                borderRadius: 'var(--radius-sm)'
-              }}
-            >
-              <ZoomOut size={16} />
-            </button>
-            <button
-              onClick={handleZoomReset}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: '4px 8px',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 12px',
+                background: showFilters ? 'rgba(255, 107, 53, 0.1)' : 'var(--bg-primary)',
+                border: `1px solid ${showFilters ? 'var(--sunbelt-orange)' : 'var(--border-color)'}`,
+                borderRadius: 'var(--radius-md)',
                 cursor: 'pointer',
-                color: 'var(--text-primary)',
-                fontSize: '0.8125rem',
-                fontWeight: '600',
-                minWidth: '50px'
+                color: showFilters ? 'var(--sunbelt-orange)' : 'var(--text-secondary)'
               }}
             >
-              {Math.round(zoom * 100)}%
+              <Filter size={16} />
+              Filters
             </button>
-            <button
-              onClick={handleZoomIn}
-              disabled={zoom >= MAX_ZOOM}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: '6px',
-                cursor: zoom >= MAX_ZOOM ? 'not-allowed' : 'pointer',
-                color: zoom >= MAX_ZOOM ? 'var(--text-tertiary)' : 'var(--text-secondary)',
-                display: 'flex',
-                borderRadius: 'var(--radius-sm)'
-              }}
-            >
-              <ZoomIn size={16} />
-            </button>
+
+            {showFilters && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '4px',
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: 'var(--space-md)',
+                  zIndex: 100,
+                  minWidth: '200px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                }}
+              >
+                <div style={{ marginBottom: 'var(--space-sm)' }}>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', display: 'block', marginBottom: '4px' }}>Type</label>
+                  <select
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      background: 'var(--bg-primary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.875rem'
+                    }}
+                  >
+                    <option value="all">All Types</option>
+                    <option value="rfi">RFIs Only</option>
+                    <option value="submittal">Submittals Only</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', display: 'block', marginBottom: '4px' }}>Status</label>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      background: 'var(--bg-primary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.875rem'
+                    }}
+                  >
+                    <option value="all">All Status</option>
+                    <option value="open">Open/Pending</option>
+                    <option value="closed">Closed/Approved</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Add Marker Button */}
-          {isPM && (
-            <div style={{
-              padding: '6px 12px',
-              background: 'rgba(255, 107, 53, 0.1)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--sunbelt-orange)',
-              fontSize: '0.8125rem',
-              fontWeight: '500'
-            }}>
-              <MapPin size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-              Click on plan to add marker
-            </div>
+          {/* Open in New Tab (for PDFs) */}
+          {isPdf && fileUrl && (
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 12px',
+                background: 'var(--bg-primary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-secondary)',
+                textDecoration: 'none',
+                fontSize: '0.875rem'
+              }}
+            >
+              <ExternalLink size={16} />
+              Open PDF
+            </a>
+          )}
+
+          {/* Add Marker Button (PM only, images only) */}
+          {isPM && !isPdf && (
+            <button
+              onClick={() => {}}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 12px',
+                background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+                color: 'white',
+                fontWeight: '500',
+                fontSize: '0.875rem'
+              }}
+              title="Click on the floor plan to add a marker"
+            >
+              <MapPin size={16} />
+              Click to Add Marker
+            </button>
           )}
         </div>
       </div>
 
       {/* ================================================================== */}
-      {/* FILTER BAR                                                        */}
+      {/* MARKER STATS BAR                                                  */}
       {/* ================================================================== */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 'var(--space-md)',
-        padding: 'var(--space-sm) var(--space-lg)',
-        borderBottom: '1px solid var(--border-color)',
-        background: 'var(--bg-primary)'
-      }}>
-        <Filter size={16} style={{ color: 'var(--text-tertiary)' }} />
-        
-        {/* Type Filter */}
-        <div style={{
+      <div
+        style={{
           display: 'flex',
-          gap: '4px',
-          background: 'var(--bg-secondary)',
-          padding: '2px',
-          borderRadius: 'var(--radius-sm)'
-        }}>
-          {[
-            { key: 'all', label: 'All', icon: MapPin },
-            { key: 'rfi', label: 'RFIs', icon: MessageSquare, color: '#3b82f6' },
-            { key: 'submittal', label: 'Submittals', icon: ClipboardList, color: 'var(--sunbelt-orange)' }
-          ].map(filter => {
-            const Icon = filter.icon;
-            const isActive = filterType === filter.key;
-            return (
-              <button
-                key={filter.key}
-                onClick={() => setFilterType(filter.key)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '4px 10px',
-                  border: 'none',
-                  borderRadius: 'var(--radius-sm)',
-                  background: isActive ? 'var(--bg-primary)' : 'transparent',
-                  color: isActive ? (filter.color || 'var(--text-primary)') : 'var(--text-secondary)',
-                  fontSize: '0.8125rem',
-                  fontWeight: isActive ? '600' : '500',
-                  cursor: 'pointer'
-                }}
-              >
-                <Icon size={14} />
-                {filter.label}
-              </button>
-            );
-          })}
+          alignItems: 'center',
+          gap: 'var(--space-lg)',
+          padding: 'var(--space-sm) var(--space-md)',
+          background: 'var(--bg-primary)',
+          borderBottom: '1px solid var(--border-color)',
+          fontSize: '0.8125rem'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+          <MapPin size={14} />
+          <span>{markers.length} markers on this page</span>
         </div>
-
-        {/* Status Filter */}
-        <div style={{
-          display: 'flex',
-          gap: '4px',
-          background: 'var(--bg-secondary)',
-          padding: '2px',
-          borderRadius: 'var(--radius-sm)'
-        }}>
-          {[
-            { key: 'all', label: 'All Status' },
-            { key: 'open', label: 'Open' },
-            { key: 'closed', label: 'Closed' }
-          ].map(filter => {
-            const isActive = filterStatus === filter.key;
-            return (
-              <button
-                key={filter.key}
-                onClick={() => setFilterStatus(filter.key)}
-                style={{
-                  padding: '4px 10px',
-                  border: 'none',
-                  borderRadius: 'var(--radius-sm)',
-                  background: isActive ? 'var(--bg-primary)' : 'transparent',
-                  color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  fontSize: '0.8125rem',
-                  fontWeight: isActive ? '600' : '500',
-                  cursor: 'pointer'
-                }}
-              >
-                {filter.label}
-              </button>
-            );
-          })}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#3b82f6' }}>
+          <MessageSquare size={14} />
+          <span>{markers.filter(m => m.item_type === 'rfi').length} RFIs</span>
         </div>
-
-        {/* Marker Count */}
-        <span style={{
-          marginLeft: 'auto',
-          fontSize: '0.8125rem',
-          color: 'var(--text-secondary)'
-        }}>
-          {filteredMarkers.length} marker{filteredMarkers.length !== 1 ? 's' : ''} visible
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#8b5cf6' }}>
+          <ClipboardList size={14} />
+          <span>{markers.filter(m => m.item_type === 'submittal').length} Submittals</span>
+        </div>
       </div>
 
       {/* ================================================================== */}
@@ -680,7 +638,7 @@ function FloorPlanViewer({
         style={{
           flex: 1,
           overflow: 'auto',
-          background: 'var(--bg-tertiary)',
+          background: '#1a1a2e',
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
@@ -689,70 +647,93 @@ function FloorPlanViewer({
         }}
       >
         {loading ? (
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            color: 'var(--text-secondary)'
-          }}>
+          <div style={{ color: 'white', textAlign: 'center' }}>
             <div className="loading-spinner" style={{ marginBottom: 'var(--space-md)' }}></div>
             <p>Loading floor plan...</p>
           </div>
-        ) : (
-          <div style={{ position: 'relative', display: 'inline-block' }}>
-            {/* Canvas/Image */}
-            {floorPlan.file_type === 'application/pdf' ? (
-              <canvas
-                ref={canvasRef}
-                onClick={handleCanvasClick}
-                style={{
-                  cursor: isPM ? 'crosshair' : 'default',
-                  boxShadow: 'var(--shadow-lg)',
-                  borderRadius: 'var(--radius-sm)'
-                }}
-              />
-            ) : (
-              renderImage()
-            )}
+        ) : isPdf ? (
+          /* PDF - Show embedded viewer */
+          <div style={{ width: '100%', height: '100%', minHeight: '500px' }}>
+            <iframe
+              src={`${fileUrl}#page=${currentPage}`}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                borderRadius: 'var(--radius-md)'
+              }}
+              title={floorPlan.name}
+            />
+            <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)', marginTop: 'var(--space-sm)', fontSize: '0.8125rem' }}>
+              Tip: For best marker support, upload floor plans as images (PNG, JPG)
+            </p>
+          </div>
+        ) : fileUrl ? (
+          /* Image - Show with markers */
+          <div
+            style={{
+              position: 'relative',
+              transform: `scale(${zoom})`,
+              transformOrigin: 'center center',
+              transition: 'transform 0.2s ease'
+            }}
+          >
+            <img
+              ref={imageRef}
+              src={fileUrl}
+              alt={floorPlan.name}
+              onLoad={handleImageLoad}
+              onClick={handleImageClick}
+              style={{
+                maxWidth: '100%',
+                maxHeight: '100%',
+                display: 'block',
+                cursor: isPM ? 'crosshair' : 'default',
+                borderRadius: 'var(--radius-md)'
+              }}
+            />
 
-            {/* Markers */}
-            {filteredMarkers.map(marker => (
+            {/* Markers Overlay */}
+            {markers.map(marker => (
               <FloorPlanMarker
                 key={marker.id}
                 marker={marker}
                 isPM={isPM}
-                isHovered={hoveredMarker === marker.id}
-                isDragging={draggingMarker?.id === marker.id}
-                canvasDimensions={canvasDimensions}
-                onHover={() => setHoveredMarker(marker.id)}
-                onLeave={() => setHoveredMarker(null)}
-                onClick={() => handleMarkerClick(marker)}
-                onDragStart={() => handleMarkerDragStart(marker)}
-                onDragEnd={(x, y) => handleMarkerDragEnd(marker, x, y)}
-                onDelete={() => handleMarkerDelete(marker)}
+                onClick={() => setSelectedMarker(marker)}
+                onDrag={(x, y) => handleMarkerDrag(marker.id, x, y)}
+                onDelete={() => handleMarkerDelete(marker.id)}
               />
             ))}
 
-            {/* Pending Marker Preview */}
+            {/* Pending Marker */}
             {pendingMarkerPosition && (
               <div
                 style={{
                   position: 'absolute',
-                  left: `${pendingMarkerPosition.x}%`,
-                  top: `${pendingMarkerPosition.y}%`,
-                  transform: 'translate(-50%, -50%)',
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  background: 'var(--sunbelt-orange)',
-                  border: '3px solid white',
-                  boxShadow: 'var(--shadow-md)',
-                  opacity: 0.8,
-                  pointerEvents: 'none',
-                  animation: 'pulse 1s infinite'
+                  left: `${pendingMarkerPosition.x_percent}%`,
+                  top: `${pendingMarkerPosition.y_percent}%`,
+                  transform: 'translate(-50%, -100%)',
+                  pointerEvents: 'none'
                 }}
-              />
+              >
+                <div
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    background: 'var(--sunbelt-orange)',
+                    borderRadius: '50% 50% 50% 0',
+                    transform: 'rotate(-45deg)',
+                    border: '2px solid white',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                    animation: 'pulse 1s infinite'
+                  }}
+                />
+              </div>
             )}
+          </div>
+        ) : (
+          <div style={{ color: 'white', textAlign: 'center' }}>
+            <p>Unable to load floor plan</p>
           </div>
         )}
       </div>
@@ -770,29 +751,25 @@ function FloorPlanViewer({
           rfis={rfis}
           submittals={submittals}
           existingMarkers={floorPlan.markers || []}
-          onSelect={handleAddMarker}
+          onSelect={handleMarkerSelect}
         />
       )}
 
       {/* ================================================================== */}
-      {/* DETAIL PANEL                                                      */}
+      {/* ITEM DETAIL PANEL                                                 */}
       {/* ================================================================== */}
-      {showDetailPanel && detailItem && (
+      {selectedMarker && (
         <ItemDetailPanel
-          item={detailItem}
-          itemType={detailItem.rfi_number ? 'rfi' : 'submittal'}
-          onClose={() => {
-            setShowDetailPanel(false);
-            setDetailItem(null);
-          }}
-          projectNumber={projectNumber}
+          marker={selectedMarker}
+          onClose={() => setSelectedMarker(null)}
+          onDelete={isPM ? () => {
+            handleMarkerDelete(selectedMarker.id);
+            setSelectedMarker(null);
+          } : null}
         />
       )}
     </div>
   );
 }
-
-// Import supabase for file access
-import { supabase } from '../../utils/supabaseClient';
 
 export default FloorPlanViewer;
