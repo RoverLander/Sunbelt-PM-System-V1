@@ -1,32 +1,45 @@
+// ============================================================================
+// App.jsx
+// ============================================================================
+// Main application entry point for Sunbelt PM.
+// Handles authentication, routing between views, and layout.
+//
+// VIEWS:
+// - dashboard: PM Dashboard with overview
+// - projects: Dedicated projects page
+// - calendar: Calendar view (widened)
+// - tasks: Dedicated tasks page
+// - rfis: Dedicated RFIs page
+// - submittals: Dedicated submittals page
+// ============================================================================
+
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import Login from './components/auth/Login';
 import Sidebar from './components/layout/Sidebar';
+
+// ============================================================================
+// PAGE IMPORTS
+// ============================================================================
 import PMDashboard from './components/dashboards/PMDashboard';
 import CalendarPage from './components/calendar/CalendarPage';
-import TasksPage from './components/dashboards/TasksPage';
+import ProjectsPage from './components/pages/ProjectsPage';
+import TasksPage from './components/pages/TasksPage';
+import RFIsPage from './components/pages/RFIsPage';
+import SubmittalsPage from './components/pages/SubmittalsPage';
+
 import './App.css';
 
 // ============================================================================
-// APP CONTENT COMPONENT
-// Main authenticated app layout with sidebar navigation
-// Handles navigation between views and deep-linking to project tabs
+// MAIN APP CONTENT
 // ============================================================================
-
 function AppContent() {
   const { user, loading } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
-  
-  // =========================================================================
-  // NAVIGATION STATE
-  // Used to navigate to a specific project and tab from other pages
-  // e.g., clicking a task in TasksPage navigates to that project's Tasks tab
-  // =========================================================================
-  const [navigationTarget, setNavigationTarget] = useState(null);
 
-  // =========================================================================
+  // ==========================================================================
   // LOADING STATE
-  // =========================================================================
+  // ==========================================================================
   if (loading) {
     return (
       <div style={{
@@ -49,99 +62,53 @@ function AppContent() {
     );
   }
 
-  // =========================================================================
-  // UNAUTHENTICATED - SHOW LOGIN
-  // =========================================================================
+  // ==========================================================================
+  // LOGIN SCREEN (Not authenticated)
+  // ==========================================================================
   if (!user) {
     return <Login />;
   }
 
-  // =========================================================================
-  // HANDLE NAVIGATION TO PROJECT
-  // Called from TasksPage (and future RFIsPage, SubmittalsPage) when
-  // user clicks an item to navigate to its project
-  // =========================================================================
-  const handleNavigateToProject = (projectId, tab = 'Overview') => {
-    setNavigationTarget({ projectId, tab });
-    setCurrentView('dashboard');
-  };
-
-  // =========================================================================
-  // CLEAR NAVIGATION TARGET
-  // Called by PMDashboard after it has processed the navigation
-  // =========================================================================
-  const clearNavigationTarget = () => {
-    setNavigationTarget(null);
-  };
-
-  // =========================================================================
-  // RENDER CONTENT BASED ON CURRENT VIEW
-  // Using key prop to reset component state when switching views
-  // =========================================================================
+  // ==========================================================================
+  // CONTENT RENDERER
+  // ==========================================================================
   const renderContent = () => {
     switch (currentView) {
       case 'calendar':
         return <CalendarPage />;
-      
-      case 'tasks':
-        return (
-          <TasksPage 
-            key="tasks-page"
-            onNavigateToProject={handleNavigateToProject} 
-          />
-        );
-      
       case 'projects':
-        return (
-          <PMDashboard 
-            key="projects" 
-            navigationTarget={navigationTarget}
-            onNavigationComplete={clearNavigationTarget}
-          />
-        );
-      
+        return <ProjectsPage />;
+      case 'tasks':
+        return <TasksPage />;
       case 'rfis':
-        // Future: RFIsPage
-        return (
-          <PMDashboard 
-            key="rfis"
-            navigationTarget={navigationTarget}
-            onNavigationComplete={clearNavigationTarget}
-          />
-        );
-      
+        return <RFIsPage />;
       case 'submittals':
-        // Future: SubmittalsPage
-        return (
-          <PMDashboard 
-            key="submittals"
-            navigationTarget={navigationTarget}
-            onNavigationComplete={clearNavigationTarget}
-          />
-        );
-      
+        return <SubmittalsPage />;
       case 'dashboard':
       default:
-        return (
-          <PMDashboard 
-            key="dashboard"
-            navigationTarget={navigationTarget}
-            onNavigationComplete={clearNavigationTarget}
-          />
-        );
+        return <PMDashboard />;
     }
   };
 
-  // =========================================================================
-  // RENDER - MAIN LAYOUT
-  // =========================================================================
+  // ==========================================================================
+  // DETERMINE PADDING FOR DIFFERENT VIEWS
+  // Calendar needs full width, other pages have standard padding
+  // ==========================================================================
+  const isCalendarView = currentView === 'calendar';
+
+  // ==========================================================================
+  // RENDER
+  // ==========================================================================
   return (
     <div style={{
       display: 'flex',
       minHeight: '100vh',
       background: 'var(--bg-primary)'
     }}>
+      {/* Sidebar */}
       <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
+      
+      {/* Main Content Area */}
       <main style={{
         flex: 1,
         marginLeft: '280px',
@@ -149,7 +116,14 @@ function AppContent() {
         background: 'var(--bg-primary)',
         overflow: 'auto'
       }}>
-        <div style={{ padding: 'var(--space-xl)' }}>
+        {/* 
+          Calendar view gets minimal padding for maximum width
+          Other views get standard padding 
+        */}
+        <div style={{ 
+          padding: isCalendarView ? 'var(--space-md)' : 'var(--space-xl)',
+          height: isCalendarView ? 'calc(100vh - var(--space-md) * 2)' : 'auto'
+        }}>
           {renderContent()}
         </div>
       </main>
@@ -158,10 +132,8 @@ function AppContent() {
 }
 
 // ============================================================================
-// APP ROOT COMPONENT
-// Wraps everything in AuthProvider for authentication context
+// APP WRAPPER WITH AUTH PROVIDER
 // ============================================================================
-
 function App() {
   return (
     <AuthProvider>
