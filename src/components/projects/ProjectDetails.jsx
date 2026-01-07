@@ -25,12 +25,17 @@ import EditSubmittalModal from './EditSubmittalModal';
 import ProjectFiles from './ProjectFiles';
 import ProjectCalendarWeek from './ProjectCalendarWeek';
 import ProjectCalendarMonth from './ProjectCalendarMonth';
-import TasksView from './TasksView';  // Kanban board + list view toggle
+import TasksView from './TasksView';
 
 // ============================================================================
 // MAIN COMPONENT
+// Props:
+//   - project: The project object to display
+//   - initialTab: Optional - which tab to open (Overview, Tasks, RFIs, Submittals, Calendar, Files)
+//   - onBack: Callback when back button is clicked
+//   - onUpdate: Callback when project is updated
 // ============================================================================
-function ProjectDetails({ project: initialProject, onBack, onUpdate }) {
+function ProjectDetails({ project: initialProject, initialTab = 'Overview', onBack, onUpdate }) {
   const { user } = useAuth();
 
   // ==========================================================================
@@ -45,8 +50,9 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate }) {
 
   // ==========================================================================
   // STATE - UI CONTROLS
+  // Use initialTab prop to set the starting tab
   // ==========================================================================
-  const [activeTab, setActiveTab] = useState('Overview');
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [toast, setToast] = useState(null);
 
   // ==========================================================================
@@ -75,6 +81,13 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate }) {
   // ==========================================================================
   useEffect(() => { setProject(initialProject); }, [initialProject]);
   useEffect(() => { if (project?.id) fetchProjectData(); }, [project?.id]);
+  
+  // Update activeTab when initialTab prop changes (for deep navigation)
+  useEffect(() => { 
+    if (initialTab && tabs.includes(initialTab)) {
+      setActiveTab(initialTab); 
+    }
+  }, [initialTab]);
 
   // ==========================================================================
   // DATA FETCHING

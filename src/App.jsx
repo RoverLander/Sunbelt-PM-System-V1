@@ -4,16 +4,25 @@ import Login from './components/auth/Login';
 import Sidebar from './components/layout/Sidebar';
 import PMDashboard from './components/dashboards/PMDashboard';
 import CalendarPage from './components/calendar/CalendarPage';
+import TasksPage from './components/pages/TasksPage';
 import './App.css';
 
 // ============================================================================
 // APP CONTENT COMPONENT
 // Main authenticated app layout with sidebar navigation
+// Handles navigation between views and deep-linking to project tabs
 // ============================================================================
 
 function AppContent() {
   const { user, loading } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
+  
+  // =========================================================================
+  // NAVIGATION STATE
+  // Used to navigate to a specific project and tab from other pages
+  // e.g., clicking a task in TasksPage navigates to that project's Tasks tab
+  // =========================================================================
+  const [navigationTarget, setNavigationTarget] = useState(null);
 
   // =========================================================================
   // LOADING STATE
@@ -48,33 +57,78 @@ function AppContent() {
   }
 
   // =========================================================================
+  // HANDLE NAVIGATION TO PROJECT
+  // Called from TasksPage (and future RFIsPage, SubmittalsPage) when
+  // user clicks an item to navigate to its project
+  // =========================================================================
+  const handleNavigateToProject = (projectId, tab = 'Overview') => {
+    setNavigationTarget({ projectId, tab });
+    setCurrentView('dashboard');
+  };
+
+  // =========================================================================
+  // CLEAR NAVIGATION TARGET
+  // Called by PMDashboard after it has processed the navigation
+  // =========================================================================
+  const clearNavigationTarget = () => {
+    setNavigationTarget(null);
+  };
+
+  // =========================================================================
   // RENDER CONTENT BASED ON CURRENT VIEW
   // Using key prop to reset component state when switching views
-  // This ensures clicking "Dashboard" resets back to main view even if
-  // you were inside a ProjectDetails view
   // =========================================================================
   const renderContent = () => {
     switch (currentView) {
       case 'calendar':
         return <CalendarPage />;
-      case 'projects':
-        // Projects view - shows PMDashboard with projects focus
-        // Key ensures state resets when switching between views
-        return <PMDashboard key="projects" />;
+      
       case 'tasks':
-        // Future: dedicated tasks page
-        return <PMDashboard key="tasks" />;
+        return (
+          <TasksPage 
+            key="tasks-page"
+            onNavigateToProject={handleNavigateToProject} 
+          />
+        );
+      
+      case 'projects':
+        return (
+          <PMDashboard 
+            key="projects" 
+            navigationTarget={navigationTarget}
+            onNavigationComplete={clearNavigationTarget}
+          />
+        );
+      
       case 'rfis':
-        // Future: dedicated RFIs page
-        return <PMDashboard key="rfis" />;
+        // Future: RFIsPage
+        return (
+          <PMDashboard 
+            key="rfis"
+            navigationTarget={navigationTarget}
+            onNavigationComplete={clearNavigationTarget}
+          />
+        );
+      
       case 'submittals':
-        // Future: dedicated submittals page
-        return <PMDashboard key="submittals" />;
+        // Future: SubmittalsPage
+        return (
+          <PMDashboard 
+            key="submittals"
+            navigationTarget={navigationTarget}
+            onNavigationComplete={clearNavigationTarget}
+          />
+        );
+      
       case 'dashboard':
       default:
-        // Dashboard view - key="dashboard" ensures clicking Dashboard
-        // from sidebar resets PMDashboard's internal state (selectedProject)
-        return <PMDashboard key="dashboard" />;
+        return (
+          <PMDashboard 
+            key="dashboard"
+            navigationTarget={navigationTarget}
+            onNavigationComplete={clearNavigationTarget}
+          />
+        );
     }
   };
 

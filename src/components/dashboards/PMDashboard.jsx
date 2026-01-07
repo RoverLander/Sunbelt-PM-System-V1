@@ -24,10 +24,11 @@ import { buildCalendarItems, getProjectColor } from '../../utils/calendarUtils';
 // ============================================================================
 // PM DASHBOARD COMPONENT
 // Main dashboard showing projects, tasks, RFIs, submittals overview
+// Supports navigation target for deep-linking to specific project tabs
 // Layout: Stats → Quick Actions → Calendar → Kanban Board → Projects/Overdue
 // ============================================================================
 
-function PMDashboard() {
+function PMDashboard({ navigationTarget, onNavigationComplete }) {
   const { user } = useAuth();
   
   // =========================================================================
@@ -45,6 +46,7 @@ function PMDashboard() {
   // STATE - UI
   // =========================================================================
   const [selectedProject, setSelectedProject] = useState(null);
+  const [initialTab, setInitialTab] = useState('Overview');
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -54,6 +56,24 @@ function PMDashboard() {
   useEffect(() => {
     fetchDashboardData();
   }, [user]);
+
+  // =========================================================================
+  // HANDLE NAVIGATION TARGET
+  // When navigating from TasksPage, RFIsPage, etc. to a specific project tab
+  // =========================================================================
+  useEffect(() => {
+    if (navigationTarget && projects.length > 0) {
+      const targetProject = projects.find(p => p.id === navigationTarget.projectId);
+      if (targetProject) {
+        setSelectedProject(targetProject);
+        setInitialTab(navigationTarget.tab || 'Overview');
+      }
+      // Clear the navigation target after processing
+      if (onNavigationComplete) {
+        onNavigationComplete();
+      }
+    }
+  }, [navigationTarget, projects]);
 
   // =========================================================================
   // DATA FETCHING
@@ -206,6 +226,7 @@ function PMDashboard() {
   // EVENT HANDLERS
   // =========================================================================
   const handleProjectClick = (project) => {
+    setInitialTab('Overview'); // Reset to Overview when clicking from list
     setSelectedProject(project);
   };
 
@@ -225,6 +246,12 @@ function PMDashboard() {
   const handleCalendarItemClick = (item) => {
     const project = projects.find(p => p.id === item.projectId);
     if (project) {
+      // Set appropriate tab based on item type
+      if (item.type === 'task') setInitialTab('Tasks');
+      else if (item.type === 'rfi') setInitialTab('RFIs');
+      else if (item.type === 'submittal') setInitialTab('Submittals');
+      else setInitialTab('Overview');
+      
       setSelectedProject(project);
     }
   };
@@ -260,6 +287,7 @@ function PMDashboard() {
   const handleKanbanTaskClick = (task) => {
     const project = projects.find(p => p.id === task.project_id);
     if (project) {
+      setInitialTab('Tasks');
       setSelectedProject(project);
     }
   };
@@ -271,8 +299,10 @@ function PMDashboard() {
     return (
       <ProjectDetails
         project={selectedProject}
+        initialTab={initialTab}
         onBack={() => {
           setSelectedProject(null);
+          setInitialTab('Overview');
           fetchDashboardData();
         }}
         onUpdate={handleProjectUpdate}
@@ -429,7 +459,7 @@ function PMDashboard() {
       </div>
 
       {/* ================================================================== */}
-      {/* 3. QUICK ACTIONS (Back to original position)                       */}
+      {/* 3. QUICK ACTIONS                                                   */}
       {/* ================================================================== */}
       <div style={{
         background: 'var(--bg-secondary)',
