@@ -4,16 +4,17 @@
 // Main navigation sidebar with dashboard switcher for Director/PM views.
 //
 // FEATURES:
-// - Dashboard role switcher (Director/PM)
+// - Dashboard role switcher (Director/PM) - visible for Directors/Admins
 // - Navigation links
-// - Quick stats (active projects, tasks, overdue)
+// - Quick stats (filtered by user's projects only)
+// - Toggle to include/exclude secondary project counts
 // - Dark/Light mode toggle
 // - User profile and logout
 //
-// DASHBOARD SWITCHING:
-// - Directors can switch between Director Dashboard and PM Dashboard
-// - PMs only see PM Dashboard
-// - Selection persists in localStorage
+// FIXES:
+// - Role detection now works correctly
+// - Stats only count items from user's assigned projects
+// - Secondary project toggle for counts
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -31,7 +32,9 @@ import {
   LogOut,
   AlertCircle,
   ChevronDown,
-  User
+  User,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -55,51 +58,115 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   const [myTasks, setMyTasks] = useState(0);
   const [overdueTasks, setOverdueTasks] = useState(0);
   const [showDashboardMenu, setShowDashboardMenu] = useState(false);
+  
+  // ===== SECONDARY PROJECT TOGGLE =====
+  const [includeSecondary, setIncludeSecondary] = useState(() => {
+    const saved = localStorage.getItem('includeSecondaryInCounts');
+    return saved !== null ? JSON.parse(saved) : false;
+  });
 
   // ==========================================================================
-  // LOAD USER AND STATS
+  // LOAD USER DATA
   // ==========================================================================
   useEffect(() => {
     if (user) {
-      fetchUserAndStats();
+      fetchUserData();
     }
   }, [user]);
 
+  // ==========================================================================
+  // FETCH STATS WHEN USER OR TOGGLE CHANGES
+  // ==========================================================================
+  useEffect(() => {
+    if (currentUser) {
+      fetchStats();
+    }
+  }, [currentUser, includeSecondary]);
+
+  // ==========================================================================
+  // DARK MODE EFFECT
+  // ==========================================================================
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
     localStorage.setItem('darkMode', JSON.stringify(darkMode));
   }, [darkMode]);
 
-  const fetchUserAndStats = async () => {
+  // ==========================================================================
+  // FETCH USER DATA
+  // ==========================================================================
+  const fetchUserData = async () => {
     try {
-      // Fetch user profile
-      const { data: userData } = await supabase
+      const { data: userData, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', user.id)
         .single();
 
-      if (userData) {
-        setCurrentUser(userData);
+      if (error) {
+        console.error('Error fetching user:', error);
+        return;
       }
 
-      // Fetch project count
-      const { data: projects } = await supabase
+      if (userData) {
+        console.log('User data loaded:', userData.name, 'Role:', userData.role);
+        setCurrentUser(userData);
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  };
+
+  // ==========================================================================
+  // FETCH STATS (FILTERED BY USER'S PROJECTS)
+  // ==========================================================================
+  const fetchStats = async () => {
+    if (!currentUser) return;
+
+    try {
+      // ===== GET USER'S PROJECTS =====
+      let projectQuery = supabase
         .from('projects')
         .select('id')
         .in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']);
 
-      setActiveProjects(projects?.length || 0);
+      // Filter by PM assignment (primary or secondary based on toggle)
+      if (includeSecondary) {
+        projectQuery = projectQuery.or(`pm_id.eq.${currentUser.id},secondary_pm_id.eq.${currentUser.id}`);
+      } else {
+        projectQuery = projectQuery.eq('pm_id', currentUser.id);
+      }
 
-      // Fetch task stats
-      const { data: tasksList } = await supabase
+      const { data: projects, error: projectError } = await projectQuery;
+
+      if (projectError) {
+        console.error('Error fetching projects:', projectError);
+        return;
+      }
+
+      const projectIds = projects?.map(p => p.id) || [];
+      setActiveProjects(projectIds.length);
+
+      if (projectIds.length === 0) {
+        setMyTasks(0);
+        setOverdueTasks(0);
+        return;
+      }
+
+      // ===== GET TASKS FOR USER'S PROJECTS =====
+      const { data: tasksList, error: taskError } = await supabase
         .from('tasks')
-        .select('id, status, due_date, assignee_id, internal_owner_id')
+        .select('id, status, due_date, assignee_id, internal_owner_id, project_id')
+        .in('project_id', projectIds)
         .in('status', ['Not Started', 'In Progress', 'Blocked']);
 
-      // Filter to user's tasks
+      if (taskError) {
+        console.error('Error fetching tasks:', taskError);
+        return;
+      }
+
+      // Filter to tasks assigned to this user or owned by this user
       const myTasksList = tasksList?.filter(t => 
-        t.assignee_id === user.id || t.internal_owner_id === user.id
+        t.assignee_id === currentUser.id || t.internal_owner_id === currentUser.id
       ) || [];
 
       setMyTasks(myTasksList.length);
@@ -129,6 +196,12 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     setDarkMode(prev => !prev);
   };
 
+  const toggleIncludeSecondary = () => {
+    const newValue = !includeSecondary;
+    setIncludeSecondary(newValue);
+    localStorage.setItem('includeSecondaryInCounts', JSON.stringify(newValue));
+  };
+
   const handleDashboardSwitch = (type) => {
     setDashboardType(type);
     localStorage.setItem('dashboardType', type);
@@ -140,8 +213,20 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   // DERIVED VALUES
   // ==========================================================================
   const displayUser = currentUser || user;
-  const isDirector = displayUser?.role === 'Director' || displayUser?.role === 'Admin';
-  const canSwitchDashboard = isDirector;
+  
+  // ===== CHECK IF USER CAN SWITCH DASHBOARDS =====
+  // Must be Director or Admin role (case-insensitive check)
+  // IMPORTANT: Only check after currentUser is loaded (has role from DB)
+  const userRole = currentUser?.role?.toLowerCase() || '';
+  const canSwitchDashboard = currentUser && (userRole === 'director' || userRole === 'admin');
+
+  // Debug logging (remove in production)
+  console.log('Dashboard switch check:', {
+    currentUserLoaded: !!currentUser,
+    role: currentUser?.role,
+    userRole,
+    canSwitchDashboard
+  });
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: dashboardType === 'director' ? BarChart3 : LayoutDashboard },
@@ -185,7 +270,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       </div>
 
       {/* ================================================================== */}
-      {/* DASHBOARD SWITCHER (Directors Only)                               */}
+      {/* DASHBOARD SWITCHER (Directors/Admins Only)                        */}
       {/* ================================================================== */}
       {canSwitchDashboard && (
         <div style={{ padding: '0 var(--space-md)', marginBottom: 'var(--space-md)' }}>
@@ -299,7 +384,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       {/* ================================================================== */}
       {/* STATS CARDS                                                       */}
       {/* ================================================================== */}
-      <div style={{ padding: '0 var(--space-md)', marginBottom: 'var(--space-lg)' }}>
+      <div style={{ padding: '0 var(--space-md)', marginBottom: 'var(--space-md)' }}>
         {/* Active Projects */}
         <div style={{
           padding: 'var(--space-md)',
@@ -310,7 +395,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
             <FolderKanban size={18} style={{ color: 'var(--sunbelt-orange)', flexShrink: 0 }} />
-            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Active Projects</span>
+            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>My Projects</span>
           </div>
           <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
             {activeProjects}
@@ -343,12 +428,38 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
             <AlertCircle size={18} style={{ color: overdueTasks > 0 ? 'var(--danger)' : 'var(--sunbelt-orange)', flexShrink: 0 }} />
-            <span style={{ fontSize: '0.875rem', color: overdueTasks > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>Overdue Tasks</span>
+            <span style={{ fontSize: '0.875rem', color: overdueTasks > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>Overdue</span>
           </div>
           <div style={{ fontSize: '1.5rem', fontWeight: '700', color: overdueTasks > 0 ? 'var(--danger)' : 'var(--text-primary)', marginTop: '4px' }}>
             {overdueTasks}
           </div>
         </div>
+
+        {/* Secondary Projects Toggle */}
+        <button
+          onClick={toggleIncludeSecondary}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: 'var(--space-sm) var(--space-md)',
+            marginTop: 'var(--space-sm)',
+            background: 'transparent',
+            border: '1px dashed var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            cursor: 'pointer',
+            color: 'var(--text-tertiary)',
+            fontSize: '0.75rem'
+          }}
+        >
+          <span>Include backup projects</span>
+          {includeSecondary ? (
+            <ToggleRight size={20} style={{ color: 'var(--sunbelt-orange)' }} />
+          ) : (
+            <ToggleLeft size={20} />
+          )}
+        </button>
       </div>
 
       {/* ================================================================== */}

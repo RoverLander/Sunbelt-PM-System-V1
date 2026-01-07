@@ -1,41 +1,81 @@
 // ============================================================================
-// App.jsx
+// App.jsx - Main Application Component
 // ============================================================================
-// Main application entry point for Sunbelt PM.
-// Handles authentication, routing between views, and layout.
-//
-// VIEWS:
-// - dashboard: PM Dashboard with overview
-// - projects: Dedicated projects page
-// - calendar: Calendar view (widened)
-// - tasks: Dedicated tasks page
-// - rfis: Dedicated RFIs page
-// - submittals: Dedicated submittals page
+// Root component that handles:
+// - Authentication state
+// - Dashboard type switching (Director/PM)
+// - View routing
+// - Layout structure
 // ============================================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import Login from './components/auth/Login';
 import Sidebar from './components/layout/Sidebar';
-
-// ============================================================================
-// PAGE IMPORTS
-// ============================================================================
 import PMDashboard from './components/dashboards/PMDashboard';
+import DirectorDashboard from './components/dashboards/DirectorDashboard';
 import CalendarPage from './components/calendar/CalendarPage';
-import ProjectsPage from './components/pages/ProjectsPage';
-import TasksPage from './components/pages/TasksPage';
-import RFIsPage from './components/pages/RFIsPage';
-import SubmittalsPage from './components/pages/SubmittalsPage';
-
 import './App.css';
 
 // ============================================================================
-// MAIN APP CONTENT
+// APP CONTENT COMPONENT
 // ============================================================================
 function AppContent() {
   const { user, loading } = useAuth();
+  
+  // ==========================================================================
+  // STATE
+  // ==========================================================================
   const [currentView, setCurrentView] = useState('dashboard');
+  
+  // Dashboard type: 'pm' or 'director'
+  const [dashboardType, setDashboardType] = useState(() => {
+    const saved = localStorage.getItem('dashboardType');
+    return saved || 'pm';
+  });
+
+  // ==========================================================================
+  // AUTO-SET DASHBOARD TYPE BASED ON USER ROLE
+  // ==========================================================================
+  useEffect(() => {
+    if (user) {
+      // Check if user has a role that should default to director view
+      const checkUserRole = async () => {
+        try {
+          const { supabase } = await import('./utils/supabaseClient');
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+
+          if (error) {
+            console.error('Error fetching user role:', error);
+            return;
+          }
+
+          if (userData) {
+            const role = userData.role?.toLowerCase() || '';
+            const isDirector = role === 'director' || role === 'admin';
+            
+            console.log('App.jsx role check:', { role: userData.role, isDirector });
+            
+            // Auto-set to director view for directors (unless they have a saved preference)
+            const savedType = localStorage.getItem('dashboardType');
+            if (isDirector && !savedType) {
+              console.log('Auto-setting to director dashboard');
+              setDashboardType('director');
+              localStorage.setItem('dashboardType', 'director');
+            }
+          }
+        } catch (error) {
+          console.error('Error checking user role:', error);
+        }
+      };
+
+      checkUserRole();
+    }
+  }, [user]);
 
   // ==========================================================================
   // LOADING STATE
@@ -63,41 +103,48 @@ function AppContent() {
   }
 
   // ==========================================================================
-  // LOGIN SCREEN (Not authenticated)
+  // LOGIN STATE
   // ==========================================================================
   if (!user) {
     return <Login />;
   }
 
   // ==========================================================================
-  // CONTENT RENDERER
+  // RENDER CONTENT BASED ON VIEW
   // ==========================================================================
   const renderContent = () => {
     switch (currentView) {
       case 'calendar':
         return <CalendarPage />;
+      
       case 'projects':
-        return <ProjectsPage />;
+        // Projects view uses PM Dashboard which has project selection
+        return <PMDashboard />;
+      
       case 'tasks':
-        return <TasksPage />;
+        // Future: dedicated tasks page
+        return <PMDashboard />;
+      
       case 'rfis':
-        return <RFIsPage />;
+        // Future: dedicated RFIs page
+        return <PMDashboard />;
+      
       case 'submittals':
-        return <SubmittalsPage />;
+        // Future: dedicated submittals page
+        return <PMDashboard />;
+      
       case 'dashboard':
       default:
+        // ===== DASHBOARD VIEW - SWITCH BASED ON TYPE =====
+        if (dashboardType === 'director') {
+          return <DirectorDashboard />;
+        }
         return <PMDashboard />;
     }
   };
 
   // ==========================================================================
-  // DETERMINE PADDING FOR DIFFERENT VIEWS
-  // Calendar needs full width, other pages have standard padding
-  // ==========================================================================
-  const isCalendarView = currentView === 'calendar';
-
-  // ==========================================================================
-  // RENDER
+  // MAIN RENDER
   // ==========================================================================
   return (
     <div style={{
@@ -105,10 +152,15 @@ function AppContent() {
       minHeight: '100vh',
       background: 'var(--bg-primary)'
     }}>
-      {/* Sidebar */}
-      <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
+      {/* ===== SIDEBAR ===== */}
+      <Sidebar 
+        currentView={currentView} 
+        setCurrentView={setCurrentView}
+        dashboardType={dashboardType}
+        setDashboardType={setDashboardType}
+      />
       
-      {/* Main Content Area */}
+      {/* ===== MAIN CONTENT ===== */}
       <main style={{
         flex: 1,
         marginLeft: '280px',
@@ -116,14 +168,7 @@ function AppContent() {
         background: 'var(--bg-primary)',
         overflow: 'auto'
       }}>
-        {/* 
-          Calendar view gets minimal padding for maximum width
-          Other views get standard padding 
-        */}
-        <div style={{ 
-          padding: isCalendarView ? 'var(--space-md)' : 'var(--space-xl)',
-          height: isCalendarView ? 'calc(100vh - var(--space-md) * 2)' : 'auto'
-        }}>
+        <div style={{ padding: 'var(--space-xl)' }}>
           {renderContent()}
         </div>
       </main>
@@ -132,7 +177,7 @@ function AppContent() {
 }
 
 // ============================================================================
-// APP WRAPPER WITH AUTH PROVIDER
+// APP ROOT COMPONENT
 // ============================================================================
 function App() {
   return (
