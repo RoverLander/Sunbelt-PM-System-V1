@@ -423,6 +423,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
           projectNumber={project.project_number}
           rfis={rfis}
           submittals={submittals}
+          tasks={tasks}
           showToast={showToast}
         />
       )}

@@ -45,6 +45,7 @@ function FloorPlanViewer({
   projectNumber,
   rfis,
   submittals,
+  tasks,
   isPM,
   onClose,
   onMarkerCreate,
@@ -52,7 +53,8 @@ function FloorPlanViewer({
   onMarkerDelete,
   onPageRename,
   showToast,
-  onRefresh
+  onRefresh,
+  onDataRefresh
 }) {
   // ==========================================================================
   // REFS
@@ -917,8 +919,13 @@ function FloorPlanViewer({
           }}
           rfis={rfis}
           submittals={submittals}
+          tasks={tasks || []}
           existingMarkers={floorPlan.markers || []}
           onSelect={handleMarkerSelect}
+          projectId={projectId}
+          projectNumber={projectNumber}
+          showToast={showToast}
+          onDataRefresh={onDataRefresh}
         />
       )}
 
