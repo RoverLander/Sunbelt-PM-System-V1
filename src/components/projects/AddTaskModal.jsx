@@ -4,6 +4,12 @@ import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { draftTaskEmail } from '../../utils/emailUtils';
 
+// ============================================================================
+// ADD TASK MODAL COMPONENT
+// Creates new tasks with internal/external assignment, file attachments,
+// and optional email draft for external contacts
+// ============================================================================
+
 function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNumber = '', onSuccess }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -13,6 +19,7 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
   const [pendingFiles, setPendingFiles] = useState([]);
   const fileInputRef = useRef(null);
   
+  // ===== FORM STATE =====
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -28,6 +35,7 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
     start_date: ''
   });
 
+  // ===== EFFECTS =====
   useEffect(() => {
     if (isOpen) {
       fetchUsers();
@@ -38,6 +46,7 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
     }
   }, [isOpen, user]);
 
+  // ===== DATA FETCHING =====
   const fetchUsers = async () => {
     try {
       const { data, error } = await supabase
@@ -68,11 +77,13 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
     }
   };
 
+  // ===== FORM HANDLERS =====
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // ===== FILE HANDLING =====
   const getFileIcon = (fileType) => {
     if (fileType?.startsWith('image/')) return <Image size={16} style={{ color: 'var(--info)' }} />;
     if (fileType?.includes('pdf')) return <FileText size={16} style={{ color: '#ef4444' }} />;
@@ -159,6 +170,7 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
     return uploadedAttachments;
   };
 
+  // ===== CREATE TASK =====
   const createTask = async () => {
     const taskData = {
       project_id: projectId,
@@ -191,6 +203,7 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
     return data;
   };
 
+  // ===== SUBMIT HANDLERS =====
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -232,6 +245,7 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
     }
   };
 
+  // ===== CLOSE HANDLER =====
   const handleClose = () => {
     setFormData({
       title: '',
@@ -254,6 +268,7 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
 
   if (!isOpen) return null;
 
+  // ===== RENDER =====
   return (
     <div style={{
       position: 'fixed',
@@ -277,6 +292,9 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
         overflow: 'auto',
         boxShadow: 'var(--shadow-xl)'
       }}>
+        {/* ================================================================== */}
+        {/* MODAL HEADER                                                       */}
+        {/* ================================================================== */}
         <div style={{
           padding: 'var(--space-xl)',
           borderBottom: '1px solid var(--border-color)',
@@ -312,7 +330,11 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
           </button>
         </div>
 
+        {/* ================================================================== */}
+        {/* MODAL FORM                                                         */}
+        {/* ================================================================== */}
         <form onSubmit={handleSubmit} style={{ padding: 'var(--space-xl)' }}>
+          {/* Error Display */}
           {error && (
             <div style={{
               padding: 'var(--space-md)',
@@ -327,6 +349,7 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
             </div>
           )}
 
+          {/* Task Title */}
           <div className="form-group">
             <label className="form-label">Task Title *</label>
             <input
@@ -340,6 +363,7 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
             />
           </div>
 
+          {/* Description */}
           <div className="form-group">
             <label className="form-label">Description</label>
             <textarea
@@ -353,7 +377,9 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
             />
           </div>
 
-          {/* Assignment Type Toggle */}
+          {/* ================================================================== */}
+          {/* ASSIGNMENT TYPE TOGGLE                                            */}
+          {/* ================================================================== */}
           <div className="form-group">
             <label className="form-label">Assign To</label>
             <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
@@ -401,7 +427,7 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
             </div>
           </div>
 
-          {/* Internal Assignment */}
+          {/* Internal Assignment Dropdown */}
           {formData.assignment_type === 'internal' && (
             <div className="form-group">
               <label className="form-label">Assign To</label>
@@ -421,7 +447,7 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
             </div>
           )}
 
-          {/* External Assignment */}
+          {/* External Assignment Fields */}
           {formData.assignment_type === 'external' && (
             <div style={{ 
               padding: 'var(--space-lg)', 
@@ -483,22 +509,27 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
             </div>
           )}
 
+          {/* ================================================================== */}
+          {/* STATUS, PRIORITY, MILESTONE, DATES                                */}
+          {/* ================================================================== */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)' }}>
+            {/* Status Dropdown - NEW! */}
             <div className="form-group">
-              <label className="form-label">Milestone</label>
+              <label className="form-label">Status</label>
               <select
-                name="milestone_id"
-                value={formData.milestone_id}
+                name="status"
+                value={formData.status}
                 onChange={handleChange}
                 className="form-input"
               >
-                <option value="">No milestone</option>
-                {milestones.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
+                <option value="Not Started">Not Started</option>
+                <option value="In Progress">In Progress</option>
+                <option value="On Hold">On Hold</option>
+                <option value="Completed">Completed</option>
               </select>
             </div>
 
+            {/* Priority Dropdown */}
             <div className="form-group">
               <label className="form-label">Priority</label>
               <select
@@ -514,6 +545,26 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
               </select>
             </div>
 
+            {/* Milestone Dropdown */}
+            <div className="form-group">
+              <label className="form-label">Milestone</label>
+              <select
+                name="milestone_id"
+                value={formData.milestone_id}
+                onChange={handleChange}
+                className="form-input"
+              >
+                <option value="">No milestone</option>
+                {milestones.map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Empty cell for grid alignment */}
+            <div></div>
+
+            {/* Start Date */}
             <div className="form-group">
               <label className="form-label">Start Date</label>
               <input
@@ -525,6 +576,7 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
               />
             </div>
 
+            {/* Due Date */}
             <div className="form-group">
               <label className="form-label">Due Date</label>
               <input
@@ -537,7 +589,9 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
             </div>
           </div>
 
-          {/* File Attachments Section */}
+          {/* ================================================================== */}
+          {/* FILE ATTACHMENTS                                                  */}
+          {/* ================================================================== */}
           <div style={{ 
             padding: 'var(--space-lg)', 
             background: 'var(--bg-secondary)', 
@@ -639,6 +693,9 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
             )}
           </div>
 
+          {/* ================================================================== */}
+          {/* FORM ACTIONS                                                      */}
+          {/* ================================================================== */}
           <div style={{
             display: 'flex',
             gap: 'var(--space-md)',
@@ -652,6 +709,7 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
               Cancel
             </button>
             
+            {/* Create & Email button for external tasks */}
             {formData.assignment_type === 'external' && formData.external_assignee_email && (
               <button 
                 type="button" 

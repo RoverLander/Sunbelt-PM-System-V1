@@ -1,6 +1,6 @@
 // ===== KANBAN BOARD COMPONENT =====
 // Drag-and-drop task board with status columns
-// Used by TasksView.jsx for board view mode
+// Used by TasksView.jsx for board view mode and PMDashboard for cross-project view
 
 import React, { useState } from 'react';
 import { 
@@ -11,33 +11,35 @@ import {
   CheckCircle2,
   Clock,
   Circle,
-  ExternalLink
+  ExternalLink,
+  FolderKanban
 } from 'lucide-react';
 
 // ===== STATUS COLUMN CONFIGURATION =====
+// IMPORTANT: These must match the exact values stored in the database
 const STATUS_COLUMNS = [
   { 
-    id: 'not_started', 
+    id: 'Not Started', 
     label: 'Not Started', 
     color: 'var(--text-muted)',
     icon: Circle
   },
   { 
-    id: 'in_progress', 
+    id: 'In Progress', 
     label: 'In Progress', 
     color: 'var(--sunbelt-orange)',
     icon: Clock
   },
   { 
-    id: 'on_hold', 
+    id: 'On Hold', 
     label: 'On Hold', 
     color: '#f59e0b',
     icon: AlertCircle
   },
   { 
-    id: 'completed', 
+    id: 'Completed', 
     label: 'Completed', 
-    color: 'var(--success-color)',
+    color: 'var(--success)',
     icon: CheckCircle2
   }
 ];
@@ -46,11 +48,13 @@ const STATUS_COLUMNS = [
 function PriorityBadge({ priority }) {
   const getPriorityStyle = () => {
     switch (priority) {
-      case 'high':
+      case 'Critical':
+        return { backgroundColor: 'rgba(139, 0, 0, 0.2)', color: '#8b0000' };
+      case 'High':
         return { backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' };
-      case 'medium':
+      case 'Medium':
         return { backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b' };
-      case 'low':
+      case 'Low':
         return { backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#22c55e' };
       default:
         return { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' };
@@ -64,8 +68,7 @@ function PriorityBadge({ priority }) {
         padding: '2px 8px',
         borderRadius: '4px',
         fontSize: '11px',
-        fontWeight: '500',
-        textTransform: 'capitalize'
+        fontWeight: '500'
       }}
     >
       {priority || 'None'}
@@ -74,7 +77,7 @@ function PriorityBadge({ priority }) {
 }
 
 // ===== TASK CARD COMPONENT =====
-function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
+function TaskCard({ task, onDragStart, onDragEnd, onClick, showProject = false }) {
   const formatDate = (dateString) => {
     if (!dateString) return null;
     const date = new Date(dateString);
@@ -82,7 +85,15 @@ function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
   };
 
   // Check if task is overdue
-  const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed';
+  const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed';
+
+  // Get assignee display name
+  const getAssigneeName = () => {
+    if (task.assignee?.name) return task.assignee.name.split(' ')[0];
+    if (task.external_assignee_name) return task.external_assignee_name.split(' ')[0];
+    if (task.internal_owner?.name) return task.internal_owner.name.split(' ')[0];
+    return null;
+  };
 
   return (
     <div
@@ -98,10 +109,31 @@ function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
         marginBottom: '8px',
         cursor: 'grab',
         transition: 'all 0.2s ease',
-        borderLeft: isOverdue ? '3px solid #ef4444' : '3px solid transparent'
+        borderLeft: isOverdue ? '3px solid #ef4444' : `3px solid ${task.project?.color || 'transparent'}`
       }}
       className="kanban-card"
     >
+      {/* Project Name (for cross-project view) */}
+      {showProject && task.project && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          marginBottom: '8px',
+          paddingBottom: '8px',
+          borderBottom: '1px solid var(--border-color)'
+        }}>
+          <FolderKanban size={12} color={task.project.color || 'var(--sunbelt-orange)'} />
+          <span style={{ 
+            fontSize: '11px', 
+            color: 'var(--text-secondary)',
+            fontWeight: '500'
+          }}>
+            {task.project.project_number || task.project.name}
+          </span>
+        </div>
+      )}
+
       {/* Card Header */}
       <div style={{ 
         display: 'flex', 
@@ -109,8 +141,8 @@ function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
         justifyContent: 'space-between',
         marginBottom: '8px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <GripVertical size={14} color="var(--text-muted)" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+          <GripVertical size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
           <span style={{ 
             fontSize: '13px', 
             fontWeight: '600',
@@ -120,8 +152,8 @@ function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
             {task.title}
           </span>
         </div>
-        {task.is_external && (
-          <ExternalLink size={14} color="var(--sunbelt-orange)" title="External Task" />
+        {(task.external_assignee_email || task.external_assignee_name) && (
+          <ExternalLink size={14} color="var(--sunbelt-orange)" title="External Task" style={{ flexShrink: 0, marginLeft: '8px' }} />
         )}
       </div>
 
@@ -167,7 +199,7 @@ function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
           )}
           
           {/* Assignee */}
-          {task.assigned_to && (
+          {getAssigneeName() && (
             <div style={{ 
               display: 'flex', 
               alignItems: 'center', 
@@ -176,7 +208,7 @@ function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
               color: 'var(--text-muted)'
             }}>
               <User size={12} />
-              {task.assigned_to.split('@')[0]}
+              {getAssigneeName()}
             </div>
           )}
         </div>
@@ -186,7 +218,7 @@ function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
 }
 
 // ===== KANBAN COLUMN COMPONENT =====
-function KanbanColumn({ column, tasks, onDragStart, onDragEnd, onDrop, onDragOver, onTaskClick }) {
+function KanbanColumn({ column, tasks, onDragStart, onDragEnd, onDrop, onDragOver, onTaskClick, showProject }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const IconComponent = column.icon;
 
@@ -276,6 +308,7 @@ function KanbanColumn({ column, tasks, onDragStart, onDragEnd, onDrop, onDragOve
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
               onClick={onTaskClick}
+              showProject={showProject}
             />
           ))
         )}
@@ -285,7 +318,7 @@ function KanbanColumn({ column, tasks, onDragStart, onDragEnd, onDrop, onDragOve
 }
 
 // ===== MAIN KANBAN BOARD COMPONENT =====
-function KanbanBoard({ tasks, onStatusChange, onTaskClick }) {
+function KanbanBoard({ tasks, onStatusChange, onTaskClick, showProject = false }) {
   const [draggedTask, setDraggedTask] = useState(null);
 
   // ===== DRAG HANDLERS =====
@@ -327,7 +360,7 @@ function KanbanBoard({ tasks, onStatusChange, onTaskClick }) {
       gap: '16px',
       overflowX: 'auto',
       padding: '4px',
-      minHeight: '500px'
+      minHeight: '400px'
     }}>
       {STATUS_COLUMNS.map(column => (
         <KanbanColumn
@@ -339,6 +372,7 @@ function KanbanBoard({ tasks, onStatusChange, onTaskClick }) {
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onTaskClick={onTaskClick}
+          showProject={showProject}
         />
       ))}
 

@@ -10,17 +10,29 @@ import {
   ArrowRight,
   DollarSign,
   ChevronRight,
-  AlertCircle
+  AlertCircle,
+  LayoutGrid
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import ProjectDetails from '../projects/ProjectDetails';
 import CreateProjectModal from '../projects/CreateProjectModal';
 import CalendarWeekView from '../calendar/CalendarWeekView';
+import KanbanBoard from '../projects/KanbanBoard';
 import { buildCalendarItems, getProjectColor } from '../../utils/calendarUtils';
+
+// ============================================================================
+// PM DASHBOARD COMPONENT
+// Main dashboard showing projects, tasks, RFIs, submittals overview
+// Layout: Stats → Calendar → Kanban Board → Quick Actions → Projects/Overdue
+// ============================================================================
 
 function PMDashboard() {
   const { user } = useAuth();
+  
+  // =========================================================================
+  // STATE - DATA
+  // =========================================================================
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -29,15 +41,23 @@ function PMDashboard() {
   const [milestones, setMilestones] = useState([]);
   const [calendarItems, setCalendarItems] = useState([]);
   
-  // View states
+  // =========================================================================
+  // STATE - UI
+  // =========================================================================
   const [selectedProject, setSelectedProject] = useState(null);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [toast, setToast] = useState(null);
 
+  // =========================================================================
+  // EFFECTS
+  // =========================================================================
   useEffect(() => {
     fetchDashboardData();
   }, [user]);
 
+  // =========================================================================
+  // DATA FETCHING
+  // =========================================================================
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
@@ -114,12 +134,17 @@ function PMDashboard() {
     }
   };
 
+  // =========================================================================
+  // TOAST NOTIFICATIONS
+  // =========================================================================
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Calculate stats
+  // =========================================================================
+  // COMPUTED STATS
+  // =========================================================================
   const today = new Date().toISOString().split('T')[0];
   
   const activeProjects = projects.filter(p => 
@@ -142,7 +167,12 @@ function PMDashboard() {
     .filter(p => !['Cancelled'].includes(p.status))
     .reduce((sum, p) => sum + (p.contract_value || 0), 0);
 
-  // Format helpers
+  // Get active tasks (not cancelled) for kanban board
+  const activeTasks = tasks.filter(t => t.status !== 'Cancelled');
+
+  // =========================================================================
+  // FORMAT HELPERS
+  // =========================================================================
   const formatCurrency = (amount) => {
     if (!amount) return '$0';
     return new Intl.NumberFormat('en-US', {
@@ -172,6 +202,9 @@ function PMDashboard() {
     return colors[status] || 'var(--text-secondary)';
   };
 
+  // =========================================================================
+  // EVENT HANDLERS
+  // =========================================================================
   const handleProjectClick = (project) => {
     setSelectedProject(project);
   };
@@ -186,11 +219,10 @@ function PMDashboard() {
     setProjects(prev => [newProject, ...prev]);
     setShowCreateProject(false);
     showToast('Project created successfully');
-    fetchDashboardData(); // Refresh to get calendar items
+    fetchDashboardData();
   };
 
   const handleCalendarItemClick = (item) => {
-    // Find the project and navigate to it
     const project = projects.find(p => p.id === item.projectId);
     if (project) {
       setSelectedProject(project);
@@ -198,25 +230,59 @@ function PMDashboard() {
   };
 
   const handleCalendarViewChange = (view) => {
-    // This would navigate to the calendar page with the selected view
-    // For now, we'll handle this when we add routing
     console.log('View change requested:', view);
   };
 
-  // Show project details if selected
+  // =========================================================================
+  // KANBAN HANDLERS
+  // =========================================================================
+  const handleTaskStatusChange = async (taskId, newStatus) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      // Update local state
+      setTasks(prev => prev.map(task => 
+        task.id === taskId ? { ...task, status: newStatus } : task
+      ));
+      
+      showToast(`Task moved to ${newStatus}`);
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      showToast('Failed to update task status', 'error');
+    }
+  };
+
+  const handleKanbanTaskClick = (task) => {
+    const project = projects.find(p => p.id === task.project_id);
+    if (project) {
+      setSelectedProject(project);
+    }
+  };
+
+  // =========================================================================
+  // RENDER - PROJECT DETAILS VIEW
+  // =========================================================================
   if (selectedProject) {
     return (
       <ProjectDetails
         project={selectedProject}
         onBack={() => {
           setSelectedProject(null);
-          fetchDashboardData(); // Refresh data when coming back
+          fetchDashboardData();
         }}
         onUpdate={handleProjectUpdate}
       />
     );
   }
 
+  // =========================================================================
+  // RENDER - LOADING STATE
+  // =========================================================================
   if (loading) {
     return (
       <div style={{ 
@@ -234,9 +300,14 @@ function PMDashboard() {
     );
   }
 
+  // =========================================================================
+  // RENDER - MAIN DASHBOARD
+  // =========================================================================
   return (
     <div>
-      {/* Welcome Header */}
+      {/* ================================================================== */}
+      {/* 1. WELCOME HEADER                                                  */}
+      {/* ================================================================== */}
       <div style={{ marginBottom: 'var(--space-xl)' }}>
         <h1 style={{ 
           fontSize: '2rem', 
@@ -251,7 +322,9 @@ function PMDashboard() {
         </p>
       </div>
 
-      {/* Quick Stats */}
+      {/* ================================================================== */}
+      {/* 2. QUICK STATS                                                     */}
+      {/* ================================================================== */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(6, 1fr)',
@@ -355,7 +428,77 @@ function PMDashboard() {
         </div>
       </div>
 
-      {/* Quick Actions */}
+      {/* ================================================================== */}
+      {/* 3. CALENDAR WEEK VIEW                                              */}
+      {/* ================================================================== */}
+      <div style={{ marginBottom: 'var(--space-xl)' }}>
+        <CalendarWeekView
+          items={calendarItems}
+          projects={projects}
+          onItemClick={handleCalendarItemClick}
+          onViewChange={handleCalendarViewChange}
+          compact={false}
+        />
+      </div>
+
+      {/* ================================================================== */}
+      {/* 4. KANBAN BOARD - ALL TASKS ACROSS PROJECTS                       */}
+      {/* ================================================================== */}
+      <div style={{
+        background: 'var(--bg-secondary)',
+        borderRadius: 'var(--radius-lg)',
+        padding: 'var(--space-lg)',
+        marginBottom: 'var(--space-xl)',
+        border: '1px solid var(--border-color)'
+      }}>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          marginBottom: 'var(--space-lg)' 
+        }}>
+          <h3 style={{ 
+            fontSize: '1rem', 
+            fontWeight: '700', 
+            color: 'var(--text-primary)', 
+            margin: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-sm)'
+          }}>
+            <LayoutGrid size={20} style={{ color: 'var(--sunbelt-orange)' }} />
+            All Tasks Board
+          </h3>
+          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+            {activeTasks.length} tasks across {projects.length} projects
+          </span>
+        </div>
+        
+        {activeTasks.length === 0 ? (
+          <div style={{ 
+            textAlign: 'center', 
+            padding: 'var(--space-2xl)', 
+            color: 'var(--text-tertiary)' 
+          }}>
+            <CheckSquare size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
+            <h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>
+              No tasks yet
+            </h4>
+            <p>Create a project and add tasks to see them here</p>
+          </div>
+        ) : (
+          <KanbanBoard
+            tasks={activeTasks}
+            onStatusChange={handleTaskStatusChange}
+            onTaskClick={handleKanbanTaskClick}
+            showProject={true}
+          />
+        )}
+      </div>
+
+      {/* ================================================================== */}
+      {/* 5. QUICK ACTIONS (Moved below Kanban Board)                        */}
+      {/* ================================================================== */}
       <div style={{
         background: 'var(--bg-secondary)',
         borderRadius: 'var(--radius-lg)',
@@ -429,18 +572,9 @@ function PMDashboard() {
         </div>
       </div>
 
-      {/* Calendar Week View */}
-      <div style={{ marginBottom: 'var(--space-xl)' }}>
-        <CalendarWeekView
-          items={calendarItems}
-          projects={projects}
-          onItemClick={handleCalendarItemClick}
-          onViewChange={handleCalendarViewChange}
-          compact={false}
-        />
-      </div>
-
-      {/* Main Content Grid */}
+      {/* ================================================================== */}
+      {/* 6. MAIN CONTENT GRID - Projects & Overdue                         */}
+      {/* ================================================================== */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-xl)' }}>
         {/* My Projects */}
         <div style={{
@@ -572,6 +706,7 @@ function PMDashboard() {
               {overdueTasks.slice(0, 5).map(task => (
                 <div
                   key={task.id}
+                  onClick={() => handleKanbanTaskClick(task)}
                   style={{
                     padding: 'var(--space-sm) var(--space-md)',
                     background: 'var(--bg-primary)',
@@ -579,7 +714,15 @@ function PMDashboard() {
                     borderLeft: '3px solid var(--danger)',
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.transform = 'translateX(4px)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.transform = 'translateX(0)';
                   }}
                 >
                   <div>
@@ -600,14 +743,18 @@ function PMDashboard() {
         </div>
       </div>
 
-      {/* Create Project Modal */}
+      {/* ================================================================== */}
+      {/* MODALS                                                             */}
+      {/* ================================================================== */}
       <CreateProjectModal
         isOpen={showCreateProject}
         onClose={() => setShowCreateProject(false)}
         onSuccess={handleProjectCreated}
       />
 
-      {/* Toast */}
+      {/* ================================================================== */}
+      {/* TOAST NOTIFICATION                                                 */}
+      {/* ================================================================== */}
       {toast && (
         <div className={`toast toast-${toast.type}`}>
           {toast.type === 'success' && <CheckSquare size={18} style={{ color: 'var(--success)' }} />}
