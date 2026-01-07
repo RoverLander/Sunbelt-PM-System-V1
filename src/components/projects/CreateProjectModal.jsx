@@ -1,95 +1,160 @@
+// ============================================================================
+// CreateProjectModal.jsx
+// ============================================================================
+// Modal component for creating new Projects.
+// 
+// FEATURES:
+// - Full project setup with all key fields
+// - Factory selection from standardized list (with shorthand codes)
+// - Auto-generates project number based on factory (e.g., NWBS-25001)
+// - Dealer POC (Point of Contact) field
+// - Building type, financials, and schedule
+//
+// DEPENDENCIES:
+// - supabaseClient: Database operations
+// - factoryConstants: Standardized factory list
+//
+// PROPS:
+// - isOpen: Boolean to control modal visibility
+// - onClose: Function called when modal closes
+// - onSuccess: Callback with created project data
+//
+// FIELD NOTES:
+// - client_name: Renamed to "Dealer POC" in UI (Point of Contact from dealer)
+// - dealer: The dealer company name
+// - factory: Uses standardized format "SHORTHAND - Full Name"
+// ============================================================================
+
 import React, { useState } from 'react';
 import { X, Plus, Building2 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 
+// ============================================================================
+// CONSTANTS - Factory Options
+// ============================================================================
+// Standardized factory names with shorthand codes
+// Format: "SHORTHAND - Full Name"
+// Used for dropdown and project number generation
+
+const FACTORY_OPTIONS = [
+  'AMT - AMTEX',
+  'BUSA - Britco USA',
+  'C&B - C&B Modular',
+  'IBI - Indicom Buildings',
+  'MRS - MR Steel',
+  'NWBS - Northwest Building Systems',
+  'PMI - Phoenix Modular',
+  'PRM - Pro-Mod Manufacturing',
+  'SMM - Southeast Modular',
+  'SNB - Sunbelt Modular (Corporate)',
+  'SSI - Specialized Structures',
+  'WM-EAST - Whitley Manufacturing East',
+  'WM-EVERGREEN - Whitley Manufacturing Evergreen',
+  'WM-ROCHESTER - Whitley Manufacturing Rochester',
+  'WM-SOUTH - Whitley Manufacturing South',
+];
+
+// ============================================================================
+// CONSTANTS - Status Options
+// ============================================================================
+const PROJECT_STATUSES = [
+  'Planning',
+  'Pre-PM',
+  'In Progress',
+  'On Hold',
+  'Completed',
+  'Cancelled',
+  'Warranty'
+];
+
+// ============================================================================
+// CONSTANTS - Building Types
+// ============================================================================
+const BUILDING_TYPES = [
+  'Education - Elementary',
+  'Education - Middle School',
+  'Education - High School',
+  'Education - Higher Ed',
+  'Healthcare - Clinic',
+  'Healthcare - Hospital',
+  'Commercial - Office',
+  'Commercial - Retail',
+  'Industrial',
+  'Government',
+  'Residential - Single Family',
+  'Residential - Multi-Family',
+  'Religious',
+  'Other'
+];
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 function CreateProjectModal({ isOpen, onClose, onSuccess }) {
   const { user } = useAuth();
+  
+  // ==========================================================================
+  // STATE
+  // ==========================================================================
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
+  // Form fields
   const [formData, setFormData] = useState({
-    name: '',
-    project_number: '',
-    status: 'Pre-PM',
-    factory: '',
-    client_name: '',
-    dealer: '',
-    site_address: '',
-    building_type: '',
-    square_footage: '',
-    module_count: '',
-    contract_value: '',
-    target_online_date: '',
-    start_date: '',
-    description: ''
+    name: '',                // Project name (required)
+    project_number: '',      // Auto-generated or manual
+    status: 'Pre-PM',        // Default status
+    factory: '',             // Factory selection (required)
+    client_name: '',         // Dealer POC (Point of Contact)
+    dealer: '',              // Dealer company name
+    site_address: '',        // Site location
+    building_type: '',       // Building type
+    square_footage: '',      // Building size
+    module_count: '',        // Number of modules
+    contract_value: '',      // Contract amount
+    target_online_date: '',  // Target completion
+    start_date: '',          // Start date
+    description: ''          // Project description
   });
 
-  const factories = [
-    'Phoenix Modular',
-    'Denver Modular', 
-    'Texas Modular',
-    'California Modular',
-    'Florida Modular'
-  ];
-
-  const statuses = [
-    'Planning',
-    'Pre-PM',
-    'In Progress',
-    'On Hold',
-    'Completed',
-    'Cancelled',
-    'Warranty'
-  ];
-
-  const buildingTypes = [
-    'Education - Elementary',
-    'Education - Middle School',
-    'Education - High School',
-    'Education - Higher Ed',
-    'Healthcare - Clinic',
-    'Healthcare - Hospital',
-    'Commercial - Office',
-    'Commercial - Retail',
-    'Industrial',
-    'Government',
-    'Residential - Single Family',
-    'Residential - Multi-Family',
-    'Religious',
-    'Other'
-  ];
-
+  // ==========================================================================
+  // FORM HANDLERS
+  // ==========================================================================
+  
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // ==========================================================================
+  // PROJECT NUMBER GENERATION
+  // ==========================================================================
+  // Format: {FACTORY_SHORTHAND}-{5_DIGIT_RANDOM}
+  // Example: NWBS-25001
+  
   const generateProjectNumber = () => {
-    const factoryPrefixes = {
-      'Phoenix Modular': 'PHX',
-      'Denver Modular': 'DEN',
-      'Texas Modular': 'TEX',
-      'California Modular': 'CAL',
-      'Florida Modular': 'FLA'
-    };
+    // Extract shorthand from factory (e.g., "NWBS" from "NWBS - Northwest Building Systems")
+    const shorthand = formData.factory?.split(' - ')[0] || 'PRJ';
+    const random = String(Math.floor(Math.random() * 99999) + 1).padStart(5, '0');
     
-    const prefix = factoryPrefixes[formData.factory] || 'PRJ';
-    const year = new Date().getFullYear();
-    const random = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
-    
-    return `${prefix}-${year}-${random}`;
+    return `${shorthand}-${random}`;
   };
 
+  // Handle factory change - clear project number to allow auto-generation
   const handleFactoryChange = (e) => {
     const factory = e.target.value;
     setFormData(prev => ({
       ...prev,
       factory,
-      project_number: prev.project_number || '' // Will auto-generate on submit if empty
+      project_number: prev.project_number || '' // Keep existing or allow auto-generation
     }));
   };
 
+  // ==========================================================================
+  // FORM SUBMISSION
+  // ==========================================================================
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -102,12 +167,13 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
         projectNumber = generateProjectNumber();
       }
 
+      // Build project data object
       const projectData = {
         name: formData.name.trim(),
         project_number: projectNumber,
         status: formData.status,
         factory: formData.factory,
-        client_name: formData.client_name.trim() || null,
+        client_name: formData.client_name.trim() || null,  // Dealer POC
         dealer: formData.dealer.trim() || null,
         site_address: formData.site_address.trim() || null,
         building_type: formData.building_type || null,
@@ -120,6 +186,7 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
         created_by: user.id
       };
 
+      // Insert project into database
       const { data, error: insertError } = await supabase
         .from('projects')
         .insert([projectData])
@@ -139,6 +206,10 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
     }
   };
 
+  // ==========================================================================
+  // MODAL CLOSE
+  // ==========================================================================
+  
   const handleClose = () => {
     setFormData({
       name: '',
@@ -160,15 +231,16 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
     onClose();
   };
 
+  // ==========================================================================
+  // RENDER
+  // ==========================================================================
+  
   if (!isOpen) return null;
 
   return (
     <div style={{
       position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+      top: 0, left: 0, right: 0, bottom: 0,
       background: 'rgba(0, 0, 0, 0.7)',
       display: 'flex',
       alignItems: 'center',
@@ -185,7 +257,9 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
         overflow: 'auto',
         boxShadow: 'var(--shadow-xl)'
       }}>
-        {/* Header */}
+        {/* ================================================================ */}
+        {/* HEADER                                                          */}
+        {/* ================================================================ */}
         <div style={{
           padding: 'var(--space-xl)',
           borderBottom: '1px solid var(--border-color)',
@@ -211,31 +285,24 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
             </div>
             <div>
               <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
-                Create New Project
+                Create Project
               </h2>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: 0 }}>
-                Fill in the project details below
+                Add a new project to the system
               </p>
             </div>
           </div>
-          <button
-            onClick={handleClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              padding: '8px',
-              display: 'flex',
-              borderRadius: '6px'
-            }}
-          >
+          <button onClick={handleClose} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '8px' }}>
             <X size={24} />
           </button>
         </div>
 
-        {/* Form */}
+        {/* ================================================================ */}
+        {/* FORM                                                            */}
+        {/* ================================================================ */}
         <form onSubmit={handleSubmit} style={{ padding: 'var(--space-xl)' }}>
+          
+          {/* Error Display */}
           {error && (
             <div style={{
               padding: 'var(--space-md)',
@@ -250,7 +317,9 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
             </div>
           )}
 
-          {/* Basic Info Section */}
+          {/* ============================================================ */}
+          {/* SECTION: Basic Information                                   */}
+          {/* ============================================================ */}
           <div style={{ marginBottom: 'var(--space-xl)' }}>
             <h3 style={{ 
               fontSize: '1rem', 
@@ -263,6 +332,7 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
               Basic Information
             </h3>
 
+            {/* Project Name & Status */}
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-lg)' }}>
               <div className="form-group">
                 <label className="form-label">Project Name *</label>
@@ -286,13 +356,14 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
                   required
                   className="form-input"
                 >
-                  {statuses.map(status => (
+                  {PROJECT_STATUSES.map(status => (
                     <option key={status} value={status}>{status}</option>
                   ))}
                 </select>
               </div>
             </div>
 
+            {/* Factory & Project Number */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)' }}>
               <div className="form-group">
                 <label className="form-label">Factory *</label>
@@ -304,7 +375,7 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
                   className="form-input"
                 >
                   <option value="">Select factory</option>
-                  {factories.map(factory => (
+                  {FACTORY_OPTIONS.map(factory => (
                     <option key={factory} value={factory}>{factory}</option>
                   ))}
                 </select>
@@ -327,7 +398,10 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Client & Dealer Section */}
+          {/* ============================================================ */}
+          {/* SECTION: Dealer & Site Information                           */}
+          {/* NOTE: "Client Name" renamed to "Dealer POC" per request      */}
+          {/* ============================================================ */}
           <div style={{ marginBottom: 'var(--space-xl)' }}>
             <h3 style={{ 
               fontSize: '1rem', 
@@ -337,22 +411,27 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
               paddingBottom: 'var(--space-sm)',
               borderBottom: '1px solid var(--border-color)'
             }}>
-              Client & Dealer
+              Dealer & Site
             </h3>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)' }}>
+              {/* Dealer POC (formerly Client Name) */}
               <div className="form-group">
-                <label className="form-label">Client Name</label>
+                <label className="form-label">Dealer POC</label>
                 <input
                   type="text"
                   name="client_name"
                   value={formData.client_name}
                   onChange={handleChange}
                   className="form-input"
-                  placeholder="e.g., Lincoln School District"
+                  placeholder="e.g., John Smith"
                 />
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                  Point of Contact at the dealer
+                </p>
               </div>
 
+              {/* Dealer Company */}
               <div className="form-group">
                 <label className="form-label">Dealer</label>
                 <input
@@ -366,6 +445,7 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
               </div>
             </div>
 
+            {/* Site Address */}
             <div className="form-group">
               <label className="form-label">Site Address</label>
               <input
@@ -379,7 +459,9 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Building Details Section */}
+          {/* ============================================================ */}
+          {/* SECTION: Building Details                                    */}
+          {/* ============================================================ */}
           <div style={{ marginBottom: 'var(--space-xl)' }}>
             <h3 style={{ 
               fontSize: '1rem', 
@@ -402,7 +484,7 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
                   className="form-input"
                 >
                   <option value="">Select type</option>
-                  {buildingTypes.map(type => (
+                  {BUILDING_TYPES.map(type => (
                     <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
@@ -436,7 +518,9 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Financial & Schedule Section */}
+          {/* ============================================================ */}
+          {/* SECTION: Financial & Schedule                                */}
+          {/* ============================================================ */}
           <div style={{ marginBottom: 'var(--space-xl)' }}>
             <h3 style={{ 
               fontSize: '1rem', 
@@ -484,67 +568,52 @@ function CreateProjectModal({ isOpen, onClose, onSuccess }) {
                   onChange={handleChange}
                   className="form-input"
                 />
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
-                  When the project should go online
-                </p>
               </div>
             </div>
           </div>
 
-          {/* Description Section */}
-          <div style={{ marginBottom: 'var(--space-xl)' }}>
-            <h3 style={{ 
-              fontSize: '1rem', 
-              fontWeight: '700', 
-              color: 'var(--text-primary)', 
-              marginBottom: 'var(--space-md)',
-              paddingBottom: 'var(--space-sm)',
-              borderBottom: '1px solid var(--border-color)'
-            }}>
-              Additional Information
-            </h3>
-
-            <div className="form-group">
-              <label className="form-label">Description</label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                className="form-input"
-                rows="4"
-                placeholder="Enter any additional project details, notes, or special requirements..."
-                style={{ resize: 'vertical', minHeight: '100px' }}
-              />
-            </div>
+          {/* ============================================================ */}
+          {/* SECTION: Description                                         */}
+          {/* ============================================================ */}
+          <div className="form-group">
+            <label className="form-label">Project Description</label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              className="form-input"
+              rows="3"
+              placeholder="Brief description of the project..."
+              style={{ resize: 'vertical', minHeight: '80px' }}
+            />
           </div>
 
-          {/* Footer */}
+          {/* ============================================================ */}
+          {/* ACTION BUTTONS                                               */}
+          {/* ============================================================ */}
           <div style={{
             display: 'flex',
             gap: 'var(--space-md)',
             justifyContent: 'flex-end',
             paddingTop: 'var(--space-lg)',
-            borderTop: '1px solid var(--border-color)'
+            borderTop: '1px solid var(--border-color)',
+            marginTop: 'var(--space-lg)'
           }}>
             <button 
               type="button" 
               onClick={handleClose} 
-              className="btn btn-secondary"
+              className="btn btn-secondary" 
               disabled={loading}
             >
               Cancel
             </button>
+            
             <button 
               type="submit" 
-              className="btn btn-primary"
+              className="btn btn-primary" 
               disabled={loading}
             >
-              {loading ? 'Creating...' : (
-                <>
-                  <Plus size={18} />
-                  Create Project
-                </>
-              )}
+              {loading ? 'Creating...' : <><Plus size={18} /> Create Project</>}
             </button>
           </div>
         </form>

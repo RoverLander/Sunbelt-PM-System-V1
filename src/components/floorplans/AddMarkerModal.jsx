@@ -1,9 +1,31 @@
 // ============================================================================
-// AddMarkerModal Component
+// AddMarkerModal.jsx
 // ============================================================================
 // Modal for linking floor plan markers to RFIs, Submittals, or Tasks.
-// Supports both selecting existing items AND creating new ones.
-// Uses correct project-based numbering (e.g., PROJ-123-RFI-001)
+// Supports both selecting existing items AND creating new ones directly.
+//
+// FEATURES:
+// - Two modes: "Select Existing" or "Create New"
+// - Create RFIs, Submittals, or Tasks directly from floor plan
+// - Auto-generates item numbers (e.g., NWBS-25001-RFI-001)
+// - Factory contacts available in recipient dropdowns
+//
+// DEPENDENCIES:
+// - useContacts hook: Fetches both users (PMs) and factory contacts
+// - supabaseClient: Database operations
+//
+// PROPS:
+// - isOpen: Boolean to control modal visibility
+// - onClose: Function called when modal closes
+// - rfis: Array of existing RFIs for selection
+// - submittals: Array of existing submittals for selection
+// - tasks: Array of existing tasks for selection
+// - existingMarkers: Array of markers already on this floor plan
+// - onSelect: Callback when item is selected (itemType, itemId, newItem?)
+// - projectId: UUID of the parent project
+// - projectNumber: Project number for item numbering
+// - showToast: Function for toast notifications
+// - onDataRefresh: Function to refresh parent data after creation
 // ============================================================================
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -23,6 +45,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
+import { useContacts } from '../../hooks/useContacts';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -40,7 +63,11 @@ function AddMarkerModal({
   showToast,
   onDataRefresh
 }) {
+  // ==========================================================================
+  // HOOKS
+  // ==========================================================================
   const { user } = useAuth();
+  const { contacts } = useContacts(isOpen); // Fetch users + factory contacts
   
   // ==========================================================================
   // STATE

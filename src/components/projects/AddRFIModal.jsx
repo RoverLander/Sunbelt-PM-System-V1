@@ -1,62 +1,100 @@
+// ============================================================================
+// AddRFIModal.jsx
+// ============================================================================
+// Modal component for creating new RFIs (Requests for Information).
+// 
+// FEATURES:
+// - Create RFIs to internal team members OR external contacts
+// - Auto-generates RFI number based on project (e.g., NWBS-25001-RFI-001)
+// - File attachment support with drag-and-drop
+// - Email draft integration for external RFIs
+// - PDF export capability
+//
+// DEPENDENCIES:
+// - useContacts hook: Fetches both users (PMs) and factory contacts
+// - supabaseClient: Database operations
+// - emailUtils: Email draft generation
+// - pdfUtils: PDF export
+//
+// PROPS:
+// - isOpen: Boolean to control modal visibility
+// - onClose: Function called when modal closes
+// - projectId: UUID of the parent project
+// - projectNumber: Project number for RFI numbering (e.g., "NWBS-25001")
+// - projectName: Project name for display/export
+// - onSuccess: Callback with created RFI data
+// ============================================================================
+
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Upload, FileText, Image, File, Trash2, Paperclip, Mail } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
+import { useContacts } from '../../hooks/useContacts';
 import { draftRFIEmail } from '../../utils/emailUtils';
 import { exportRFIToPDF } from '../../utils/pdfUtils';
 
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = '', onSuccess }) {
+  
+  // ==========================================================================
+  // HOOKS
+  // ==========================================================================
   const { user } = useAuth();
+  const { contacts, loading: contactsLoading } = useContacts(isOpen); // Only fetch when modal opens
+
+  // ==========================================================================
+  // STATE - Form Data
+  // ==========================================================================
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [users, setUsers] = useState([]);
   const [nextRFINumber, setNextRFINumber] = useState('');
   const [pendingFiles, setPendingFiles] = useState([]);
   const fileInputRef = useRef(null);
   
+  // Form fields for RFI creation
   const [formData, setFormData] = useState({
-    subject: '',
-    question: '',
-    recipient_type: 'external',
-    sent_to: '',
-    sent_to_email: '',
-    internal_owner_id: '',
-    priority: 'Medium',
-    due_date: ''
+    subject: '',              // RFI subject line (required)
+    question: '',             // Detailed question/request (required)
+    recipient_type: 'external', // 'external' or 'internal'
+    sent_to: '',              // Recipient name or company
+    sent_to_email: '',        // Recipient email (for external)
+    internal_owner_id: '',    // User ID responsible for tracking
+    priority: 'Medium',       // 'Low', 'Medium', 'High'
+    due_date: ''              // Expected response date
   });
 
+  // ==========================================================================
+  // EFFECTS
+  // ==========================================================================
+  
+  // Initialize form when modal opens
   useEffect(() => {
     if (isOpen) {
-      fetchUsers();
       generateRFINumber();
+      // Set current user as default internal owner
       setFormData(prev => ({ ...prev, internal_owner_id: user?.id || '' }));
       setPendingFiles([]);
       setError('');
     }
   }, [isOpen, user]);
 
-  const fetchUsers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      
-      if (error) throw error;
-      setUsers(data || []);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    }
-  };
-
+  // ==========================================================================
+  // RFI NUMBER GENERATION
+  // ==========================================================================
+  // Format: {PROJECT_NUMBER}-RFI-{SEQUENCE}
+  // Example: NWBS-25001-RFI-001
+  
   const generateRFINumber = async () => {
     try {
+      // Count existing RFIs for this project
       const { count } = await supabase
         .from('rfis')
         .select('*', { count: 'exact', head: true })
         .eq('project_id', projectId);
       
+      // Generate next sequential number
       const rfiNum = (count || 0) + 1;
       const newRFINumber = `${projectNumber}-RFI-${String(rfiNum).padStart(3, '0')}`;
       setNextRFINumber(newRFINumber);
@@ -66,11 +104,20 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
     }
   };
 
+  // ==========================================================================
+  // FORM HANDLERS
+  // ==========================================================================
+  
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // ==========================================================================
+  // FILE ATTACHMENT HELPERS
+  // ==========================================================================
+  
+  // Get appropriate icon based on file type
   const getFileIcon = (fileType) => {
     if (fileType?.startsWith('image/')) return <Image size={16} style={{ color: 'var(--info)' }} />;
     if (fileType?.includes('pdf')) return <FileText size={16} style={{ color: '#ef4444' }} />;
@@ -79,6 +126,7 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
     return <File size={16} />;
   };
 
+  // Format file size for display (e.g., "1.5 MB")
   const formatFileSize = (bytes) => {
     if (!bytes) return '';
     if (bytes < 1024) return bytes + ' B';
@@ -86,10 +134,12 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
+  // Handle file selection from input
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
+    // Create pending file objects with unique IDs
     const newFiles = files.map(file => ({
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       file: file,
@@ -100,22 +150,31 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
 
     setPendingFiles(prev => [...prev, ...newFiles]);
     
+    // Clear input for re-selection of same file
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  // Remove a pending file before submission
   const handleRemovePendingFile = (fileId) => {
     setPendingFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
+  // ==========================================================================
+  // FILE UPLOAD
+  // ==========================================================================
+  // Upload files to Supabase storage and create attachment records
+  
   const uploadPendingFiles = async (rfiId) => {
     const uploadedAttachments = [];
 
     for (const pendingFile of pendingFiles) {
       try {
+        // Create unique storage path: {project_id}/rfis/{rfi_id}/{timestamp}_{filename}
         const timestamp = Date.now();
         const safeName = pendingFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const storagePath = `${projectId}/rfis/${rfiId}/${timestamp}_${safeName}`;
 
+        // Upload to Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from('project-files')
           .upload(storagePath, pendingFile.file);
@@ -125,10 +184,12 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
           continue;
         }
 
+        // Get public URL for the uploaded file
         const { data: urlData } = supabase.storage
           .from('project-files')
           .getPublicUrl(storagePath);
 
+        // Create attachment record in database
         const attachmentData = {
           project_id: projectId,
           rfi_id: rfiId,
@@ -157,12 +218,18 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
     return uploadedAttachments;
   };
 
+  // ==========================================================================
+  // RFI CREATION
+  // ==========================================================================
+  
   const createRFI = async () => {
+    // Build RFI data object
     const rfiData = {
       project_id: projectId,
       rfi_number: nextRFINumber,
       subject: formData.subject.trim(),
       question: formData.question.trim(),
+      // For external: use text input; for internal: use selected contact name
       sent_to: formData.recipient_type === 'external' 
         ? formData.sent_to.trim() 
         : formData.sent_to,
@@ -176,6 +243,7 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
       created_by: user.id
     };
 
+    // Insert RFI into database
     const { data, error: insertError } = await supabase
       .from('rfis')
       .insert([rfiData])
@@ -193,6 +261,11 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
     return { rfi: data, attachments };
   };
 
+  // ==========================================================================
+  // FORM SUBMISSION HANDLERS
+  // ==========================================================================
+
+  // Standard submit - create RFI only
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -210,6 +283,7 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
     }
   };
 
+  // Create and open email draft
   const handleCreateAndEmail = async () => {
     setLoading(true);
     setError('');
@@ -217,7 +291,7 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
     try {
       const { rfi } = await createRFI();
       
-      // Draft the email
+      // Open email client with pre-filled draft
       const rfiForEmail = {
         ...rfi,
         sent_to_email: formData.sent_to_email
@@ -234,6 +308,7 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
     }
   };
 
+  // Create and export PDF
   const handleCreateAndExportPDF = async () => {
     setLoading(true);
     setError('');
@@ -241,7 +316,7 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
     try {
       const { rfi, attachments } = await createRFI();
       
-      // Export to PDF
+      // Generate PDF with RFI details
       exportRFIToPDF(rfi, projectName, projectNumber, attachments);
       
       onSuccess(rfi);
@@ -254,14 +329,19 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
     }
   };
 
+  // ==========================================================================
+  // MODAL CLOSE
+  // ==========================================================================
+  
   const handleClose = () => {
+    // Reset form state
     setFormData({
       subject: '',
       question: '',
       recipient_type: 'external',
       sent_to: '',
       sent_to_email: '',
-      internal_owner_id: user?.id || '',
+      internal_owner_id: '',
       priority: 'Medium',
       due_date: ''
     });
@@ -270,15 +350,20 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
     onClose();
   };
 
+  // ==========================================================================
+  // RENDER - Early return if not open
+  // ==========================================================================
+  
   if (!isOpen) return null;
 
+  // ==========================================================================
+  // RENDER - Modal UI
+  // ==========================================================================
+  
   return (
     <div style={{
       position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+      top: 0, left: 0, right: 0, bottom: 0,
       background: 'rgba(0, 0, 0, 0.7)',
       display: 'flex',
       alignItems: 'center',
@@ -295,6 +380,9 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
         overflow: 'auto',
         boxShadow: 'var(--shadow-xl)'
       }}>
+        {/* ================================================================ */}
+        {/* HEADER                                                          */}
+        {/* ================================================================ */}
         <div style={{
           padding: 'var(--space-xl)',
           borderBottom: '1px solid var(--border-color)',
@@ -330,7 +418,12 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
           </button>
         </div>
 
+        {/* ================================================================ */}
+        {/* FORM                                                            */}
+        {/* ================================================================ */}
         <form onSubmit={handleSubmit} style={{ padding: 'var(--space-xl)' }}>
+          
+          {/* Error Display */}
           {error && (
             <div style={{
               padding: 'var(--space-md)',
@@ -345,6 +438,9 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
             </div>
           )}
 
+          {/* ============================================================ */}
+          {/* SUBJECT FIELD                                                */}
+          {/* ============================================================ */}
           <div className="form-group">
             <label className="form-label">Subject *</label>
             <input
@@ -358,6 +454,9 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
             />
           </div>
 
+          {/* ============================================================ */}
+          {/* QUESTION FIELD                                               */}
+          {/* ============================================================ */}
           <div className="form-group">
             <label className="form-label">Question / Request *</label>
             <textarea
@@ -372,10 +471,15 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
             />
           </div>
 
-          {/* Recipient Type Toggle */}
+          {/* ============================================================ */}
+          {/* RECIPIENT TYPE TOGGLE                                        */}
+          {/* External = Outside company (architect, engineer, etc.)       */}
+          {/* Internal = Team members or factory contacts                  */}
+          {/* ============================================================ */}
           <div className="form-group">
             <label className="form-label">Send To</label>
             <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
+              {/* External Option */}
               <label style={{
                 flex: 1,
                 padding: 'var(--space-md)',
@@ -397,6 +501,7 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
                 <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>External Contact</span>
               </label>
               
+              {/* Internal Option */}
               <label style={{
                 flex: 1,
                 padding: 'var(--space-md)',
@@ -420,7 +525,10 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
             </div>
           </div>
 
-          {/* External Contact Fields */}
+          {/* ============================================================ */}
+          {/* EXTERNAL RECIPIENT FIELDS                                    */}
+          {/* Shown when recipient_type === 'external'                     */}
+          {/* ============================================================ */}
           {formData.recipient_type === 'external' && (
             <div style={{ 
               padding: 'var(--space-lg)', 
@@ -434,6 +542,7 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
               </h4>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
+                {/* Contact Name/Company */}
                 <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
                   <label className="form-label">Contact Name / Company *</label>
                   <input
@@ -447,6 +556,7 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
                   />
                 </div>
                 
+                {/* Contact Email */}
                 <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
                   <label className="form-label">Contact Email *</label>
                   <input
@@ -461,6 +571,7 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
                 </div>
               </div>
 
+              {/* Internal Owner - Who tracks this RFI */}
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">Internal Owner (Tracking) *</label>
                 <select
@@ -471,7 +582,8 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
                   className="form-input"
                 >
                   <option value="">Select team member</option>
-                  {users.map(u => (
+                  {/* Only show users (PMs, Directors) for internal owner */}
+                  {contacts.filter(c => c.contact_type === 'user').map(u => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.role})
                     </option>
@@ -484,7 +596,11 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
             </div>
           )}
 
-          {/* Internal Recipient */}
+          {/* ============================================================ */}
+          {/* INTERNAL RECIPIENT DROPDOWN                                  */}
+          {/* Includes both users AND factory contacts                     */}
+          {/* Shown when recipient_type === 'internal'                     */}
+          {/* ============================================================ */}
           {formData.recipient_type === 'internal' && (
             <div className="form-group">
               <label className="form-label">Send To (Internal) *</label>
@@ -496,15 +612,31 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
                 className="form-input"
               >
                 <option value="">Select team member</option>
-                {users.map(u => (
-                  <option key={u.id} value={u.name}>
-                    {u.name} ({u.role})
-                  </option>
-                ))}
+                
+                {/* Group 1: Users (PMs, Directors, VPs) */}
+                <optgroup label="── Internal Team ──">
+                  {contacts.filter(c => c.contact_type === 'user').map(u => (
+                    <option key={u.id} value={u.name}>
+                      {u.name} ({u.role})
+                    </option>
+                  ))}
+                </optgroup>
+                
+                {/* Group 2: Factory Contacts by Department */}
+                <optgroup label="── Factory Contacts ──">
+                  {contacts.filter(c => c.contact_type === 'factory').map(c => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </div>
           )}
 
+          {/* ============================================================ */}
+          {/* PRIORITY & DUE DATE                                          */}
+          {/* ============================================================ */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)' }}>
             <div className="form-group">
               <label className="form-label">Priority</label>
@@ -517,12 +649,11 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
                 <option value="High">High</option>
-                <option value="Critical">Critical</option>
               </select>
             </div>
-
+            
             <div className="form-group">
-              <label className="form-label">Response Due Date</label>
+              <label className="form-label">Due Date</label>
               <input
                 type="date"
                 name="due_date"
@@ -533,86 +664,61 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
             </div>
           </div>
 
-          {/* File Attachments Section */}
-          <div style={{ 
-            padding: 'var(--space-lg)', 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            marginTop: 'var(--space-lg)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)' }}>
-              <h4 style={{ 
-                fontSize: '0.875rem', 
-                fontWeight: '700', 
-                color: 'var(--text-primary)', 
-                margin: 0,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-sm)'
-              }}>
-                <Paperclip size={16} />
-                Attachments ({pendingFiles.length})
-              </h4>
-              
-              <label style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-xs)',
-                padding: '6px 12px',
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
+          {/* ============================================================ */}
+          {/* FILE ATTACHMENTS                                             */}
+          {/* ============================================================ */}
+          <div className="form-group">
+            <label className="form-label">Attachments</label>
+            
+            {/* File Upload Button */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: '2px dashed var(--border-color)',
                 borderRadius: 'var(--radius-md)',
-                color: 'var(--text-secondary)',
-                fontSize: '0.8125rem',
-                fontWeight: '600',
+                padding: 'var(--space-lg)',
+                textAlign: 'center',
                 cursor: 'pointer',
-                transition: 'all 0.15s'
-              }}>
-                <Upload size={14} />
-                Add Files
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  onChange={handleFileSelect}
-                  style={{ display: 'none' }}
-                />
-              </label>
+                transition: 'all 0.15s',
+                marginBottom: pendingFiles.length > 0 ? 'var(--space-md)' : 0
+              }}
+              onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--sunbelt-orange)'}
+              onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--border-color)'}
+            >
+              <Upload size={24} style={{ color: 'var(--text-tertiary)', marginBottom: '8px' }} />
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', margin: 0 }}>
+                Click to upload files or drag and drop
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+              />
             </div>
 
-            {pendingFiles.length === 0 ? (
-              <p style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem', margin: 'var(--space-md) 0' }}>
-                No files attached. Click "Add Files" to attach documents.
-              </p>
-            ) : (
+            {/* Pending Files List */}
+            {pendingFiles.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                 {pendingFiles.map(file => (
-                  <div key={file.id} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-sm)',
-                    padding: 'var(--space-sm) var(--space-md)',
-                    background: 'var(--bg-primary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-sm)'
-                  }}>
+                  <div
+                    key={file.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-sm)',
+                      padding: 'var(--space-sm) var(--space-md)',
+                      background: 'var(--bg-secondary)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '0.875rem'
+                    }}
+                  >
                     {getFileIcon(file.type)}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ 
-                        fontSize: '0.875rem', 
-                        fontWeight: '500', 
-                        color: 'var(--text-primary)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}>
-                        {file.name}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                        {formatFileSize(file.size)}
-                      </div>
-                    </div>
+                    <span style={{ flex: 1, color: 'var(--text-primary)' }}>{file.name}</span>
+                    <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>
+                      {formatFileSize(file.size)}
+                    </span>
                     <button
                       type="button"
                       onClick={() => handleRemovePendingFile(file.id)}
@@ -622,12 +728,10 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
                         color: 'var(--danger)',
                         cursor: 'pointer',
                         padding: '4px',
-                        display: 'flex',
-                        borderRadius: '4px'
+                        display: 'flex'
                       }}
-                      title="Remove"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 ))}
@@ -635,6 +739,9 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
             )}
           </div>
 
+          {/* ============================================================ */}
+          {/* ACTION BUTTONS                                               */}
+          {/* ============================================================ */}
           <div style={{
             display: 'flex',
             gap: 'var(--space-md)',
@@ -644,10 +751,12 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
             marginTop: 'var(--space-lg)',
             flexWrap: 'wrap'
           }}>
+            {/* Cancel Button */}
             <button type="button" onClick={handleClose} className="btn btn-secondary" disabled={loading}>
               Cancel
             </button>
             
+            {/* Create & PDF Button */}
             <button 
               type="button" 
               onClick={handleCreateAndExportPDF}
@@ -672,6 +781,7 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
               Create & PDF
             </button>
             
+            {/* Create & Email Button (only for external with email) */}
             {formData.recipient_type === 'external' && formData.sent_to_email && (
               <button 
                 type="button" 
@@ -698,6 +808,7 @@ function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = 
               </button>
             )}
             
+            {/* Primary Submit Button */}
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? (
                 pendingFiles.length > 0 ? 'Creating & Uploading...' : 'Creating...'
