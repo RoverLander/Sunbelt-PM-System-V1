@@ -14,6 +14,7 @@ import Sidebar from './components/layout/Sidebar';
 import PMDashboard from './components/dashboards/PMDashboard';
 import DirectorDashboard from './components/dashboards/DirectorDashboard';
 import VPDashboard from './components/dashboards/VPDashboard';
+import { ITDashboard } from './components/it';
 
 // Pages
 import CalendarPage from './components/calendar/CalendarPage';
@@ -320,7 +321,30 @@ function AppContent() {
       }
     }
 
+    // ========================================================================
+    // IT-specific views
+    // ========================================================================
+    if (dashboardType === 'it') {
+      switch (currentView) {
+        case 'dashboard':
+          return <ITDashboard />;
+        case 'projects':
+          return <ProjectsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
+        case 'tasks':
+          return <TasksPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
+        case 'rfis':
+          return <RFIsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
+        case 'submittals':
+          return <SubmittalsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
+        default:
+          return <ITDashboard />;
+      }
+    }
+
+    // ========================================================================
     // PM-specific views
+    // ========================================================================
+
     switch (currentView) {
       case 'dashboard':
         return <PMDashboard onNavigateToProject={handleNavigateToProject} />;
