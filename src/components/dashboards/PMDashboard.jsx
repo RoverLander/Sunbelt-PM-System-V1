@@ -1,17 +1,19 @@
 // ============================================================================
-// PMDashboard.jsx - Project Manager Dashboard (REDESIGNED)
+// PMDashboard.jsx - Project Manager Command Center (COMPLETE VERSION)
 // ============================================================================
-// Command Center style dashboard with:
-// - Overdue items section (past due)
-// - Needs Attention section (due within 48 hours)
-// - Full-width project table
-// - Compact calendar heat map
+// Full-featured dashboard with:
+// - Status indicators (portfolio health)
+// - Overdue / Due Soon sections
+// - Weekly calendar view
+// - Gantt chart timeline
+// - Active projects table
 // ============================================================================
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Plus,
   ChevronRight,
+  ChevronLeft,
   AlertCircle,
   AlertTriangle,
   Clock,
@@ -21,7 +23,11 @@ import {
   MessageSquare,
   ClipboardList,
   ChevronDown,
-  RefreshCw
+  RefreshCw,
+  TrendingUp,
+  Target,
+  DollarSign,
+  Flag
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -31,6 +37,7 @@ import CreateProjectModal from '../projects/CreateProjectModal';
 // ============================================================================
 // CONSTANTS
 // ============================================================================
+const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const TOAST_DURATION = 3000;
 
 // ============================================================================
@@ -43,7 +50,6 @@ const formatDate = (dateString) => {
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   
-  // Reset times for comparison
   today.setHours(0, 0, 0, 0);
   tomorrow.setHours(0, 0, 0, 0);
   const compareDate = new Date(date);
@@ -55,26 +61,27 @@ const formatDate = (dateString) => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
+const formatDateShort = (date) => {
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
 const formatCurrency = (amount) => {
   if (!amount) return '—';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(amount);
+  if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
+  if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
+  return `$${amount}`;
+};
+
+const formatCurrencyFull = (amount) => {
+  if (!amount) return '—';
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(amount);
 };
 
 const getProjectStatusColor = (status) => {
   const colors = {
-    'Planning': 'var(--info)',
-    'Pre-PM': 'var(--warning)',
-    'PM Handoff': 'var(--sunbelt-orange)',
-    'In Progress': 'var(--sunbelt-orange)',
-    'On Hold': 'var(--text-tertiary)',
-    'Completed': 'var(--success)',
-    'Cancelled': 'var(--danger)',
-    'Warranty': 'var(--info)'
+    'Planning': 'var(--info)', 'Pre-PM': 'var(--warning)', 'PM Handoff': 'var(--sunbelt-orange)',
+    'In Progress': 'var(--sunbelt-orange)', 'On Hold': 'var(--text-tertiary)',
+    'Completed': 'var(--success)', 'Cancelled': 'var(--danger)', 'Warranty': 'var(--info)'
   };
   return colors[status] || 'var(--text-secondary)';
 };
@@ -84,6 +91,7 @@ const getItemTypeIcon = (type) => {
     case 'task': return CheckSquare;
     case 'rfi': return MessageSquare;
     case 'submittal': return ClipboardList;
+    case 'milestone': return Flag;
     default: return AlertCircle;
   }
 };
@@ -93,6 +101,7 @@ const getItemTypeColor = (type) => {
     case 'task': return 'var(--info)';
     case 'rfi': return 'var(--sunbelt-orange)';
     case 'submittal': return 'var(--success)';
+    case 'milestone': return 'var(--warning)';
     default: return 'var(--text-secondary)';
   }
 };
@@ -104,6 +113,31 @@ const getDaysUntilDue = (dueDate) => {
   const due = new Date(dueDate);
   due.setHours(0, 0, 0, 0);
   return Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+};
+
+const getWeekDates = (referenceDate = new Date()) => {
+  const dates = [];
+  const startOfWeek = new Date(referenceDate);
+  const day = startOfWeek.getDay();
+  startOfWeek.setDate(startOfWeek.getDate() - day); // Start from Sunday
+  
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(startOfWeek);
+    date.setDate(startOfWeek.getDate() + i);
+    dates.push(date);
+  }
+  return dates;
+};
+
+const isSameDay = (date1, date2) => {
+  if (!date1 || !date2) return false;
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  return d1.toDateString() === d2.toDateString();
+};
+
+const isToday = (date) => {
+  return isSameDay(date, new Date());
 };
 
 // ============================================================================
@@ -121,12 +155,14 @@ function PMDashboard() {
   const [tasks, setTasks] = useState([]);
   const [rfis, setRFIs] = useState([]);
   const [submittals, setSubmittals] = useState([]);
+  const [milestones, setMilestones] = useState([]);
 
   // View state
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedProjectTab, setSelectedProjectTab] = useState(null);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [showNewDropdown, setShowNewDropdown] = useState(false);
+  const [calendarWeekOffset, setCalendarWeekOffset] = useState(0);
   const [toast, setToast] = useState(null);
 
   // ==========================================================================
@@ -151,7 +187,7 @@ function PMDashboard() {
     setError(null);
 
     try {
-      const [projectsRes, tasksRes, rfisRes, submittalsRes] = await Promise.all([
+      const [projectsRes, tasksRes, rfisRes, submittalsRes, milestonesRes] = await Promise.all([
         supabase.from('projects').select('*').order('updated_at', { ascending: false }),
         supabase.from('tasks').select(`
           *, 
@@ -166,18 +202,24 @@ function PMDashboard() {
         supabase.from('submittals').select(`
           *, 
           project:project_id(id, name, project_number, color)
-        `).order('created_at', { ascending: false })
+        `).order('created_at', { ascending: false }),
+        supabase.from('milestones').select(`
+          *,
+          project:project_id(id, name, project_number, color)
+        `).order('due_date', { ascending: true })
       ]);
 
       if (projectsRes.error) throw projectsRes.error;
       if (tasksRes.error) throw tasksRes.error;
       if (rfisRes.error) throw rfisRes.error;
       if (submittalsRes.error) throw submittalsRes.error;
+      if (milestonesRes.error) throw milestonesRes.error;
 
       setProjects(projectsRes.data || []);
       setTasks(tasksRes.data || []);
       setRFIs(rfisRes.data || []);
       setSubmittals(submittalsRes.data || []);
+      setMilestones(milestonesRes.data || []);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       setError('Failed to load dashboard data');
@@ -192,12 +234,10 @@ function PMDashboard() {
   }, [fetchDashboardData]);
 
   // ==========================================================================
-  // COMPUTED: MY ITEMS (assigned to me or I'm internal owner)
+  // COMPUTED: MY ITEMS
   // ==========================================================================
   const myItems = useMemo(() => {
     const items = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
     // My Tasks
     tasks.forEach(task => {
@@ -262,6 +302,30 @@ function PMDashboard() {
     return items;
   }, [tasks, rfis, submittals, user]);
 
+  // All calendar items (including milestones)
+  const allCalendarItems = useMemo(() => {
+    const items = [...myItems];
+    
+    // Add milestones from active projects
+    milestones.forEach(milestone => {
+      const project = projects.find(p => p.id === milestone.project_id);
+      if (project && !['Completed', 'Cancelled'].includes(project.status) && milestone.due_date) {
+        items.push({
+          id: milestone.id,
+          type: 'milestone',
+          title: milestone.name,
+          identifier: milestone.name,
+          dueDate: milestone.due_date,
+          status: milestone.status,
+          project: { id: project.id, name: project.name, project_number: project.project_number, color: project.color },
+          raw: milestone
+        });
+      }
+    });
+
+    return items;
+  }, [myItems, milestones, projects]);
+
   // Overdue items (past due)
   const overdueItems = useMemo(() => {
     return myItems
@@ -280,28 +344,144 @@ function PMDashboard() {
   }, [myItems]);
 
   // ==========================================================================
-  // COMPUTED: PROJECT STATS
+  // COMPUTED: PROJECT STATS & HEALTH
   // ==========================================================================
   const projectStats = useMemo(() => {
     return projects.map(project => {
       const projectTasks = tasks.filter(t => t.project_id === project.id);
       const projectRFIs = rfis.filter(r => r.project_id === project.id);
       const projectSubs = submittals.filter(s => s.project_id === project.id);
+      const projectMilestones = milestones.filter(m => m.project_id === project.id);
+
+      // Calculate overdue items for this project
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const overdueTaskCount = projectTasks.filter(t => 
+        t.due_date && new Date(t.due_date) < today && !['Completed', 'Cancelled'].includes(t.status)
+      ).length;
+      
+      const overdueRFICount = projectRFIs.filter(r => 
+        r.due_date && new Date(r.due_date) < today && !['Closed', 'Answered'].includes(r.status)
+      ).length;
+
+      const totalOverdue = overdueTaskCount + overdueRFICount;
+
+      // Determine health status
+      let health = 'on-track';
+      if (totalOverdue > 3) health = 'behind';
+      else if (totalOverdue > 0) health = 'at-risk';
 
       return {
         ...project,
         taskCount: projectTasks.length,
         taskCompleted: projectTasks.filter(t => t.status === 'Completed').length,
         openRFIs: projectRFIs.filter(r => !['Closed', 'Answered'].includes(r.status)).length,
-        pendingSubs: projectSubs.filter(s => !['Approved', 'Approved as Noted', 'Rejected'].includes(s.status)).length
+        pendingSubs: projectSubs.filter(s => !['Approved', 'Approved as Noted', 'Rejected'].includes(s.status)).length,
+        milestoneCount: projectMilestones.length,
+        overdueCount: totalOverdue,
+        health
       };
     });
-  }, [projects, tasks, rfis, submittals]);
+  }, [projects, tasks, rfis, submittals, milestones]);
 
   // Active projects only
   const activeProjects = useMemo(() => {
     return projectStats.filter(p => !['Completed', 'Cancelled', 'On Hold'].includes(p.status));
   }, [projectStats]);
+
+  // Portfolio health summary
+  const portfolioHealth = useMemo(() => {
+    const onTrack = activeProjects.filter(p => p.health === 'on-track').length;
+    const atRisk = activeProjects.filter(p => p.health === 'at-risk').length;
+    const behind = activeProjects.filter(p => p.health === 'behind').length;
+    const totalValue = activeProjects.reduce((sum, p) => sum + (p.contract_value || 0), 0);
+    
+    return { onTrack, atRisk, behind, totalValue };
+  }, [activeProjects]);
+
+  // ==========================================================================
+  // COMPUTED: WEEKLY CALENDAR
+  // ==========================================================================
+  const weekDates = useMemo(() => {
+    const refDate = new Date();
+    refDate.setDate(refDate.getDate() + (calendarWeekOffset * 7));
+    return getWeekDates(refDate);
+  }, [calendarWeekOffset]);
+
+  const calendarItemsByDay = useMemo(() => {
+    const byDay = {};
+    weekDates.forEach(date => {
+      const key = date.toDateString();
+      byDay[key] = allCalendarItems.filter(item => isSameDay(item.dueDate, date));
+    });
+    return byDay;
+  }, [weekDates, allCalendarItems]);
+
+  // ==========================================================================
+  // COMPUTED: GANTT DATA
+  // ==========================================================================
+  const ganttData = useMemo(() => {
+    // Find date range for Gantt
+    const today = new Date();
+    const threeMonthsAgo = new Date(today);
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 1);
+    const sixMonthsFromNow = new Date(today);
+    sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 5);
+
+    let minDate = threeMonthsAgo;
+    let maxDate = sixMonthsFromNow;
+
+    // Adjust based on actual project dates
+    activeProjects.forEach(p => {
+      if (p.start_date && new Date(p.start_date) < minDate) minDate = new Date(p.start_date);
+      if (p.target_online_date && new Date(p.target_online_date) > maxDate) maxDate = new Date(p.target_online_date);
+    });
+
+    const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24));
+
+    // Generate month labels
+    const months = [];
+    const currentMonth = new Date(minDate);
+    currentMonth.setDate(1);
+    while (currentMonth <= maxDate) {
+      const monthStart = new Date(currentMonth);
+      const daysFromStart = Math.ceil((monthStart - minDate) / (1000 * 60 * 60 * 24));
+      months.push({
+        label: monthStart.toLocaleDateString('en-US', { month: 'short' }),
+        position: (daysFromStart / totalDays) * 100
+      });
+      currentMonth.setMonth(currentMonth.getMonth() + 1);
+    }
+
+    // Calculate bar positions for each project
+    const bars = activeProjects.map(project => {
+      const startDate = project.start_date ? new Date(project.start_date) : new Date();
+      const endDate = project.target_online_date ? new Date(project.target_online_date) : new Date();
+      
+      const startDays = Math.max(0, Math.ceil((startDate - minDate) / (1000 * 60 * 60 * 24)));
+      const endDays = Math.min(totalDays, Math.ceil((endDate - minDate) / (1000 * 60 * 60 * 24)));
+      
+      const startPercent = (startDays / totalDays) * 100;
+      const widthPercent = ((endDays - startDays) / totalDays) * 100;
+      
+      // Progress based on completed tasks
+      const progress = project.taskCount > 0 ? (project.taskCompleted / project.taskCount) * 100 : 0;
+
+      return {
+        ...project,
+        startPercent,
+        widthPercent: Math.max(widthPercent, 2), // Minimum 2% width for visibility
+        progress
+      };
+    });
+
+    // Today marker position
+    const todayDays = Math.ceil((today - minDate) / (1000 * 60 * 60 * 24));
+    const todayPercent = (todayDays / totalDays) * 100;
+
+    return { months, bars, todayPercent, minDate, maxDate };
+  }, [activeProjects]);
 
   // ==========================================================================
   // HANDLERS
@@ -317,6 +497,7 @@ function PMDashboard() {
       if (item.type === 'task') setSelectedProjectTab('Tasks');
       else if (item.type === 'rfi') setSelectedProjectTab('RFIs');
       else if (item.type === 'submittal') setSelectedProjectTab('Submittals');
+      else setSelectedProjectTab(null);
     }
   }, []);
 
@@ -326,7 +507,7 @@ function PMDashboard() {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  const handleProjectCreated = useCallback((newProject) => {
+  const handleProjectCreated = useCallback(() => {
     setShowCreateProject(false);
     showToast('Project created successfully');
     fetchDashboardData();
@@ -386,17 +567,17 @@ function PMDashboard() {
   // RENDER: Main Dashboard
   // ==========================================================================
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
       {/* ================================================================== */}
       {/* HEADER                                                            */}
       {/* ================================================================== */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-xl)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-lg)' }}>
         <div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
             Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.name?.split(' ')[0] || 'there'}
           </h1>
-          <p style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
-            {activeProjects.length} active project{activeProjects.length !== 1 ? 's' : ''} • {overdueItems.length + needsAttentionItems.length} item{overdueItems.length + needsAttentionItems.length !== 1 ? 's' : ''} need{overdueItems.length + needsAttentionItems.length === 1 ? 's' : ''} attention
+          <p style={{ color: 'var(--text-secondary)', marginTop: '4px', fontSize: '0.9375rem' }}>
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </p>
         </div>
 
@@ -417,10 +598,7 @@ function PMDashboard() {
           
           {showNewDropdown && (
             <>
-              <div 
-                style={{ position: 'fixed', inset: 0, zIndex: 99 }} 
-                onClick={() => setShowNewDropdown(false)} 
-              />
+              <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowNewDropdown(false)} />
               <div style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: '4px',
                 background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
@@ -447,6 +625,58 @@ function PMDashboard() {
       </div>
 
       {/* ================================================================== */}
+      {/* STATUS INDICATORS                                                 */}
+      {/* ================================================================== */}
+      <div style={{
+        display: 'flex', gap: 'var(--space-lg)', marginBottom: 'var(--space-lg)',
+        padding: 'var(--space-md) var(--space-lg)',
+        background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--border-color)', flexWrap: 'wrap'
+      }}>
+        <StatusIndicator
+          icon={TrendingUp}
+          label="On Track"
+          value={portfolioHealth.onTrack}
+          color="var(--success)"
+        />
+        <StatusIndicator
+          icon={AlertTriangle}
+          label="At Risk"
+          value={portfolioHealth.atRisk}
+          color="var(--warning)"
+          highlight={portfolioHealth.atRisk > 0}
+        />
+        <StatusIndicator
+          icon={AlertCircle}
+          label="Behind"
+          value={portfolioHealth.behind}
+          color="var(--danger)"
+          highlight={portfolioHealth.behind > 0}
+        />
+        <div style={{ width: '1px', background: 'var(--border-color)', margin: '0 var(--space-sm)' }} />
+        <StatusIndicator
+          icon={FolderKanban}
+          label="Active Projects"
+          value={activeProjects.length}
+          color="var(--sunbelt-orange)"
+        />
+        <StatusIndicator
+          icon={DollarSign}
+          label="Portfolio Value"
+          value={formatCurrency(portfolioHealth.totalValue)}
+          color="var(--text-primary)"
+          isText
+        />
+        <StatusIndicator
+          icon={Target}
+          label="My Items Due"
+          value={overdueItems.length + needsAttentionItems.length}
+          color={overdueItems.length > 0 ? 'var(--danger)' : 'var(--warning)'}
+          highlight={overdueItems.length > 0}
+        />
+      </div>
+
+      {/* ================================================================== */}
       {/* OVERDUE & NEEDS ATTENTION                                         */}
       {/* ================================================================== */}
       {(overdueItems.length > 0 || needsAttentionItems.length > 0) && (
@@ -454,7 +684,7 @@ function PMDashboard() {
           display: 'grid', 
           gridTemplateColumns: overdueItems.length > 0 && needsAttentionItems.length > 0 ? '1fr 1fr' : '1fr',
           gap: 'var(--space-lg)', 
-          marginBottom: 'var(--space-xl)' 
+          marginBottom: 'var(--space-lg)' 
         }}>
           {/* Overdue Section */}
           {overdueItems.length > 0 && (
@@ -462,48 +692,48 @@ function PMDashboard() {
               background: 'rgba(239, 68, 68, 0.08)',
               border: '1px solid var(--danger)',
               borderRadius: 'var(--radius-lg)',
-              padding: 'var(--space-lg)'
+              padding: 'var(--space-md)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
-                <AlertCircle size={20} style={{ color: 'var(--danger)' }} />
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: 'var(--danger)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
+                <AlertCircle size={18} style={{ color: 'var(--danger)' }} />
+                <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: '700', color: 'var(--danger)' }}>
                   Overdue ({overdueItems.length})
                 </h3>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                {overdueItems.slice(0, 5).map(item => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
+                {overdueItems.slice(0, 4).map(item => (
                   <AttentionItem key={`${item.type}-${item.id}`} item={item} onClick={handleItemClick} isOverdue />
                 ))}
-                {overdueItems.length > 5 && (
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--danger)', margin: 'var(--space-sm) 0 0 0' }}>
-                    +{overdueItems.length - 5} more overdue items
+                {overdueItems.length > 4 && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--danger)', margin: 'var(--space-xs) 0 0 0' }}>
+                    +{overdueItems.length - 4} more
                   </p>
                 )}
               </div>
             </div>
           )}
 
-          {/* Needs Attention Section */}
+          {/* Due Soon Section */}
           {needsAttentionItems.length > 0 && (
             <div style={{
               background: 'rgba(245, 158, 11, 0.08)',
               border: '1px solid var(--warning)',
               borderRadius: 'var(--radius-lg)',
-              padding: 'var(--space-lg)'
+              padding: 'var(--space-md)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
-                <Clock size={20} style={{ color: 'var(--warning)' }} />
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: 'var(--warning)' }}>
-                  Due Soon ({needsAttentionItems.length})
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
+                <Clock size={18} style={{ color: 'var(--warning)' }} />
+                <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: '700', color: 'var(--warning)' }}>
+                  Due Within 48hrs ({needsAttentionItems.length})
                 </h3>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                {needsAttentionItems.slice(0, 5).map(item => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
+                {needsAttentionItems.slice(0, 4).map(item => (
                   <AttentionItem key={`${item.type}-${item.id}`} item={item} onClick={handleItemClick} />
                 ))}
-                {needsAttentionItems.length > 5 && (
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--warning)', margin: 'var(--space-sm) 0 0 0' }}>
-                    +{needsAttentionItems.length - 5} more items due soon
+                {needsAttentionItems.length > 4 && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--warning)', margin: 'var(--space-xs) 0 0 0' }}>
+                    +{needsAttentionItems.length - 4} more
                   </p>
                 )}
               </div>
@@ -513,11 +743,251 @@ function PMDashboard() {
       )}
 
       {/* ================================================================== */}
+      {/* WEEKLY CALENDAR                                                   */}
+      {/* ================================================================== */}
+      <div style={{
+        background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--border-color)', marginBottom: 'var(--space-lg)',
+        overflow: 'hidden'
+      }}>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: 'var(--space-md) var(--space-lg)',
+          borderBottom: '1px solid var(--border-color)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+            <Calendar size={18} style={{ color: 'var(--sunbelt-orange)' }} />
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)' }}>
+              This Week
+            </h3>
+            {calendarWeekOffset !== 0 && (
+              <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
+                ({calendarWeekOffset > 0 ? '+' : ''}{calendarWeekOffset} week{Math.abs(calendarWeekOffset) !== 1 ? 's' : ''})
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
+            <button
+              onClick={() => setCalendarWeekOffset(prev => prev - 1)}
+              style={{
+                padding: '4px 8px', background: 'var(--bg-tertiary)', border: 'none',
+                borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--text-secondary)'
+              }}
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              onClick={() => setCalendarWeekOffset(0)}
+              disabled={calendarWeekOffset === 0}
+              style={{
+                padding: '4px 12px', background: calendarWeekOffset === 0 ? 'var(--bg-tertiary)' : 'var(--sunbelt-orange)',
+                border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                color: calendarWeekOffset === 0 ? 'var(--text-tertiary)' : 'white',
+                fontSize: '0.75rem', fontWeight: '600'
+              }}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setCalendarWeekOffset(prev => prev + 1)}
+              style={{
+                padding: '4px 8px', background: 'var(--bg-tertiary)', border: 'none',
+                borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--text-secondary)'
+              }}
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', minHeight: '120px' }}>
+          {weekDates.map((date, index) => {
+            const dayKey = date.toDateString();
+            const items = calendarItemsByDay[dayKey] || [];
+            const isCurrentDay = isToday(date);
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+            
+            return (
+              <div
+                key={dayKey}
+                style={{
+                  padding: 'var(--space-sm)',
+                  borderLeft: index > 0 ? '1px solid var(--border-color)' : 'none',
+                  background: isCurrentDay ? 'rgba(255, 107, 53, 0.05)' : isWeekend ? 'var(--bg-tertiary)' : 'transparent'
+                }}
+              >
+                <div style={{
+                  textAlign: 'center', marginBottom: 'var(--space-sm)',
+                  paddingBottom: 'var(--space-xs)', borderBottom: '1px solid var(--border-color)'
+                }}>
+                  <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
+                    {DAYS_OF_WEEK[date.getDay()]}
+                  </div>
+                  <div style={{
+                    fontSize: '1.125rem', fontWeight: isCurrentDay ? '700' : '500',
+                    color: isCurrentDay ? 'var(--sunbelt-orange)' : 'var(--text-primary)'
+                  }}>
+                    {date.getDate()}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {items.slice(0, 3).map(item => {
+                    const Icon = getItemTypeIcon(item.type);
+                    return (
+                      <div
+                        key={`${item.type}-${item.id}`}
+                        onClick={() => handleItemClick(item)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '4px',
+                          padding: '2px 4px', borderRadius: '3px',
+                          background: `${getItemTypeColor(item.type)}15`,
+                          cursor: 'pointer', fontSize: '0.6875rem',
+                          color: 'var(--text-primary)',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                        }}
+                        title={`${item.identifier}: ${item.title}`}
+                      >
+                        <Icon size={10} style={{ color: getItemTypeColor(item.type), flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</span>
+                      </div>
+                    );
+                  })}
+                  {items.length > 3 && (
+                    <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textAlign: 'center' }}>
+                      +{items.length - 3} more
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ================================================================== */}
+      {/* GANTT CHART                                                       */}
+      {/* ================================================================== */}
+      {activeProjects.length > 0 && (
+        <div style={{
+          background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--border-color)', marginBottom: 'var(--space-lg)',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
+            padding: 'var(--space-md) var(--space-lg)',
+            borderBottom: '1px solid var(--border-color)'
+          }}>
+            <Target size={18} style={{ color: 'var(--sunbelt-orange)' }} />
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)' }}>
+              Project Timeline
+            </h3>
+          </div>
+
+          {/* Month Headers */}
+          <div style={{ position: 'relative', height: '30px', borderBottom: '1px solid var(--border-color)', marginLeft: '200px' }}>
+            {ganttData.months.map((month, i) => (
+              <div
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: `${month.position}%`,
+                  fontSize: '0.75rem',
+                  color: 'var(--text-tertiary)',
+                  padding: '8px 0',
+                  borderLeft: '1px solid var(--border-color)',
+                  paddingLeft: '8px'
+                }}
+              >
+                {month.label}
+              </div>
+            ))}
+            {/* Today marker */}
+            <div style={{
+              position: 'absolute',
+              left: `${ganttData.todayPercent}%`,
+              top: 0,
+              bottom: 0,
+              width: '2px',
+              background: 'var(--sunbelt-orange)',
+              zIndex: 2
+            }} />
+          </div>
+
+          {/* Project Bars */}
+          <div style={{ padding: 'var(--space-sm) 0' }}>
+            {ganttData.bars.map(project => (
+              <div
+                key={project.id}
+                onClick={() => handleProjectClick(project)}
+                style={{
+                  display: 'flex', alignItems: 'center', height: '36px',
+                  cursor: 'pointer', transition: 'background 0.15s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-primary)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                {/* Project Name */}
+                <div style={{
+                  width: '200px', flexShrink: 0, padding: '0 var(--space-md)',
+                  display: 'flex', alignItems: 'center', gap: 'var(--space-sm)'
+                }}>
+                  <div style={{
+                    width: '8px', height: '8px', borderRadius: '2px',
+                    background: project.color || 'var(--sunbelt-orange)'
+                  }} />
+                  <span style={{
+                    fontSize: '0.8125rem', color: 'var(--text-primary)',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                  }}>
+                    {project.name}
+                  </span>
+                  {project.health === 'at-risk' && <AlertTriangle size={12} style={{ color: 'var(--warning)' }} />}
+                  {project.health === 'behind' && <AlertCircle size={12} style={{ color: 'var(--danger)' }} />}
+                </div>
+
+                {/* Bar Area */}
+                <div style={{ flex: 1, position: 'relative', height: '100%' }}>
+                  {/* Today line */}
+                  <div style={{
+                    position: 'absolute',
+                    left: `${ganttData.todayPercent}%`,
+                    top: 0, bottom: 0, width: '2px',
+                    background: 'var(--sunbelt-orange)', opacity: 0.3
+                  }} />
+                  
+                  {/* Project Bar */}
+                  <div style={{
+                    position: 'absolute',
+                    left: `${project.startPercent}%`,
+                    width: `${project.widthPercent}%`,
+                    top: '8px', height: '20px',
+                    background: 'var(--bg-tertiary)',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    {/* Progress Fill */}
+                    <div style={{
+                      width: `${project.progress}%`,
+                      height: '100%',
+                      background: project.color || 'var(--sunbelt-orange)',
+                      opacity: 0.8,
+                      transition: 'width 0.3s'
+                    }} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================== */}
       {/* ACTIVE PROJECTS TABLE                                             */}
       {/* ================================================================== */}
       <div style={{ marginBottom: 'var(--space-xl)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)' }}>
-          <h2 style={{ margin: 0, fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+          <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)' }}>
             Active Projects
           </h2>
           {projects.length > activeProjects.length && (
@@ -556,14 +1026,15 @@ function PMDashboard() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'var(--bg-tertiary)' }}>
-                  <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Project</th>
-                  <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '120px' }}>Status</th>
-                  <th style={{ padding: 'var(--space-md)', textAlign: 'center', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '100px' }}>Tasks</th>
-                  <th style={{ padding: 'var(--space-md)', textAlign: 'center', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '80px' }}>RFIs</th>
-                  <th style={{ padding: 'var(--space-md)', textAlign: 'center', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '100px' }}>Submittals</th>
-                  <th style={{ padding: 'var(--space-md)', textAlign: 'right', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '120px' }}>Value</th>
-                  <th style={{ padding: 'var(--space-md)', textAlign: 'right', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '100px' }}>Due</th>
-                  <th style={{ width: '40px' }}></th>
+                  <th style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'left', fontSize: '0.6875rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Project</th>
+                  <th style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'left', fontSize: '0.6875rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '100px' }}>Status</th>
+                  <th style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'center', fontSize: '0.6875rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '80px' }}>Health</th>
+                  <th style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'center', fontSize: '0.6875rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '80px' }}>Tasks</th>
+                  <th style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'center', fontSize: '0.6875rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '70px' }}>RFIs</th>
+                  <th style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'center', fontSize: '0.6875rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '70px' }}>Subs</th>
+                  <th style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'right', fontSize: '0.6875rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '100px' }}>Value</th>
+                  <th style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'right', fontSize: '0.6875rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '90px' }}>Due</th>
+                  <th style={{ width: '30px' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -573,63 +1044,54 @@ function PMDashboard() {
                     onClick={() => handleProjectClick(project)}
                     style={{
                       borderTop: index > 0 ? '1px solid var(--border-color)' : 'none',
-                      cursor: 'pointer',
-                      transition: 'background 0.15s'
+                      cursor: 'pointer', transition: 'background 0.15s'
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-primary)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <td style={{ padding: 'var(--space-md)' }}>
+                    <td style={{ padding: 'var(--space-sm) var(--space-md)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                        <div style={{
-                          width: '10px', height: '10px', borderRadius: '3px',
-                          background: project.color || 'var(--sunbelt-orange)'
-                        }} />
+                        <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: project.color || 'var(--sunbelt-orange)' }} />
                         <div>
-                          <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{project.name}</div>
-                          <div style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>{project.project_number}</div>
+                          <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>{project.name}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{project.project_number}</div>
                         </div>
                       </div>
                     </td>
-                    <td style={{ padding: 'var(--space-md)' }}>
+                    <td style={{ padding: 'var(--space-sm) var(--space-md)' }}>
                       <span style={{
-                        padding: '4px 10px', borderRadius: '12px',
-                        fontSize: '0.75rem', fontWeight: '600',
+                        padding: '3px 8px', borderRadius: '10px', fontSize: '0.6875rem', fontWeight: '600',
                         background: `${getProjectStatusColor(project.status)}20`,
                         color: getProjectStatusColor(project.status)
                       }}>
                         {project.status}
                       </span>
                     </td>
-                    <td style={{ padding: 'var(--space-md)', textAlign: 'center' }}>
-                      <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>
-                        {project.taskCompleted}/{project.taskCount}
+                    <td style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'center' }}>
+                      <HealthBadge health={project.health} />
+                    </td>
+                    <td style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'center', fontSize: '0.8125rem' }}>
+                      <span style={{ color: 'var(--text-primary)' }}>{project.taskCompleted}</span>
+                      <span style={{ color: 'var(--text-tertiary)' }}>/{project.taskCount}</span>
+                    </td>
+                    <td style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'center', fontSize: '0.8125rem' }}>
+                      <span style={{ color: project.openRFIs > 0 ? 'var(--sunbelt-orange)' : 'var(--text-tertiary)', fontWeight: project.openRFIs > 0 ? '600' : '400' }}>
+                        {project.openRFIs || '—'}
                       </span>
                     </td>
-                    <td style={{ padding: 'var(--space-md)', textAlign: 'center' }}>
-                      <span style={{
-                        color: project.openRFIs > 0 ? 'var(--sunbelt-orange)' : 'var(--text-tertiary)',
-                        fontWeight: project.openRFIs > 0 ? '600' : '400'
-                      }}>
-                        {project.openRFIs > 0 ? `${project.openRFIs} open` : '—'}
+                    <td style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'center', fontSize: '0.8125rem' }}>
+                      <span style={{ color: project.pendingSubs > 0 ? 'var(--warning)' : 'var(--text-tertiary)', fontWeight: project.pendingSubs > 0 ? '600' : '400' }}>
+                        {project.pendingSubs || '—'}
                       </span>
                     </td>
-                    <td style={{ padding: 'var(--space-md)', textAlign: 'center' }}>
-                      <span style={{
-                        color: project.pendingSubs > 0 ? 'var(--warning)' : 'var(--text-tertiary)',
-                        fontWeight: project.pendingSubs > 0 ? '600' : '400'
-                      }}>
-                        {project.pendingSubs > 0 ? `${project.pendingSubs} pending` : '—'}
-                      </span>
-                    </td>
-                    <td style={{ padding: 'var(--space-md)', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                    <td style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'right', color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
                       {formatCurrency(project.contract_value)}
                     </td>
-                    <td style={{ padding: 'var(--space-md)', textAlign: 'right', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                    <td style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'right', color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
                       {formatDate(project.target_online_date)}
                     </td>
-                    <td style={{ padding: 'var(--space-md)' }}>
-                      <ChevronRight size={16} style={{ color: 'var(--text-tertiary)' }} />
+                    <td style={{ padding: 'var(--space-sm)' }}>
+                      <ChevronRight size={14} style={{ color: 'var(--text-tertiary)' }} />
                     </td>
                   </tr>
                 ))}
@@ -669,6 +1131,50 @@ function PMDashboard() {
 }
 
 // ============================================================================
+// STATUS INDICATOR COMPONENT
+// ============================================================================
+function StatusIndicator({ icon: Icon, label, value, color, highlight = false, isText = false }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
+      padding: 'var(--space-xs) var(--space-sm)',
+      background: highlight ? `${color}15` : 'transparent',
+      borderRadius: 'var(--radius-md)'
+    }}>
+      <Icon size={16} style={{ color }} />
+      <div>
+        <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>{label}</div>
+        <div style={{ fontSize: isText ? '0.9375rem' : '1.125rem', fontWeight: '700', color }}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// HEALTH BADGE COMPONENT
+// ============================================================================
+function HealthBadge({ health }) {
+  const config = {
+    'on-track': { color: 'var(--success)', label: '●', title: 'On Track' },
+    'at-risk': { color: 'var(--warning)', label: '●', title: 'At Risk' },
+    'behind': { color: 'var(--danger)', label: '●', title: 'Behind' }
+  };
+  const { color, label, title } = config[health] || config['on-track'];
+  
+  return (
+    <span
+      title={title}
+      style={{
+        display: 'inline-block',
+        width: '10px', height: '10px',
+        borderRadius: '50%',
+        background: color
+      }}
+    />
+  );
+}
+
+// ============================================================================
 // ATTENTION ITEM COMPONENT
 // ============================================================================
 function AttentionItem({ item, onClick, isOverdue = false }) {
@@ -679,34 +1185,33 @@ function AttentionItem({ item, onClick, isOverdue = false }) {
     <div
       onClick={() => onClick(item)}
       style={{
-        display: 'flex', alignItems: 'center', gap: 'var(--space-md)',
-        padding: 'var(--space-sm) var(--space-md)',
-        background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)',
+        display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
+        padding: '6px var(--space-sm)',
+        background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)',
         cursor: 'pointer', transition: 'transform 0.15s'
       }}
       onMouseEnter={(e) => e.currentTarget.style.transform = 'translateX(4px)'}
       onMouseLeave={(e) => e.currentTarget.style.transform = 'translateX(0)'}
     >
-      <Icon size={16} style={{ color: getItemTypeColor(item.type), flexShrink: 0 }} />
+      <Icon size={14} style={{ color: getItemTypeColor(item.type), flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontSize: '0.875rem', fontWeight: '500', color: 'var(--text-primary)',
+          fontSize: '0.8125rem', fontWeight: '500', color: 'var(--text-primary)',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
         }}>
-          {item.identifier !== item.title ? `${item.identifier}: ` : ''}{item.title}
+          {item.title}
         </div>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-          {item.project?.project_number || item.project?.name}
+        <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
+          {item.project?.project_number}
         </div>
       </div>
       <div style={{
-        fontSize: '0.75rem', fontWeight: '600',
+        fontSize: '0.6875rem', fontWeight: '600',
         color: isOverdue ? 'var(--danger)' : 'var(--warning)',
         whiteSpace: 'nowrap'
       }}>
-        {isOverdue ? `${Math.abs(daysUntil)}d overdue` : formatDate(item.dueDate)}
+        {isOverdue ? `${Math.abs(daysUntil)}d late` : formatDate(item.dueDate)}
       </div>
-      <ChevronRight size={14} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
     </div>
   );
 }
