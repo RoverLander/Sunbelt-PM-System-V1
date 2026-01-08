@@ -80,7 +80,9 @@ function AppContent() {
 
   // Project navigation state
   const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [selectedProject, setSelectedProject] = useState(null);
   const [selectedProjectTab, setSelectedProjectTab] = useState('overview');
+  const [loadingProject, setLoadingProject] = useState(false);
 
   // ==========================================================================
   // CHECK USER ROLE ON LOAD
@@ -136,21 +138,68 @@ function AppContent() {
   }, [dashboardType]);
 
   // ==========================================================================
+  // FETCH PROJECT WHEN ID CHANGES
+  // ==========================================================================
+  useEffect(() => {
+    if (selectedProjectId) {
+      fetchProject(selectedProjectId);
+    } else {
+      setSelectedProject(null);
+    }
+  }, [selectedProjectId]);
+
+  const fetchProject = async (projectId) => {
+    setLoadingProject(true);
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+
+      if (error) throw error;
+      setSelectedProject(data);
+    } catch (error) {
+      console.error('Error fetching project:', error);
+      setSelectedProject(null);
+    } finally {
+      setLoadingProject(false);
+    }
+  };
+
+  // ==========================================================================
   // NAVIGATION HANDLERS
   // ==========================================================================
   
   // Navigate to a specific project (optionally with a specific tab)
-  const handleNavigateToProject = (projectId, tab = 'overview') => {
+  // Tab names: 'Overview', 'Tasks', 'RFIs', 'Submittals', 'Calendar', 'Files'
+  const handleNavigateToProject = (projectId, tab = 'Overview') => {
+    // Map lowercase tab names to proper case
+    const tabMap = {
+      'overview': 'Overview',
+      'tasks': 'Tasks',
+      'rfis': 'RFIs',
+      'submittals': 'Submittals',
+      'calendar': 'Calendar',
+      'files': 'Files'
+    };
+    
     setSelectedProjectId(projectId);
-    setSelectedProjectTab(tab);
+    setSelectedProjectTab(tabMap[tab?.toLowerCase()] || 'Overview');
     setCurrentView('project-detail');
   };
 
-  // Go back from project detail to the projects list
+  // Go back from project detail to the previous view
   const handleBackToProjects = () => {
     setSelectedProjectId(null);
-    setSelectedProjectTab('overview');
+    setSelectedProject(null);
+    setSelectedProjectTab('Overview');
     setCurrentView('projects');
+  };
+
+  // Handle project update from ProjectDetails
+  const handleProjectUpdate = (updatedProject) => {
+    setSelectedProject(updatedProject);
   };
 
   // Custom setCurrentView that clears project selection when navigating away
@@ -200,11 +249,22 @@ function AppContent() {
   const renderContent = () => {
     // Project Detail View (accessible from any dashboard type)
     if (currentView === 'project-detail' && selectedProjectId) {
+      // Show loading while fetching project
+      if (loadingProject || !selectedProject) {
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '50vh' }}>
+            <div className="loading-spinner"></div>
+            <p style={{ marginTop: 'var(--space-md)', color: 'var(--text-secondary)' }}>Loading project...</p>
+          </div>
+        );
+      }
+      
       return (
         <ProjectDetails 
-          projectId={selectedProjectId}
+          project={selectedProject}
           initialTab={selectedProjectTab}
           onBack={handleBackToProjects}
+          onUpdate={handleProjectUpdate}
         />
       );
     }
