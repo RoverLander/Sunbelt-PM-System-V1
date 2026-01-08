@@ -4,7 +4,7 @@
 // Shows different sidebar content based on user role and dashboard type:
 // - PM View: My Projects, My Tasks, Overdue counts
 // - Director View: Portfolio Health, At-Risk, Team stats
-// - VP View: Executive KPIs, Portfolio Value
+// - VP View: Executive KPIs, Portfolio Value (LOCKED - no switching)
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -31,7 +31,9 @@ import {
   Target,
   DollarSign,
   Briefcase,
-  PieChart
+  PieChart,
+  Crown,
+  Shield
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -86,6 +88,21 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     }
   }, [user]);
 
+  // ===== FORCE VP USERS TO VP DASHBOARD =====
+  useEffect(() => {
+    if (currentUser) {
+      const role = (currentUser.role || '').toLowerCase();
+      
+      // VP users are LOCKED to VP dashboard - force it if not set
+      if (role === 'vp' && dashboardType !== 'vp') {
+        if (setDashboardType) {
+          setDashboardType('vp');
+          localStorage.setItem('dashboardType', 'vp');
+        }
+      }
+    }
+  }, [currentUser, dashboardType, setDashboardType]);
+
   useEffect(() => {
     if (currentUser) {
       if (dashboardType === 'vp') {
@@ -116,6 +133,25 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
 
       if (!error && userData) {
         setCurrentUser(userData);
+        
+        // ===== SET DEFAULT DASHBOARD BASED ON ROLE =====
+        const role = (userData.role || '').toLowerCase();
+        const savedDashboard = localStorage.getItem('dashboardType');
+        
+        if (role === 'vp') {
+          // VP is ALWAYS locked to VP dashboard
+          if (setDashboardType) {
+            setDashboardType('vp');
+            localStorage.setItem('dashboardType', 'vp');
+          }
+        } else if (role === 'director' || role === 'admin') {
+          // Directors/Admins default to director view but can switch
+          if (!savedDashboard && setDashboardType) {
+            setDashboardType('director');
+            localStorage.setItem('dashboardType', 'director');
+          }
+        }
+        // PMs stay on PM dashboard (default)
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -129,15 +165,16 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     if (!currentUser) return;
 
     try {
+      // Include projects where user is: PM, Secondary PM, or Creator
       let projectQuery = supabase
         .from('projects')
         .select('id')
         .in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']);
 
       if (includeSecondary) {
-        projectQuery = projectQuery.or(`pm_id.eq.${currentUser.id},secondary_pm_id.eq.${currentUser.id}`);
+        projectQuery = projectQuery.or(`pm_id.eq.${currentUser.id},secondary_pm_id.eq.${currentUser.id},created_by.eq.${currentUser.id}`);
       } else {
-        projectQuery = projectQuery.eq('pm_id', currentUser.id);
+        projectQuery = projectQuery.or(`pm_id.eq.${currentUser.id},created_by.eq.${currentUser.id}`);
       }
 
       const { data: projects } = await projectQuery;
@@ -194,7 +231,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         projectIds.length > 0
           ? supabase.from('submittals').select('id, project_id, due_date, status').in('project_id', projectIds)
           : { data: [] },
-        supabase.from('users').select('id').in('role', ['Project Manager', 'Director', 'Admin']).eq('is_active', true)
+        supabase.from('users').select('id').in('role', ['Project Manager', 'PM', 'Director', 'Admin']).eq('is_active', true)
       ]);
 
       const tasks = tasksResult.data || [];
@@ -321,7 +358,10 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   // ==========================================================================
   const displayUser = currentUser || user;
   const userRole = (currentUser?.role || '').toLowerCase();
-  const canSwitchDashboard = currentUser && (userRole === 'director' || userRole === 'admin' || userRole === 'vp');
+  
+  // ===== KEY FIX: VP CANNOT SWITCH DASHBOARDS =====
+  // Only Director and Admin can switch views - VP is locked to VP dashboard
+  const canSwitchDashboard = currentUser && (userRole === 'director' || userRole === 'admin');
   const isVP = userRole === 'vp';
 
   const formatCurrency = (amount) => {
@@ -346,13 +386,16 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     { id: 'projects', label: 'All Projects', icon: FolderKanban },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
     { id: 'team', label: 'Team', icon: Users },
-    { id: 'reports', label: 'Reports', icon: TrendingUp },
+    { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+    { id: 'rfis', label: 'RFIs', icon: FileText },
+    { id: 'submittals', label: 'Submittals', icon: ClipboardList },
   ];
 
   const vpNavItems = [
-    { id: 'dashboard', label: 'Executive', icon: TrendingUp },
+    { id: 'dashboard', label: 'Executive Dashboard', icon: TrendingUp },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'clients', label: 'Clients', icon: Briefcase },
+    { id: 'clients', label: 'Client Accounts', icon: Briefcase },
+    { id: 'team', label: 'Team Overview', icon: Users },
     { id: 'projects', label: 'All Projects', icon: FolderKanban },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
   ];
@@ -373,13 +416,18 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         <div style={{
           width: '40px',
           height: '40px',
-          background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+          background: isVP 
+            ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)'
+            : 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
           borderRadius: '10px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           marginRight: '12px',
-          flexShrink: 0
+          flexShrink: 0,
+          boxShadow: isVP 
+            ? '0 2px 8px rgba(139, 92, 246, 0.3)'
+            : '0 2px 8px rgba(255, 107, 53, 0.3)'
         }}>
           <Building2 size={24} color="white" />
         </div>
@@ -387,13 +435,48 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
           <h1 style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
             Sunbelt PM
           </h1>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
-            Project Management
+          <p style={{ fontSize: '0.75rem', color: isVP ? '#8b5cf6' : 'var(--text-secondary)', margin: 0, fontWeight: isVP ? '600' : '400' }}>
+            {isVP ? 'Executive Portal' : 'Project Management'}
           </p>
         </div>
       </div>
 
-      {/* DASHBOARD SWITCHER - Only for Director/Admin/VP */}
+      {/* ===== VP ROLE BADGE (shown instead of switcher for VP) ===== */}
+      {isVP && (
+        <div style={{ padding: '8px 16px', marginBottom: '8px' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '12px 14px',
+            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05))',
+            border: '1px solid rgba(139, 92, 246, 0.3)',
+            borderRadius: 'var(--radius-md)'
+          }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Crown size={16} color="white" />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.875rem', fontWeight: '700', color: '#8b5cf6' }}>
+                Vice President
+              </div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)' }}>
+                Executive Access
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DASHBOARD SWITCHER - Only for Director/Admin (NOT VP) */}
       {canSwitchDashboard && (
         <div style={{ padding: '8px 16px', marginBottom: '8px' }}>
           <div style={{ position: 'relative' }}>
@@ -456,29 +539,31 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                 zIndex: 100,
                 overflow: 'hidden'
               }}>
-                {/* VP Option */}
-                <button
-                  onClick={() => handleDashboardSwitch('vp')}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 12px',
-                    background: dashboardType === 'vp' ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: dashboardType === 'vp' ? '#8b5cf6' : 'var(--text-primary)',
-                    fontSize: '0.875rem',
-                    textAlign: 'left'
-                  }}
-                >
-                  <TrendingUp size={18} />
-                  <div>
-                    <div style={{ fontWeight: '600' }}>VP View</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Executive overview</div>
-                  </div>
-                </button>
+                {/* VP Option - only for Admin */}
+                {userRole === 'admin' && (
+                  <button
+                    onClick={() => handleDashboardSwitch('vp')}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 12px',
+                      background: dashboardType === 'vp' ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: dashboardType === 'vp' ? '#8b5cf6' : 'var(--text-primary)',
+                      fontSize: '0.875rem',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <TrendingUp size={18} />
+                    <div>
+                      <div style={{ fontWeight: '600' }}>VP View</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Executive overview</div>
+                    </div>
+                  </button>
+                )}
                 {/* Director Option */}
                 <button
                   onClick={() => handleDashboardSwitch('director')}
@@ -539,61 +624,63 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         {/* ===== VP VIEW STATS ===== */}
         {dashboardType === 'vp' ? (
           <>
-            {/* Portfolio Value */}
+            {/* Portfolio Value - Enhanced for VP */}
             <div style={{
-              padding: '14px',
+              padding: '16px',
               background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
               borderRadius: 'var(--radius-md)',
-              marginBottom: '8px',
-              color: 'white'
+              marginBottom: '10px',
+              color: 'white',
+              boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', opacity: 0.9 }}>
-                <DollarSign size={16} />
-                <span style={{ fontSize: '0.75rem', fontWeight: '600' }}>Portfolio Value</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', opacity: 0.9 }}>
+                <DollarSign size={18} />
+                <span style={{ fontSize: '0.8125rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Portfolio Value</span>
               </div>
-              <div style={{ fontSize: '1.5rem', fontWeight: '700' }}>
+              <div style={{ fontSize: '1.75rem', fontWeight: '700' }}>
                 {formatCurrency(vpStats.portfolioValue)}
               </div>
             </div>
 
             {/* KPIs Row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '10px' }}>
               <div style={{
-                padding: '12px 10px',
+                padding: '14px 12px',
                 background: 'var(--bg-secondary)',
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--border-color)',
                 textAlign: 'center'
               }}>
-                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>{vpStats.activeProjects}</div>
-                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Active</div>
+                <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--text-primary)' }}>{vpStats.activeProjects}</div>
+                <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Active Projects</div>
               </div>
               <div style={{
-                padding: '12px 10px',
-                background: 'var(--bg-secondary)',
+                padding: '14px 12px',
+                background: vpStats.onTimeRate >= 90 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(245, 158, 11, 0.1)',
                 borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-color)',
+                border: `1px solid ${vpStats.onTimeRate >= 90 ? 'rgba(34, 197, 94, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
                 textAlign: 'center'
               }}>
-                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: vpStats.onTimeRate >= 90 ? '#22c55e' : '#f59e0b' }}>{vpStats.onTimeRate}%</div>
-                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>On-Time</div>
+                <div style={{ fontSize: '1.375rem', fontWeight: '700', color: vpStats.onTimeRate >= 90 ? '#22c55e' : '#f59e0b' }}>{vpStats.onTimeRate}%</div>
+                <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>On-Time Rate</div>
               </div>
             </div>
 
             {/* Clients */}
             <div style={{
-              padding: '12px 14px',
+              padding: '14px 16px',
               background: 'var(--bg-secondary)',
               borderRadius: 'var(--radius-md)',
-              marginTop: '8px',
               border: '1px solid var(--border-color)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Briefcase size={16} style={{ color: '#8b5cf6' }} />
-                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Total Clients</span>
-              </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
-                {vpStats.totalClients}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Briefcase size={18} style={{ color: '#8b5cf6' }} />
+                  <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Active Clients</span>
+                </div>
+                <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+                  {vpStats.totalClients}
+                </div>
               </div>
             </div>
           </>
@@ -764,12 +851,19 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
               style={{
                 width: '100%',
                 textAlign: 'left',
-                background: isActive ? 'rgba(255, 107, 53, 0.1)' : 'transparent',
+                background: isActive 
+                  ? isVP 
+                    ? 'rgba(139, 92, 246, 0.1)' 
+                    : 'rgba(255, 107, 53, 0.1)' 
+                  : 'transparent',
                 border: 'none',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                borderLeft: isActive 
+                  ? `3px solid ${isVP ? '#8b5cf6' : 'var(--sunbelt-orange)'}` 
+                  : '3px solid transparent'
               }}
             >
-              <Icon size={20} />
+              <Icon size={20} style={{ color: isActive && isVP ? '#8b5cf6' : undefined }} />
               <span>{item.label}</span>
             </button>
           );
@@ -811,7 +905,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
             width: '36px',
             height: '36px',
             borderRadius: '50%',
-            background: dashboardType === 'vp' 
+            background: isVP 
               ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)'
               : 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
             display: 'flex',
@@ -828,7 +922,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
             <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {displayUser?.name || 'User'}
             </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+            <div style={{ fontSize: '0.75rem', color: isVP ? '#8b5cf6' : 'var(--text-secondary)', fontWeight: isVP ? '600' : '400' }}>
               {displayUser?.role || 'Team Member'}
             </div>
           </div>
