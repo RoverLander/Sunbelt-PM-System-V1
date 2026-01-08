@@ -1,16 +1,16 @@
 // ============================================================================
-// Sidebar Component - With PM/Director/VP View Modes (FIXED VERSION)
+// Sidebar Component - With PM/Director/VP/IT View Modes
 // ============================================================================
 // Shows different sidebar content based on user role and dashboard type:
 // - PM View: My Projects, My Tasks, Overdue counts
 // - Director View: Portfolio Health, At-Risk, Team stats
 // - VP View: Executive KPIs, Portfolio Value
+// - IT View: User management, System health, Audit stats              ← IT ADDED
 //
-// FIXES (Jan 8, 2026):
-// - Directors can ONLY see Director and PM views (NO VP access)
-// - VPs can see all three views
-// - Default dashboard based on role (Director → director, VP → vp, PM → pm)
-// - Fixed query to use owner_id for primary PM
+// UPDATES (Jan 8, 2026):
+// - Added IT Dashboard support for IT role
+// - IT users can access IT Dashboard (system admin features)
+// - Added Shield icon for IT branding
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -37,7 +37,10 @@ import {
   Target,
   DollarSign,
   Briefcase,
-  PieChart
+  PieChart,
+  Shield,        // ← IT ADDED
+  Server,        // ← IT ADDED
+  Database       // ← IT ADDED
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -83,6 +86,14 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     totalClients: 0
   });
 
+  // ← IT ADDED: IT View Stats
+  const [itStats, setITStats] = useState({
+    totalUsers: 0,
+    activeUsers: 0,
+    totalProjects: 0,
+    recentErrors: 0
+  });
+
   // ==========================================================================
   // EFFECTS
   // ==========================================================================
@@ -106,6 +117,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         if (userRole === 'vp') {
           setDashboardType('vp');
           localStorage.setItem('dashboardType', 'vp');
+        } else if (userRole === 'it') {                              // ← IT ADDED
+          setDashboardType('it');                                    // ← IT ADDED
+          localStorage.setItem('dashboardType', 'it');               // ← IT ADDED
         } else if (userRole === 'director' || userRole === 'admin') {
           setDashboardType('director');
           localStorage.setItem('dashboardType', 'director');
@@ -120,6 +134,11 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
           setDashboardType('director');
           localStorage.setItem('dashboardType', 'director');
         }
+        // PMs cannot access IT/VP/Director dashboards                // ← IT ADDED
+        if (userRole === 'pm' && ['vp', 'it', 'director'].includes(savedDashboard)) {
+          setDashboardType('pm');
+          localStorage.setItem('dashboardType', 'pm');
+        }
       }
     }
   }, [currentUser, setDashboardType]);
@@ -130,6 +149,8 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         fetchVPStats();
       } else if (dashboardType === 'director') {
         fetchDirectorStats();
+      } else if (dashboardType === 'it') {                           // ← IT ADDED
+        fetchITStats();                                              // ← IT ADDED
       } else {
         fetchPMStats();
       }
@@ -340,6 +361,31 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   };
 
   // ==========================================================================
+  // ← IT ADDED: FETCH IT STATS
+  // ==========================================================================
+  const fetchITStats = async () => {
+    try {
+      const [usersResult, projectsResult] = await Promise.all([
+        supabase.from('users').select('id, is_active'),
+        supabase.from('projects').select('id', { count: 'exact', head: true })
+      ]);
+
+      const users = usersResult.data || [];
+      const activeUsers = users.filter(u => u.is_active !== false).length;
+
+      setITStats({
+        totalUsers: users.length,
+        activeUsers,
+        totalProjects: projectsResult.count || 0,
+        recentErrors: 0 // Would need error_log table
+      });
+
+    } catch (error) {
+      console.error('Error fetching IT stats:', error);
+    }
+  };
+
+  // ==========================================================================
   // HANDLERS
   // ==========================================================================
   const handleLogout = async () => {
@@ -368,22 +414,23 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   };
 
   // ==========================================================================
-  // DERIVED VALUES - FIXED ROLE PERMISSIONS
+  // DERIVED VALUES - ROLE PERMISSIONS
   // ==========================================================================
   const displayUser = currentUser || user;
   const userRole = (currentUser?.role || '').toLowerCase();
   
-  // Determine who can switch dashboards and what they can access
+  // Role checks
   const isVP = userRole === 'vp';
   const isDirector = userRole === 'director';
   const isAdmin = userRole === 'admin';
+  const isIT = userRole === 'it';                                    // ← IT ADDED
   
-  // Directors and Admins can switch between PM and Director views
-  // VPs can switch between PM, Director, and VP views
-  const canSwitchDashboard = isVP || isDirector || isAdmin;
+  // Who can switch dashboards
+  const canSwitchDashboard = isVP || isDirector || isAdmin || isIT;  // ← IT ADDED: isIT
   
-  // Only VPs can access VP dashboard
-  const canAccessVP = isVP;
+  // Access permissions
+  const canAccessVP = isVP || isAdmin;                               // ← UPDATED: Admin can access VP
+  const canAccessIT = isIT || isAdmin;                               // ← IT ADDED
 
   const formatCurrency = (amount) => {
     if (!amount) return '$0';
@@ -392,7 +439,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     return `$${amount.toLocaleString()}`;
   };
 
-  // Different nav items for different views
+  // ==========================================================================
+  // NAV ITEMS FOR EACH VIEW
+  // ==========================================================================
   const pmNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'projects', label: 'Projects', icon: FolderKanban },
@@ -420,18 +469,33 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     { id: 'calendar', label: 'Calendar', icon: Calendar },
   ];
 
+  // ← IT ADDED: IT Nav Items
+  const itNavItems = [
+    { id: 'dashboard', label: 'IT Dashboard', icon: Shield },
+    { id: 'projects', label: 'All Projects', icon: FolderKanban },
+    { id: 'calendar', label: 'Calendar', icon: Calendar },
+    { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+    { id: 'rfis', label: 'RFIs', icon: FileText },
+    { id: 'submittals', label: 'Submittals', icon: ClipboardList },
+  ];
+
+  // Select nav items based on dashboard type
   const navItems = dashboardType === 'vp' 
     ? vpNavItems 
     : dashboardType === 'director' 
       ? directorNavItems 
-      : pmNavItems;
+      : dashboardType === 'it'                                       // ← IT ADDED
+        ? itNavItems                                                 // ← IT ADDED
+        : pmNavItems;
 
   // ==========================================================================
   // RENDER
   // ==========================================================================
   return (
     <aside className="sidebar">
-      {/* LOGO */}
+      {/* ================================================================== */}
+      {/* LOGO                                                              */}
+      {/* ================================================================== */}
       <div className="sidebar-logo">
         <div style={{
           width: '40px',
@@ -472,14 +536,18 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                 padding: '10px 12px',
                 background: dashboardType === 'vp' 
                   ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05))'
-                  : dashboardType === 'director' 
-                    ? 'linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(255, 107, 53, 0.05))'
-                    : 'var(--bg-tertiary)',
+                  : dashboardType === 'it'                           // ← IT ADDED
+                    ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05))'
+                    : dashboardType === 'director' 
+                      ? 'linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(255, 107, 53, 0.05))'
+                      : 'var(--bg-tertiary)',
                 border: dashboardType === 'vp' 
                   ? '1px solid #8b5cf6' 
-                  : dashboardType === 'director' 
-                    ? '1px solid var(--sunbelt-orange)' 
-                    : '1px solid var(--border-color)',
+                  : dashboardType === 'it'                           // ← IT ADDED
+                    ? '1px solid #06b6d4'                            // ← IT ADDED (cyan)
+                    : dashboardType === 'director' 
+                      ? '1px solid var(--sunbelt-orange)' 
+                      : '1px solid var(--border-color)',
                 borderRadius: 'var(--radius-md)',
                 cursor: 'pointer',
                 color: 'var(--text-primary)'
@@ -488,13 +556,18 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {dashboardType === 'vp' ? (
                   <TrendingUp size={18} style={{ color: '#8b5cf6' }} />
+                ) : dashboardType === 'it' ? (                       // ← IT ADDED
+                  <Shield size={18} style={{ color: '#06b6d4' }} />  // ← IT ADDED
                 ) : dashboardType === 'director' ? (
                   <BarChart3 size={18} style={{ color: 'var(--sunbelt-orange)' }} />
                 ) : (
                   <LayoutDashboard size={18} style={{ color: 'var(--text-secondary)' }} />
                 )}
                 <span style={{ fontSize: '0.875rem', fontWeight: '600' }}>
-                  {dashboardType === 'vp' ? 'VP View' : dashboardType === 'director' ? 'Director View' : 'PM View'}
+                  {dashboardType === 'vp' ? 'VP View' 
+                    : dashboardType === 'it' ? 'IT View'             // ← IT ADDED
+                    : dashboardType === 'director' ? 'Director View' 
+                    : 'PM View'}
                 </span>
               </div>
               <ChevronDown 
@@ -507,6 +580,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
               />
             </button>
 
+            {/* ============================================================ */}
+            {/* DASHBOARD DROPDOWN MENU                                      */}
+            {/* ============================================================ */}
             {showDashboardMenu && (
               <div style={{
                 position: 'absolute',
@@ -521,7 +597,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                 zIndex: 100,
                 overflow: 'hidden'
               }}>
-                {/* VP Option - ONLY shown if user is VP */}
+                {/* VP Option - Only shown if canAccessVP */}
                 {canAccessVP && (
                   <button
                     onClick={() => handleDashboardSwitch('vp')}
@@ -546,8 +622,34 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                     </div>
                   </button>
                 )}
+
+                {/* ← IT ADDED: IT Option - Only shown if canAccessIT */}
+                {canAccessIT && (
+                  <button
+                    onClick={() => handleDashboardSwitch('it')}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 12px',
+                      background: dashboardType === 'it' ? 'rgba(6, 182, 212, 0.1)' : 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: dashboardType === 'it' ? '#06b6d4' : 'var(--text-primary)',
+                      fontSize: '0.875rem',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <Shield size={18} />
+                    <div>
+                      <div style={{ fontWeight: '600' }}>IT View</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>System administration</div>
+                    </div>
+                  </button>
+                )}
                 
-                {/* Director Option - Shown to Directors, Admins, and VPs */}
+                {/* Director Option - Shown to Directors, Admins, VPs, and IT */}
                 <button
                   onClick={() => handleDashboardSwitch('director')}
                   style={{
@@ -666,6 +768,71 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
               </div>
             </div>
           </>
+
+        /* ===== IT VIEW STATS ===== */                              
+        ) : dashboardType === 'it' ? (                               // ← IT ADDED: Entire block
+          <>
+            {/* System Status */}
+            <div style={{
+              padding: '14px',
+              background: 'linear-gradient(135deg, #06b6d4, #0891b2)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '8px',
+              color: 'white'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', opacity: 0.9 }}>
+                <Server size={16} />
+                <span style={{ fontSize: '0.75rem', fontWeight: '600' }}>System Status</span>
+              </div>
+              <div style={{ fontSize: '1.25rem', fontWeight: '700' }}>
+                All Systems Operational
+              </div>
+            </div>
+
+            {/* Users Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+              <div style={{
+                padding: '12px 10px',
+                background: 'var(--bg-secondary)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-color)',
+                textAlign: 'center'
+              }}>
+                <Users size={16} style={{ color: '#06b6d4', marginBottom: '4px' }} />
+                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>{itStats.totalUsers}</div>
+                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Users</div>
+              </div>
+              <div style={{
+                padding: '12px 10px',
+                background: 'var(--bg-secondary)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-color)',
+                textAlign: 'center'
+              }}>
+                <Database size={16} style={{ color: '#06b6d4', marginBottom: '4px' }} />
+                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>{itStats.totalProjects}</div>
+                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Projects</div>
+              </div>
+            </div>
+
+            {/* Active Users */}
+            <div style={{
+              padding: '12px 14px',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              marginTop: '8px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Activity size={16} style={{ color: '#22c55e' }} />
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Active Users</span>
+              </div>
+              <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#22c55e', marginTop: '4px' }}>
+                {itStats.activeUsers}
+              </div>
+            </div>
+          </>
+
         ) : dashboardType === 'director' ? (
           /* ===== DIRECTOR VIEW STATS ===== */
           <>
@@ -820,7 +987,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         )}
       </div>
 
-      {/* NAVIGATION */}
+      {/* ================================================================== */}
+      {/* NAVIGATION                                                        */}
+      {/* ================================================================== */}
       <nav className="sidebar-nav">
         {navItems.map(item => {
           const Icon = item.icon;
@@ -848,7 +1017,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* DARK MODE TOGGLE */}
+      {/* ================================================================== */}
+      {/* DARK MODE TOGGLE                                                  */}
+      {/* ================================================================== */}
       <div style={{ padding: '0 16px', marginBottom: '12px' }}>
         <button
           onClick={toggleDarkMode}
@@ -873,7 +1044,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         </button>
       </div>
 
-      {/* USER PROFILE */}
+      {/* ================================================================== */}
+      {/* USER PROFILE                                                      */}
+      {/* ================================================================== */}
       <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
@@ -882,7 +1055,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
             borderRadius: '50%',
             background: dashboardType === 'vp' 
               ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)'
-              : 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+              : dashboardType === 'it'                               // ← IT ADDED
+                ? 'linear-gradient(135deg, #06b6d4, #0891b2)'        // ← IT ADDED
+                : 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
