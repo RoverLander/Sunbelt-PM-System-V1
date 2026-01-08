@@ -20,7 +20,7 @@ import {
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 
-function SubmittalsPage({ isDirectorView = false }) {
+function SubmittalsPage({ isDirectorView = false, onNavigateToProject }) {
   const { user } = useAuth();
   
   const [loading, setLoading] = useState(true);
@@ -243,13 +243,18 @@ function SubmittalsPage({ isDirectorView = false }) {
               return (
                 <div
                   key={submittal.id}
+                  onClick={() => onNavigateToProject && onNavigateToProject(submittal.project_id, 'submittals')}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     padding: '14px 16px',
                     borderBottom: idx < filteredSubmittals.length - 1 ? '1px solid var(--border-color)' : 'none',
-                    gap: '16px'
+                    gap: '16px',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s'
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 >
                   {/* Status indicator */}
                   <StatusIcon 

@@ -21,7 +21,7 @@ import {
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 
-function TasksPage({ isDirectorView = false }) {
+function TasksPage({ isDirectorView = false, onNavigateToProject }) {
   const { user } = useAuth();
   
   const [loading, setLoading] = useState(true);
@@ -269,13 +269,18 @@ function TasksPage({ isDirectorView = false }) {
             {filteredTasks.map((task, idx) => (
               <div
                 key={task.id}
+                onClick={() => onNavigateToProject && onNavigateToProject(task.project_id, 'tasks')}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   padding: '14px 16px',
                   borderBottom: idx < filteredTasks.length - 1 ? '1px solid var(--border-color)' : 'none',
-                  gap: '16px'
+                  gap: '16px',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s'
                 }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
                 {/* Status indicator */}
                 <div style={{

@@ -2,28 +2,7 @@
 // App.jsx - Main Application with PM/Director/VP Routing
 // ============================================================================
 // Routes all sidebar navigation to appropriate pages based on view mode.
-//
-// PM VIEW ROUTES:
-// - dashboard → PMDashboard
-// - projects → ProjectsPage (filtered to user's projects)
-// - calendar → CalendarPage
-// - tasks → TasksPage (filtered)
-// - rfis → RFIsPage (filtered)
-// - submittals → SubmittalsPage (filtered)
-//
-// DIRECTOR VIEW ROUTES:
-// - dashboard → DirectorDashboard
-// - projects → ProjectsPage (all projects)
-// - calendar → CalendarPage
-// - team → TeamPage
-// - reports → ReportsPage
-//
-// VP VIEW ROUTES:
-// - dashboard → VPDashboard
-// - analytics → AnalyticsPage
-// - clients → ClientsPage
-// - projects → ProjectsPage (all projects, read-only view)
-// - calendar → CalendarPage
+// Includes deep navigation from Tasks/RFIs/Submittals pages to ProjectDetails.
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -45,6 +24,9 @@ import SubmittalsPage from './components/pages/SubmittalsPage';
 import TeamPage from './components/pages/TeamPage';
 import AnalyticsPage from './components/pages/AnalyticsPage';
 import ClientsPage from './components/pages/ClientsPage';
+
+// Project Details
+import ProjectDetails from './components/projects/ProjectDetails';
 
 import { supabase } from './utils/supabaseClient';
 import './App.css';
@@ -96,6 +78,10 @@ function AppContent() {
   });
   const [userRole, setUserRole] = useState(null);
 
+  // Project navigation state
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [selectedProjectTab, setSelectedProjectTab] = useState('overview');
+
   // ==========================================================================
   // CHECK USER ROLE ON LOAD
   // ==========================================================================
@@ -113,22 +99,25 @@ function AppContent() {
         .eq('id', user.id)
         .single();
 
-      if (error) {
-        console.error('Error fetching user role:', error);
-        return;
-      }
-
-      if (userData) {
-        const role = (userData.role || '').toLowerCase();
+      if (!error && userData) {
+        const role = userData.role?.toLowerCase();
         setUserRole(role);
-        
-        // Auto-set to appropriate view based on role (if no saved preference)
-        const savedType = localStorage.getItem('dashboardType');
-        if (!savedType) {
-          if (role === 'vp') {
-            setDashboardType('vp');
-            localStorage.setItem('dashboardType', 'vp');
-          } else if (role === 'director' || role === 'admin') {
+
+        // Force VP to VP dashboard
+        if (role === 'vp') {
+          setDashboardType('vp');
+          localStorage.setItem('dashboardType', 'vp');
+        } else {
+          // Check for stale localStorage that doesn't match role
+          const storedType = localStorage.getItem('dashboardType');
+          
+          // If PM user has director/vp stored, reset to pm
+          if (role === 'pm' && storedType !== 'pm') {
+            setDashboardType('pm');
+            localStorage.setItem('dashboardType', 'pm');
+          }
+          // If Director/Admin with no stored preference, set to director
+          else if ((role === 'director' || role === 'admin') && !storedType) {
             setDashboardType('director');
             localStorage.setItem('dashboardType', 'director');
           }
@@ -145,6 +134,33 @@ function AppContent() {
   useEffect(() => {
     localStorage.setItem('dashboardType', dashboardType);
   }, [dashboardType]);
+
+  // ==========================================================================
+  // NAVIGATION HANDLERS
+  // ==========================================================================
+  
+  // Navigate to a specific project (optionally with a specific tab)
+  const handleNavigateToProject = (projectId, tab = 'overview') => {
+    setSelectedProjectId(projectId);
+    setSelectedProjectTab(tab);
+    setCurrentView('project-detail');
+  };
+
+  // Go back from project detail to the projects list
+  const handleBackToProjects = () => {
+    setSelectedProjectId(null);
+    setSelectedProjectTab('overview');
+    setCurrentView('projects');
+  };
+
+  // Custom setCurrentView that clears project selection when navigating away
+  const handleSetCurrentView = (view) => {
+    if (view !== 'project-detail') {
+      setSelectedProjectId(null);
+      setSelectedProjectTab('overview');
+    }
+    setCurrentView(view);
+  };
 
   // ==========================================================================
   // LOADING STATE
@@ -182,24 +198,43 @@ function AppContent() {
   // RENDER CONTENT BASED ON VIEW AND DASHBOARD TYPE
   // ==========================================================================
   const renderContent = () => {
+    // Project Detail View (accessible from any dashboard type)
+    if (currentView === 'project-detail' && selectedProjectId) {
+      return (
+        <ProjectDetails 
+          projectId={selectedProjectId}
+          initialTab={selectedProjectTab}
+          onBack={handleBackToProjects}
+        />
+      );
+    }
+
     // Common pages (same for all views)
     if (currentView === 'calendar') {
-      return <CalendarPage />;
+      return <CalendarPage onNavigateToProject={handleNavigateToProject} />;
     }
 
     // VP-specific views
     if (dashboardType === 'vp') {
       switch (currentView) {
         case 'dashboard':
-          return <VPDashboard />;
+          return <VPDashboard onNavigateToProject={handleNavigateToProject} />;
         case 'analytics':
           return <AnalyticsPage />;
         case 'clients':
-          return <ClientsPage />;
+          return <ClientsPage onNavigateToProject={handleNavigateToProject} />;
+        case 'team':
+          return <TeamPage onNavigateToProject={handleNavigateToProject} />;
         case 'projects':
-          return <ProjectsPage isDirectorView={true} />;
+          return <ProjectsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
+        case 'tasks':
+          return <TasksPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
+        case 'rfis':
+          return <RFIsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
+        case 'submittals':
+          return <SubmittalsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
         default:
-          return <VPDashboard />;
+          return <VPDashboard onNavigateToProject={handleNavigateToProject} />;
       }
     }
 
@@ -207,32 +242,38 @@ function AppContent() {
     if (dashboardType === 'director') {
       switch (currentView) {
         case 'dashboard':
-          return <DirectorDashboard />;
+          return <DirectorDashboard onNavigateToProject={handleNavigateToProject} />;
         case 'projects':
-          return <ProjectsPage isDirectorView={true} />;
+          return <ProjectsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
         case 'team':
-          return <TeamPage />;
+          return <TeamPage onNavigateToProject={handleNavigateToProject} />;
+        case 'tasks':
+          return <TasksPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
+        case 'rfis':
+          return <RFIsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
+        case 'submittals':
+          return <SubmittalsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
         case 'reports':
           return <ReportsPage />;
         default:
-          return <DirectorDashboard />;
+          return <DirectorDashboard onNavigateToProject={handleNavigateToProject} />;
       }
     }
 
     // PM-specific views
     switch (currentView) {
       case 'dashboard':
-        return <PMDashboard />;
+        return <PMDashboard onNavigateToProject={handleNavigateToProject} />;
       case 'projects':
-        return <ProjectsPage isDirectorView={false} />;
+        return <ProjectsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
       case 'tasks':
-        return <TasksPage isDirectorView={false} />;
+        return <TasksPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
       case 'rfis':
-        return <RFIsPage isDirectorView={false} />;
+        return <RFIsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
       case 'submittals':
-        return <SubmittalsPage isDirectorView={false} />;
+        return <SubmittalsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
       default:
-        return <PMDashboard />;
+        return <PMDashboard onNavigateToProject={handleNavigateToProject} />;
     }
   };
 
@@ -247,7 +288,7 @@ function AppContent() {
     }}>
       <Sidebar 
         currentView={currentView} 
-        setCurrentView={setCurrentView}
+        setCurrentView={handleSetCurrentView}
         dashboardType={dashboardType}
         setDashboardType={setDashboardType}
       />

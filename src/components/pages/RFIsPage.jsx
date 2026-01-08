@@ -20,7 +20,7 @@ import {
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 
-function RFIsPage({ isDirectorView = false }) {
+function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
   const { user } = useAuth();
   
   const [loading, setLoading] = useState(true);
@@ -224,13 +224,18 @@ function RFIsPage({ isDirectorView = false }) {
             {filteredRFIs.map((rfi, idx) => (
               <div
                 key={rfi.id}
+                onClick={() => onNavigateToProject && onNavigateToProject(rfi.project_id, 'rfis')}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   padding: '14px 16px',
                   borderBottom: idx < filteredRFIs.length - 1 ? '1px solid var(--border-color)' : 'none',
-                  gap: '16px'
+                  gap: '16px',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s'
                 }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
                 {/* Status indicator */}
                 <div style={{

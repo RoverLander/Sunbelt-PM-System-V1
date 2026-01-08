@@ -22,7 +22,7 @@ import { useAuth } from '../../context/AuthContext';
 import ProjectDetails from '../projects/ProjectDetails';
 import CreateProjectModal from '../projects/CreateProjectModal';
 
-function ProjectsPage({ isDirectorView = false }) {
+function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
   const { user } = useAuth();
   
   const [loading, setLoading] = useState(true);
@@ -316,7 +316,7 @@ function ProjectsPage({ isDirectorView = false }) {
           {filteredProjects.map(project => (
             <div
               key={project.id}
-              onClick={() => setSelectedProject(project)}
+              onClick={() => onNavigateToProject ? onNavigateToProject(project.id, 'overview') : setSelectedProject(project)}
               style={{
                 background: 'var(--bg-secondary)',
                 borderRadius: 'var(--radius-lg)',
