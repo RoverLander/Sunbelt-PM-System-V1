@@ -1,9 +1,13 @@
 // ============================================================================
-// ProjectsPage Component
+// ProjectsPage Component - FIXED
 // ============================================================================
 // Standalone page showing projects list.
 // For Directors: Shows all projects
 // For PMs: Shows their assigned projects (primary + secondary)
+//
+// FIXES (Jan 8, 2026):
+// - PM Filter now shows ALL PMs (added 'PM' and 'VP' roles)
+// - Factory Filter now shows ALL factories from database (not just from projects)
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -22,35 +26,50 @@ import { useAuth } from '../../context/AuthContext';
 import ProjectDetails from '../projects/ProjectDetails';
 import CreateProjectModal from '../projects/CreateProjectModal';
 
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
   const { user } = useAuth();
-  
+
+  // ==========================================================================
+  // STATE - DATA
+  // ==========================================================================
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
+  const [factories, setFactories] = useState([]); // ✅ ADDED: All factories from DB
   const [currentUser, setCurrentUser] = useState(null);
-  
+
+  // ==========================================================================
+  // STATE - UI
+  // ==========================================================================
   const [selectedProject, setSelectedProject] = useState(null);
   const [showCreateProject, setShowCreateProject] = useState(false);
-  
-  // Filters
+  const [toast, setToast] = useState(null);
+
+  // ==========================================================================
+  // STATE - FILTERS
+  // ==========================================================================
   const [filterStatus, setFilterStatus] = useState('active');
   const [filterPM, setFilterPM] = useState('all');
   const [filterFactory, setFilterFactory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  
-  const [toast, setToast] = useState(null);
 
   // ==========================================================================
-  // FETCH DATA
+  // EFFECTS
   // ==========================================================================
   useEffect(() => {
     if (user) fetchData();
   }, [user, isDirectorView]);
 
+  // ==========================================================================
+  // FETCH DATA
+  // ==========================================================================
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Get current user data
       const { data: userData } = await supabase
         .from('users')
         .select('*')
@@ -59,12 +78,21 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
 
       setCurrentUser(userData);
 
-      // Get users for filter
+      // Get ALL users for PM filter
       const { data: usersData } = await supabase
         .from('users')
         .select('id, name, role')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .order('name');
       setUsers(usersData || []);
+
+      // ✅ ADDED: Get ALL factories for filter (not just from projects)
+      const { data: factoriesData } = await supabase
+        .from('factories')
+        .select('id, name, code')
+        .eq('is_active', true)
+        .order('name');
+      setFactories(factoriesData || []);
 
       // Get projects
       let projectsQuery = supabase
@@ -76,13 +104,16 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
         `)
         .order('updated_at', { ascending: false });
 
+      // For PM view, only show their projects
       if (!isDirectorView && userData) {
-        // Include projects where user is: PM (owner_id), Backup PM, or Creator
-        projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        projectsQuery = projectsQuery.or(
+          `owner_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`
+        );
       }
 
       const { data: projectsData } = await projectsQuery;
       setProjects(projectsData || []);
+
     } catch (error) {
       console.error('Error fetching projects:', error);
     } finally {
@@ -109,20 +140,44 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
     // Search
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      if (!project.project_number?.toLowerCase().includes(term) &&
-          !project.name?.toLowerCase().includes(term) &&
-          !project.client_name?.toLowerCase().includes(term)) return false;
+      if (
+        !project.project_number?.toLowerCase().includes(term) &&
+        !project.name?.toLowerCase().includes(term) &&
+        !project.client_name?.toLowerCase().includes(term)
+      ) {
+        return false;
+      }
     }
 
     return true;
   });
 
   // ==========================================================================
+  // DERIVED VALUES
+  // ==========================================================================
+  // ✅ FIXED: Include 'PM' and 'VP' roles in PM filter
+  const pms = users.filter(u => 
+    ['PM', 'Project Manager', 'Director', 'Admin', 'VP'].includes(u.role)
+  );
+
+  const stats = {
+    total: projects.length,
+    active: projects.filter(p => 
+      ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'].includes(p.status)
+    ).length,
+    completed: projects.filter(p => p.status === 'Completed').length
+  };
+
+  // ==========================================================================
   // HELPERS
   // ==========================================================================
   const formatDate = (dateString) => {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(dateString).toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
   };
 
   const getStatusColor = (status) => {
@@ -144,17 +199,8 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const uniqueFactories = [...new Set(projects.map(p => p.factory).filter(Boolean))];
-  const pms = users.filter(u => ['Project Manager', 'Director', 'Admin'].includes(u.role));
-
-  const stats = {
-    total: projects.length,
-    active: projects.filter(p => ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'].includes(p.status)).length,
-    completed: projects.filter(p => p.status === 'Completed').length
-  };
-
   // ==========================================================================
-  // RENDER - PROJECT DETAILS
+  // RENDER - PROJECT DETAILS VIEW
   // ==========================================================================
   if (selectedProject) {
     return (
@@ -174,22 +220,48 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
   }
 
   // ==========================================================================
-  // RENDER
+  // RENDER - LOADING STATE
   // ==========================================================================
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '50vh' }}>
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        height: '50vh' 
+      }}>
         <div className="loading-spinner"></div>
       </div>
     );
   }
 
+  // ==========================================================================
+  // RENDER - MAIN VIEW
+  // ==========================================================================
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: '12px' }}>
+      
+      {/* ================================================================== */}
+      {/* HEADER                                                            */}
+      {/* ================================================================== */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'flex-start', 
+        marginBottom: 'var(--space-lg)', 
+        flexWrap: 'wrap', 
+        gap: '12px' 
+      }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h1 style={{ 
+            fontSize: '1.75rem', 
+            fontWeight: '700', 
+            color: 'var(--text-primary)', 
+            marginBottom: '4px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '10px' 
+          }}>
             <FolderKanban size={28} style={{ color: 'var(--sunbelt-orange)' }} />
             {isDirectorView ? 'All Projects' : 'My Projects'}
           </h1>
@@ -219,28 +291,79 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
         </button>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: 'var(--space-lg)' }}>
-        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Total Projects</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.total}</div>
+      {/* ================================================================== */}
+      {/* STATS                                                             */}
+      {/* ================================================================== */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(3, 1fr)', 
+        gap: '12px', 
+        marginBottom: 'var(--space-lg)' 
+      }}>
+        <div style={{ 
+          background: 'var(--bg-secondary)', 
+          borderRadius: 'var(--radius-lg)', 
+          padding: '16px', 
+          border: '1px solid var(--border-color)' 
+        }}>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+            Total Projects
+          </div>
+          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+            {stats.total}
+          </div>
         </div>
-        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Active</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--sunbelt-orange)' }}>{stats.active}</div>
+        <div style={{ 
+          background: 'var(--bg-secondary)', 
+          borderRadius: 'var(--radius-lg)', 
+          padding: '16px', 
+          border: '1px solid var(--border-color)' 
+        }}>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+            Active
+          </div>
+          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--sunbelt-orange)' }}>
+            {stats.active}
+          </div>
         </div>
-        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Completed</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#22c55e' }}>{stats.completed}</div>
+        <div style={{ 
+          background: 'var(--bg-secondary)', 
+          borderRadius: 'var(--radius-lg)', 
+          padding: '16px', 
+          border: '1px solid var(--border-color)' 
+        }}>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+            Completed
+          </div>
+          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#22c55e' }}>
+            {stats.completed}
+          </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: 'var(--space-md)', flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* ================================================================== */}
+      {/* FILTERS                                                           */}
+      {/* ================================================================== */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '10px', 
+        marginBottom: 'var(--space-md)', 
+        flexWrap: 'wrap', 
+        alignItems: 'center' 
+      }}>
+        {/* Status Filter */}
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          style={{ padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+          style={{ 
+            padding: '8px 12px', 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid var(--border-color)', 
+            borderRadius: 'var(--radius-md)', 
+            color: 'var(--text-primary)', 
+            fontSize: '0.8125rem',
+            cursor: 'pointer'
+          }}
         >
           <option value="active">Active</option>
           <option value="completed">Completed</option>
@@ -248,11 +371,20 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
           <option value="all">All Statuses</option>
         </select>
 
+        {/* PM Filter - Only show in Director View */}
         {isDirectorView && (
           <select
             value={filterPM}
             onChange={(e) => setFilterPM(e.target.value)}
-            style={{ padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+            style={{ 
+              padding: '8px 12px', 
+              background: 'var(--bg-secondary)', 
+              border: '1px solid var(--border-color)', 
+              borderRadius: 'var(--radius-md)', 
+              color: 'var(--text-primary)', 
+              fontSize: '0.8125rem',
+              cursor: 'pointer'
+            }}
           >
             <option value="all">All PMs</option>
             {pms.map(pm => (
@@ -261,36 +393,74 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
           </select>
         )}
 
+        {/* Factory Filter - ✅ FIXED: Now shows ALL factories from database */}
         <select
           value={filterFactory}
           onChange={(e) => setFilterFactory(e.target.value)}
-          style={{ padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+          style={{ 
+            padding: '8px 12px', 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid var(--border-color)', 
+            borderRadius: 'var(--radius-md)', 
+            color: 'var(--text-primary)', 
+            fontSize: '0.8125rem',
+            cursor: 'pointer'
+          }}
         >
           <option value="all">All Factories</option>
-          {uniqueFactories.map(f => (
-            <option key={f} value={f}>{f}</option>
+          {factories.map(f => (
+            <option key={f.id} value={f.name}>{f.name}</option>
           ))}
         </select>
 
+        {/* Search */}
         <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-          <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+          <Search 
+            size={16} 
+            style={{ 
+              position: 'absolute', 
+              left: '10px', 
+              top: '50%', 
+              transform: 'translateY(-50%)', 
+              color: 'var(--text-tertiary)' 
+            }} 
+          />
           <input
             type="text"
             placeholder="Search projects..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ width: '100%', padding: '8px 12px 8px 34px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+            style={{ 
+              width: '100%', 
+              padding: '8px 12px 8px 34px', 
+              background: 'var(--bg-secondary)', 
+              border: '1px solid var(--border-color)', 
+              borderRadius: 'var(--radius-md)', 
+              color: 'var(--text-primary)', 
+              fontSize: '0.8125rem' 
+            }}
           />
         </div>
       </div>
 
-      {/* Projects Grid */}
+      {/* ================================================================== */}
+      {/* PROJECTS GRID                                                     */}
+      {/* ================================================================== */}
       {filteredProjects.length === 0 ? (
-        <div style={{ padding: '60px 40px', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)' }}>
+        // Empty State
+        <div style={{ 
+          padding: '60px 40px', 
+          textAlign: 'center', 
+          background: 'var(--bg-secondary)', 
+          borderRadius: 'var(--radius-lg)', 
+          border: '1px solid var(--border-color)' 
+        }}>
           <FolderKanban size={48} style={{ color: 'var(--text-tertiary)', marginBottom: '16px' }} />
           <h3 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>No projects found</h3>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
-            {searchTerm || filterStatus !== 'active' ? 'Try adjusting your filters' : 'Create your first project to get started'}
+            {searchTerm || filterStatus !== 'active' 
+              ? 'Try adjusting your filters' 
+              : 'Create your first project to get started'}
           </p>
           <button
             onClick={() => setShowCreateProject(true)}
@@ -312,11 +482,19 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
           </button>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
+        // Projects Grid
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', 
+          gap: '16px' 
+        }}>
           {filteredProjects.map(project => (
             <div
               key={project.id}
-              onClick={() => onNavigateToProject ? onNavigateToProject(project.id, 'overview') : setSelectedProject(project)}
+              onClick={() => onNavigateToProject 
+                ? onNavigateToProject(project.id, 'overview') 
+                : setSelectedProject(project)
+              }
               style={{
                 background: 'var(--bg-secondary)',
                 borderRadius: 'var(--radius-lg)',
@@ -328,13 +506,25 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
               onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--sunbelt-orange)'}
               onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--border-color)'}
             >
-              {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+              {/* Project Card Header */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'flex-start', 
+                marginBottom: '12px' 
+              }}>
                 <div>
-                  <div style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '1rem', marginBottom: '2px' }}>
+                  <div style={{ 
+                    fontWeight: '700', 
+                    color: 'var(--text-primary)', 
+                    fontSize: '1rem', 
+                    marginBottom: '2px' 
+                  }}>
                     {project.project_number}
                   </div>
-                  <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{project.name}</div>
+                  <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                    {project.name}
+                  </div>
                 </div>
                 <span style={{
                   padding: '4px 10px',
@@ -348,8 +538,14 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
                 </span>
               </div>
 
-              {/* Details */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
+              {/* Project Card Details */}
+              <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '8px', 
+                fontSize: '0.8125rem', 
+                color: 'var(--text-tertiary)' 
+              }}>
                 {project.client_name && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Building2 size={14} />
@@ -375,8 +571,15 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
                 )}
               </div>
 
-              {/* Footer */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+              {/* Project Card Footer */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginTop: '16px', 
+                paddingTop: '12px', 
+                borderTop: '1px solid var(--border-color)' 
+              }}>
                 {project.factory && (
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
                     {project.factory}
@@ -389,7 +592,9 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
         </div>
       )}
 
-      {/* Create Modal */}
+      {/* ================================================================== */}
+      {/* CREATE PROJECT MODAL                                              */}
+      {/* ================================================================== */}
       {showCreateProject && (
         <CreateProjectModal
           isOpen={showCreateProject}
@@ -403,7 +608,9 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
         />
       )}
 
-      {/* Toast */}
+      {/* ================================================================== */}
+      {/* TOAST NOTIFICATION                                                */}
+      {/* ================================================================== */}
       {toast && (
         <div style={{
           position: 'fixed',
