@@ -509,8 +509,17 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
               )}
 
               {/* FLOORPLAN TAB */}
+              {/* FLOORPLAN TAB */}
               {activeTab === 'floorplan' && (
-                <PlaceholderTab icon={Map} message="Floorplan view coming soon" />
+                <FloorPlansTab
+                  projectId={project.id}
+                  projectNumber={project.project_number}
+                  rfis={rfis}
+                  submittals={submittals}
+                  tasks={tasks}
+                  showToast={showToast}
+                  onDataRefresh={fetchProjectData}
+                />
               )}
 
               {/* CALENDAR TAB */}
