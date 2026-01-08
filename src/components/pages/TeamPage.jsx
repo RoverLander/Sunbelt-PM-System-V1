@@ -68,19 +68,20 @@ function TeamPage() {
   // ==========================================================================
   const today = new Date().toISOString().split('T')[0];
 
+  // Filter for team members (PM, Director, Admin - not VP)
   const teamData = users
-    .filter(u => ['Project Manager', 'Director', 'Admin'].includes(u.role))
+    .filter(u => ['PM', 'Project Manager', 'Director', 'Admin'].includes(u.role))
     .map(member => {
-      // Projects where user is PM
+      // Projects where user is PM (owner_id)
       const memberProjects = projects.filter(p => 
-        p.pm_id === member.id && 
+        p.owner_id === member.id && 
         ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'].includes(p.status)
       );
 
-      // Secondary projects
+      // Backup projects
       const secondaryProjects = projects.filter(p => 
-        p.secondary_pm_id === member.id && 
-        p.pm_id !== member.id &&
+        p.backup_pm_id === member.id && 
+        p.owner_id !== member.id &&
         ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'].includes(p.status)
       );
 

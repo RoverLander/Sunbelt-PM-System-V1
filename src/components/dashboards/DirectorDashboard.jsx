@@ -241,7 +241,7 @@ function DirectorDashboard() {
     }
 
     if (filterPM !== 'all') {
-      filtered = filtered.filter(p => p.pm_id === filterPM);
+      filtered = filtered.filter(p => p.owner_id === filterPM);
     }
 
     if (filterFactory !== 'all') {

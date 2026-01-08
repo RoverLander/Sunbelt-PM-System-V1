@@ -122,9 +122,9 @@ function AnalyticsPage() {
     };
 
     // ===== PM PERFORMANCE =====
-    const pms = users.filter(u => ['Project Manager', 'Director', 'Admin'].includes(u.role));
+    const pms = users.filter(u => ['PM', 'Project Manager', 'Director', 'Admin'].includes(u.role));
     const pmPerformance = pms.map(pm => {
-      const pmProjects = projects.filter(p => p.pm_id === pm.id);
+      const pmProjects = projects.filter(p => p.owner_id === pm.id);
       const activeProjects = pmProjects.filter(p => activeStatuses.includes(p.status));
       const completedProjects = pmProjects.filter(p => p.status === 'Completed');
       const totalValue = pmProjects.reduce((sum, p) => sum + (p.contract_value || 0), 0);

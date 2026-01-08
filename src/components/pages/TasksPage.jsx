@@ -58,8 +58,8 @@ function TasksPage({ isDirectorView = false }) {
       let projectsQuery = supabase.from('projects').select('id, project_number, name, color');
       
       if (!isDirectorView && userData) {
-        // Include projects where user is: PM, Secondary PM, or Creator
-        projectsQuery = projectsQuery.or(`pm_id.eq.${userData.id},secondary_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        // Include projects where user is: PM (owner_id), Backup PM, or Creator
+        projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
       }
 
       const { data: projectsData } = await projectsQuery;

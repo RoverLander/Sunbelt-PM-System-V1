@@ -201,18 +201,18 @@ function PMDashboard({ onNavigateToProject }) {
       if (!userData) return;
 
       // Fetch user's projects
-      // Include projects where user is: PM, Secondary PM, or Creator
+      // Include projects where user is: PM (owner_id), Backup PM, or Creator
       let projectQuery = supabase
         .from('projects')
         .select('*')
         .in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']);
 
       if (includeSecondary) {
-        // All three: PM, Secondary PM, or Created by user
-        projectQuery = projectQuery.or(`pm_id.eq.${userData.id},secondary_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        // All three: PM, Backup PM, or Created by user
+        projectQuery = projectQuery.or(`owner_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
       } else {
-        // PM or Created by user (exclude secondary)
-        projectQuery = projectQuery.or(`pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        // PM or Created by user (exclude backup)
+        projectQuery = projectQuery.or(`owner_id.eq.${userData.id},created_by.eq.${userData.id}`);
       }
 
       const { data: projectsData } = await projectQuery.order('delivery_date', { ascending: true });

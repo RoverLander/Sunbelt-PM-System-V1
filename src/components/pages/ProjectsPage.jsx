@@ -71,14 +71,14 @@ function ProjectsPage({ isDirectorView = false }) {
         .from('projects')
         .select(`
           *,
-          pm:pm_id(id, name),
-          secondary_pm:secondary_pm_id(id, name)
+          pm:owner_id(id, name),
+          backup_pm:backup_pm_id(id, name)
         `)
         .order('updated_at', { ascending: false });
 
       if (!isDirectorView && userData) {
-        // Include projects where user is: PM, Secondary PM, or Creator
-        projectsQuery = projectsQuery.or(`pm_id.eq.${userData.id},secondary_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        // Include projects where user is: PM (owner_id), Backup PM, or Creator
+        projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
       }
 
       const { data: projectsData } = await projectsQuery;
@@ -101,7 +101,7 @@ function ProjectsPage({ isDirectorView = false }) {
     if (filterStatus === 'on-hold' && project.status !== 'On Hold') return false;
 
     // PM filter
-    if (filterPM !== 'all' && project.pm_id !== filterPM) return false;
+    if (filterPM !== 'all' && project.owner_id !== filterPM) return false;
 
     // Factory filter
     if (filterFactory !== 'all' && project.factory !== filterFactory) return false;
@@ -360,9 +360,9 @@ function ProjectsPage({ isDirectorView = false }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <User size={14} />
                     <span>{project.pm.name}</span>
-                    {project.secondary_pm?.name && (
+                    {project.backup_pm?.name && (
                       <span style={{ color: 'var(--text-tertiary)' }}>
-                        (+{project.secondary_pm.name})
+                        (+{project.backup_pm.name})
                       </span>
                     )}
                   </div>

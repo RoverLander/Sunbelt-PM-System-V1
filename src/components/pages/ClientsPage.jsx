@@ -63,7 +63,7 @@ function ClientsPage() {
         .from('projects')
         .select(`
           *,
-          pm:pm_id(name)
+          pm:owner_id(name)
         `)
         .order('created_at', { ascending: false });
 
