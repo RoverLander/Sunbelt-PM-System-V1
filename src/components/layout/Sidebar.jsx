@@ -1,9 +1,10 @@
 // ============================================================================
-// Sidebar Component - With Director/PM View Modes
+// Sidebar Component - With PM/Director/VP View Modes
 // ============================================================================
-// Shows different sidebar content based on dashboard type:
+// Shows different sidebar content based on user role and dashboard type:
 // - PM View: My Projects, My Tasks, Overdue counts
 // - Director View: Portfolio Health, At-Risk, Team stats
+// - VP View: Executive KPIs, Portfolio Value
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -28,7 +29,9 @@ import {
   TrendingUp,
   Activity,
   Target,
-  Shield
+  DollarSign,
+  Briefcase,
+  PieChart
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -57,13 +60,21 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   });
 
   // Director View Stats
-  const [portfolioStats, setPortfolioStats] = useState({
+  const [directorStats, setDirectorStats] = useState({
     totalProjects: 0,
     onTrack: 0,
     atRisk: 0,
     critical: 0,
     totalOverdue: 0,
     teamMembers: 0
+  });
+
+  // VP View Stats
+  const [vpStats, setVPStats] = useState({
+    portfolioValue: 0,
+    activeProjects: 0,
+    onTimeRate: 0,
+    totalClients: 0
   });
 
   // ==========================================================================
@@ -77,7 +88,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
 
   useEffect(() => {
     if (currentUser) {
-      if (dashboardType === 'director') {
+      if (dashboardType === 'vp') {
+        fetchVPStats();
+      } else if (dashboardType === 'director') {
         fetchDirectorStats();
       } else {
         fetchPMStats();
@@ -116,7 +129,6 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     if (!currentUser) return;
 
     try {
-      // Get user's projects
       let projectQuery = supabase
         .from('projects')
         .select('id')
@@ -138,7 +150,6 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         return;
       }
 
-      // Get tasks
       const { data: tasksList } = await supabase
         .from('tasks')
         .select('id, status, due_date, assignee_id, internal_owner_id')
@@ -166,7 +177,6 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     try {
       const today = new Date().toISOString().split('T')[0];
 
-      // Get all active projects
       const { data: projects } = await supabase
         .from('projects')
         .select('id, status, delivery_date')
@@ -174,7 +184,6 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
 
       const projectIds = (projects || []).map(p => p.id);
 
-      // Get tasks, RFIs, submittals for all projects
       const [tasksResult, rfisResult, submittalsResult, usersResult] = await Promise.all([
         projectIds.length > 0 
           ? supabase.from('tasks').select('id, project_id, due_date, status').in('project_id', projectIds)
@@ -192,7 +201,6 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       const rfis = rfisResult.data || [];
       const submittals = submittalsResult.data || [];
 
-      // Calculate per-project health
       let onTrack = 0;
       let atRisk = 0;
       let critical = 0;
@@ -216,7 +224,6 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         const projectOverdue = overdueTasks + overdueRFIs + overdueSubmittals;
         totalOverdue += projectOverdue;
 
-        // Check delivery proximity
         const daysToDelivery = project.delivery_date 
           ? Math.ceil((new Date(project.delivery_date) - new Date()) / (1000 * 60 * 60 * 24))
           : 999;
@@ -230,7 +237,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         }
       });
 
-      setPortfolioStats({
+      setDirectorStats({
         totalProjects: (projects || []).length,
         onTrack,
         atRisk,
@@ -241,6 +248,43 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
 
     } catch (error) {
       console.error('Error fetching director stats:', error);
+    }
+  };
+
+  // ==========================================================================
+  // FETCH VP STATS
+  // ==========================================================================
+  const fetchVPStats = async () => {
+    try {
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('id, status, contract_value, client_name, delivery_date, actual_completion_date');
+
+      const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
+      const activeProjects = (projects || []).filter(p => activeStatuses.includes(p.status));
+      const completedProjects = (projects || []).filter(p => p.status === 'Completed');
+
+      const portfolioValue = (projects || []).reduce((sum, p) => sum + (p.contract_value || 0), 0);
+      const clients = [...new Set((projects || []).map(p => p.client_name).filter(Boolean))];
+
+      // Calculate on-time rate
+      const projectsWithDelivery = completedProjects.filter(p => p.delivery_date && p.actual_completion_date);
+      const onTimeDeliveries = projectsWithDelivery.filter(p => 
+        new Date(p.actual_completion_date) <= new Date(p.delivery_date)
+      );
+      const onTimeRate = projectsWithDelivery.length > 0 
+        ? Math.round((onTimeDeliveries.length / projectsWithDelivery.length) * 100)
+        : 100;
+
+      setVPStats({
+        portfolioValue,
+        activeProjects: activeProjects.length,
+        onTimeRate,
+        totalClients: clients.length
+      });
+
+    } catch (error) {
+      console.error('Error fetching VP stats:', error);
     }
   };
 
@@ -277,7 +321,15 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   // ==========================================================================
   const displayUser = currentUser || user;
   const userRole = (currentUser?.role || '').toLowerCase();
-  const canSwitchDashboard = currentUser && (userRole === 'director' || userRole === 'admin');
+  const canSwitchDashboard = currentUser && (userRole === 'director' || userRole === 'admin' || userRole === 'vp');
+  const isVP = userRole === 'vp';
+
+  const formatCurrency = (amount) => {
+    if (!amount) return '$0';
+    if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
+    if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
+    return `$${amount.toLocaleString()}`;
+  };
 
   // Different nav items for different views
   const pmNavItems = [
@@ -297,7 +349,19 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     { id: 'reports', label: 'Reports', icon: TrendingUp },
   ];
 
-  const navItems = dashboardType === 'director' ? directorNavItems : pmNavItems;
+  const vpNavItems = [
+    { id: 'dashboard', label: 'Executive', icon: TrendingUp },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'clients', label: 'Clients', icon: Briefcase },
+    { id: 'projects', label: 'All Projects', icon: FolderKanban },
+    { id: 'calendar', label: 'Calendar', icon: Calendar },
+  ];
+
+  const navItems = dashboardType === 'vp' 
+    ? vpNavItems 
+    : dashboardType === 'director' 
+      ? directorNavItems 
+      : pmNavItems;
 
   // ==========================================================================
   // RENDER
@@ -329,7 +393,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         </div>
       </div>
 
-      {/* DASHBOARD SWITCHER */}
+      {/* DASHBOARD SWITCHER - Only for Director/Admin/VP */}
       {canSwitchDashboard && (
         <div style={{ padding: '8px 16px', marginBottom: '8px' }}>
           <div style={{ position: 'relative' }}>
@@ -341,23 +405,31 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '10px 12px',
-                background: dashboardType === 'director' 
-                  ? 'linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(255, 107, 53, 0.05))'
-                  : 'var(--bg-tertiary)',
-                border: dashboardType === 'director' ? '1px solid var(--sunbelt-orange)' : '1px solid var(--border-color)',
+                background: dashboardType === 'vp' 
+                  ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05))'
+                  : dashboardType === 'director' 
+                    ? 'linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(255, 107, 53, 0.05))'
+                    : 'var(--bg-tertiary)',
+                border: dashboardType === 'vp' 
+                  ? '1px solid #8b5cf6' 
+                  : dashboardType === 'director' 
+                    ? '1px solid var(--sunbelt-orange)' 
+                    : '1px solid var(--border-color)',
                 borderRadius: 'var(--radius-md)',
                 cursor: 'pointer',
                 color: 'var(--text-primary)'
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {dashboardType === 'director' ? (
+                {dashboardType === 'vp' ? (
+                  <TrendingUp size={18} style={{ color: '#8b5cf6' }} />
+                ) : dashboardType === 'director' ? (
                   <BarChart3 size={18} style={{ color: 'var(--sunbelt-orange)' }} />
                 ) : (
                   <LayoutDashboard size={18} style={{ color: 'var(--text-secondary)' }} />
                 )}
                 <span style={{ fontSize: '0.875rem', fontWeight: '600' }}>
-                  {dashboardType === 'director' ? 'Director View' : 'PM View'}
+                  {dashboardType === 'vp' ? 'VP View' : dashboardType === 'director' ? 'Director View' : 'PM View'}
                 </span>
               </div>
               <ChevronDown 
@@ -384,6 +456,30 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                 zIndex: 100,
                 overflow: 'hidden'
               }}>
+                {/* VP Option */}
+                <button
+                  onClick={() => handleDashboardSwitch('vp')}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 12px',
+                    background: dashboardType === 'vp' ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: dashboardType === 'vp' ? '#8b5cf6' : 'var(--text-primary)',
+                    fontSize: '0.875rem',
+                    textAlign: 'left'
+                  }}
+                >
+                  <TrendingUp size={18} />
+                  <div>
+                    <div style={{ fontWeight: '600' }}>VP View</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Executive overview</div>
+                  </div>
+                </button>
+                {/* Director Option */}
                 <button
                   onClick={() => handleDashboardSwitch('director')}
                   style={{
@@ -406,6 +502,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Portfolio & team oversight</div>
                   </div>
                 </button>
+                {/* PM Option */}
                 <button
                   onClick={() => handleDashboardSwitch('pm')}
                   style={{
@@ -439,8 +536,69 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       {/* ================================================================== */}
       <div style={{ padding: '0 16px', marginBottom: '12px' }}>
         
-        {/* ===== DIRECTOR VIEW STATS ===== */}
-        {dashboardType === 'director' ? (
+        {/* ===== VP VIEW STATS ===== */}
+        {dashboardType === 'vp' ? (
+          <>
+            {/* Portfolio Value */}
+            <div style={{
+              padding: '14px',
+              background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '8px',
+              color: 'white'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', opacity: 0.9 }}>
+                <DollarSign size={16} />
+                <span style={{ fontSize: '0.75rem', fontWeight: '600' }}>Portfolio Value</span>
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: '700' }}>
+                {formatCurrency(vpStats.portfolioValue)}
+              </div>
+            </div>
+
+            {/* KPIs Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+              <div style={{
+                padding: '12px 10px',
+                background: 'var(--bg-secondary)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-color)',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>{vpStats.activeProjects}</div>
+                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Active</div>
+              </div>
+              <div style={{
+                padding: '12px 10px',
+                background: 'var(--bg-secondary)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-color)',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: vpStats.onTimeRate >= 90 ? '#22c55e' : '#f59e0b' }}>{vpStats.onTimeRate}%</div>
+                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>On-Time</div>
+              </div>
+            </div>
+
+            {/* Clients */}
+            <div style={{
+              padding: '12px 14px',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              marginTop: '8px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Briefcase size={16} style={{ color: '#8b5cf6' }} />
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Total Clients</span>
+              </div>
+              <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
+                {vpStats.totalClients}
+              </div>
+            </div>
+          </>
+        ) : dashboardType === 'director' ? (
+          /* ===== DIRECTOR VIEW STATS ===== */
           <>
             {/* Portfolio Health */}
             <div style={{
@@ -456,15 +614,15 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
                 <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#22c55e' }}>{portfolioStats.onTrack}</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#22c55e' }}>{directorStats.onTrack}</div>
                   <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>On Track</div>
                 </div>
                 <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#f59e0b' }}>{portfolioStats.atRisk}</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#f59e0b' }}>{directorStats.atRisk}</div>
                   <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>At Risk</div>
                 </div>
                 <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ef4444' }}>{portfolioStats.critical}</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ef4444' }}>{directorStats.critical}</div>
                   <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Critical</div>
                 </div>
               </div>
@@ -473,17 +631,17 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
             {/* Total Overdue */}
             <div style={{
               padding: '12px 14px',
-              background: portfolioStats.totalOverdue > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)',
+              background: directorStats.totalOverdue > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)',
               borderRadius: 'var(--radius-md)',
               marginBottom: '8px',
-              border: portfolioStats.totalOverdue > 0 ? '1px solid var(--danger)' : '1px solid var(--border-color)'
+              border: directorStats.totalOverdue > 0 ? '1px solid var(--danger)' : '1px solid var(--border-color)'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <AlertTriangle size={16} style={{ color: portfolioStats.totalOverdue > 0 ? 'var(--danger)' : 'var(--text-tertiary)' }} />
-                <span style={{ fontSize: '0.8125rem', color: portfolioStats.totalOverdue > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>Total Overdue Items</span>
+                <AlertTriangle size={16} style={{ color: directorStats.totalOverdue > 0 ? 'var(--danger)' : 'var(--text-tertiary)' }} />
+                <span style={{ fontSize: '0.8125rem', color: directorStats.totalOverdue > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>Total Overdue Items</span>
               </div>
-              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: portfolioStats.totalOverdue > 0 ? 'var(--danger)' : 'var(--text-primary)', marginTop: '4px' }}>
-                {portfolioStats.totalOverdue}
+              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: directorStats.totalOverdue > 0 ? 'var(--danger)' : 'var(--text-primary)', marginTop: '4px' }}>
+                {directorStats.totalOverdue}
               </div>
             </div>
 
@@ -498,7 +656,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                 textAlign: 'center'
               }}>
                 <FolderKanban size={16} style={{ color: 'var(--sunbelt-orange)', marginBottom: '4px' }} />
-                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>{portfolioStats.totalProjects}</div>
+                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>{directorStats.totalProjects}</div>
                 <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Projects</div>
               </div>
               <div style={{
@@ -510,7 +668,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                 textAlign: 'center'
               }}>
                 <Users size={16} style={{ color: 'var(--sunbelt-orange)', marginBottom: '4px' }} />
-                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>{portfolioStats.teamMembers}</div>
+                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>{directorStats.teamMembers}</div>
                 <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Team</div>
               </div>
             </div>
@@ -653,7 +811,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
             width: '36px',
             height: '36px',
             borderRadius: '50%',
-            background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+            background: dashboardType === 'vp' 
+              ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)'
+              : 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

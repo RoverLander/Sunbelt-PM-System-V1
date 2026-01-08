@@ -1,7 +1,7 @@
 // ============================================================================
-// App.jsx - Main Application with Comprehensive Routing
+// App.jsx - Main Application with PM/Director/VP Routing
 // ============================================================================
-// Routes all sidebar navigation to appropriate pages.
+// Routes all sidebar navigation to appropriate pages based on view mode.
 //
 // PM VIEW ROUTES:
 // - dashboard → PMDashboard
@@ -16,7 +16,14 @@
 // - projects → ProjectsPage (all projects)
 // - calendar → CalendarPage
 // - team → TeamPage
-// - reports → ReportsPage (placeholder)
+// - reports → ReportsPage
+//
+// VP VIEW ROUTES:
+// - dashboard → VPDashboard
+// - analytics → AnalyticsPage
+// - clients → ClientsPage
+// - projects → ProjectsPage (all projects, read-only view)
+// - calendar → CalendarPage
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -27,6 +34,7 @@ import Sidebar from './components/layout/Sidebar';
 // Dashboards
 import PMDashboard from './components/dashboards/PMDashboard';
 import DirectorDashboard from './components/dashboards/DirectorDashboard';
+import VPDashboard from './components/dashboards/VPDashboard';
 
 // Pages
 import CalendarPage from './components/calendar/CalendarPage';
@@ -35,6 +43,8 @@ import TasksPage from './components/pages/TasksPage';
 import RFIsPage from './components/pages/RFIsPage';
 import SubmittalsPage from './components/pages/SubmittalsPage';
 import TeamPage from './components/pages/TeamPage';
+import AnalyticsPage from './components/pages/AnalyticsPage';
+import ClientsPage from './components/pages/ClientsPage';
 
 import { supabase } from './utils/supabaseClient';
 import './App.css';
@@ -50,7 +60,7 @@ function ReportsPage() {
           Reports
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-          Analytics and reporting coming soon
+          Analytics and reporting
         </p>
       </div>
       <div style={{
@@ -112,13 +122,16 @@ function AppContent() {
         const role = (userData.role || '').toLowerCase();
         setUserRole(role);
         
-        const isDirector = role === 'director' || role === 'admin';
-        
-        // Auto-set to director view for directors (if no saved preference)
+        // Auto-set to appropriate view based on role (if no saved preference)
         const savedType = localStorage.getItem('dashboardType');
-        if (isDirector && !savedType) {
-          setDashboardType('director');
-          localStorage.setItem('dashboardType', 'director');
+        if (!savedType) {
+          if (role === 'vp') {
+            setDashboardType('vp');
+            localStorage.setItem('dashboardType', 'vp');
+          } else if (role === 'director' || role === 'admin') {
+            setDashboardType('director');
+            localStorage.setItem('dashboardType', 'director');
+          }
         }
       }
     } catch (error) {
@@ -169,15 +182,29 @@ function AppContent() {
   // RENDER CONTENT BASED ON VIEW AND DASHBOARD TYPE
   // ==========================================================================
   const renderContent = () => {
-    const isDirectorView = dashboardType === 'director';
-
-    // Common pages (same for both views)
+    // Common pages (same for all views)
     if (currentView === 'calendar') {
       return <CalendarPage />;
     }
 
+    // VP-specific views
+    if (dashboardType === 'vp') {
+      switch (currentView) {
+        case 'dashboard':
+          return <VPDashboard />;
+        case 'analytics':
+          return <AnalyticsPage />;
+        case 'clients':
+          return <ClientsPage />;
+        case 'projects':
+          return <ProjectsPage isDirectorView={true} />;
+        default:
+          return <VPDashboard />;
+      }
+    }
+
     // Director-specific views
-    if (isDirectorView) {
+    if (dashboardType === 'director') {
       switch (currentView) {
         case 'dashboard':
           return <DirectorDashboard />;
