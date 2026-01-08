@@ -9,8 +9,8 @@
 // - Active projects table
 //
 // FIXES (Jan 8, 2026):
-// - Now filters to show ONLY user's projects (pm_id = user.id)
-// - Respects "Include backup projects" toggle for secondary_pm_id
+// - Now filters to show ONLY user's projects (owner_id = user.id)
+// - Respects "Include backup projects" toggle for backup_pm_id
 // - Fixed calendar to maintain consistent height
 // ============================================================================
 
@@ -220,8 +220,8 @@ function PMDashboard() {
         // Include both primary and secondary PM projects
         // Use two separate queries and combine (Supabase OR on same column is tricky)
         const [primaryRes, secondaryRes] = await Promise.all([
-          supabase.from('projects').select('*').eq('pm_id', user.id),
-          supabase.from('projects').select('*').eq('secondary_pm_id', user.id)
+          supabase.from('projects').select('*').eq('owner_id', user.id),
+          supabase.from('projects').select('*').eq('backup_pm_id', user.id)
         ]);
         
         if (primaryRes.error) throw primaryRes.error;
@@ -238,7 +238,7 @@ function PMDashboard() {
         const { data, error: projectsError } = await supabase
           .from('projects')
           .select('*')
-          .eq('pm_id', user.id)
+          .eq('owner_id', user.id)
           .order('updated_at', { ascending: false });
         
         if (projectsError) throw projectsError;

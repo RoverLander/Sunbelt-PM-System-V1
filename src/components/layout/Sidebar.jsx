@@ -10,7 +10,7 @@
 // - Directors can ONLY see Director and PM views (NO VP access)
 // - VPs can see all three views
 // - Default dashboard based on role (Director → director, VP → vp, PM → pm)
-// - Fixed query to use pm_id instead of owner_id
+// - Fixed query to use owner_id for primary PM
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -161,20 +161,20 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   };
 
   // ==========================================================================
-  // FETCH PM STATS - FIXED to use pm_id
+  // FETCH PM STATS - Uses owner_id for primary PM
   // ==========================================================================
   const fetchPMStats = async () => {
     if (!currentUser) return;
 
     try {
-      // Fetch projects where user is primary PM or secondary PM
+      // Fetch projects where user is primary PM or backup PM
       let projectsData = [];
       
       if (includeSecondary) {
-        // Include both primary and secondary PM projects
+        // Include both primary and backup PM projects
         const [primaryRes, secondaryRes] = await Promise.all([
-          supabase.from('projects').select('id').eq('pm_id', currentUser.id).in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']),
-          supabase.from('projects').select('id').eq('secondary_pm_id', currentUser.id).in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'])
+          supabase.from('projects').select('id').eq('owner_id', currentUser.id).in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']),
+          supabase.from('projects').select('id').eq('backup_pm_id', currentUser.id).in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'])
         ]);
         
         const allProjects = [...(primaryRes.data || []), ...(secondaryRes.data || [])];
@@ -187,7 +187,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         const { data } = await supabase
           .from('projects')
           .select('id')
-          .eq('pm_id', currentUser.id)
+          .eq('owner_id', currentUser.id)
           .in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']);
         projectsData = data || [];
       }
