@@ -1,10 +1,16 @@
 // ============================================================================
-// Sidebar Component - With PM/Director/VP View Modes
+// Sidebar Component - With PM/Director/VP View Modes (FIXED VERSION)
 // ============================================================================
 // Shows different sidebar content based on user role and dashboard type:
 // - PM View: My Projects, My Tasks, Overdue counts
 // - Director View: Portfolio Health, At-Risk, Team stats
 // - VP View: Executive KPIs, Portfolio Value
+//
+// FIXES (Jan 8, 2026):
+// - Directors can ONLY see Director and PM views (NO VP access)
+// - VPs can see all three views
+// - Default dashboard based on role (Director → director, VP → vp, PM → pm)
+// - Fixed query to use pm_id instead of owner_id
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -86,6 +92,38 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     }
   }, [user]);
 
+  // ==========================================================================
+  // SET DEFAULT DASHBOARD BASED ON ROLE (runs once when user data loads)
+  // ==========================================================================
+  useEffect(() => {
+    if (currentUser && setDashboardType) {
+      const userRole = (currentUser.role || '').toLowerCase();
+      const savedDashboard = localStorage.getItem('dashboardType');
+      
+      // Only set default if no saved preference OR saved preference is invalid for role
+      if (!savedDashboard) {
+        // Set default based on role
+        if (userRole === 'vp') {
+          setDashboardType('vp');
+          localStorage.setItem('dashboardType', 'vp');
+        } else if (userRole === 'director' || userRole === 'admin') {
+          setDashboardType('director');
+          localStorage.setItem('dashboardType', 'director');
+        } else {
+          setDashboardType('pm');
+          localStorage.setItem('dashboardType', 'pm');
+        }
+      } else {
+        // Validate saved preference against role permissions
+        // Directors cannot access VP dashboard
+        if (userRole === 'director' && savedDashboard === 'vp') {
+          setDashboardType('director');
+          localStorage.setItem('dashboardType', 'director');
+        }
+      }
+    }
+  }, [currentUser, setDashboardType]);
+
   useEffect(() => {
     if (currentUser) {
       if (dashboardType === 'vp') {
@@ -123,26 +161,38 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   };
 
   // ==========================================================================
-  // FETCH PM STATS
+  // FETCH PM STATS - FIXED to use pm_id
   // ==========================================================================
   const fetchPMStats = async () => {
     if (!currentUser) return;
 
     try {
-      // Include projects where user is: PM (owner_id), Backup PM, or Creator
-      let projectQuery = supabase
-        .from('projects')
-        .select('id')
-        .in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']);
-
+      // Fetch projects where user is primary PM or secondary PM
+      let projectsData = [];
+      
       if (includeSecondary) {
-        projectQuery = projectQuery.or(`owner_id.eq.${currentUser.id},backup_pm_id.eq.${currentUser.id},created_by.eq.${currentUser.id}`);
+        // Include both primary and secondary PM projects
+        const [primaryRes, secondaryRes] = await Promise.all([
+          supabase.from('projects').select('id').eq('pm_id', currentUser.id).in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']),
+          supabase.from('projects').select('id').eq('secondary_pm_id', currentUser.id).in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'])
+        ]);
+        
+        const allProjects = [...(primaryRes.data || []), ...(secondaryRes.data || [])];
+        const uniqueProjects = allProjects.filter((project, index, self) =>
+          index === self.findIndex(p => p.id === project.id)
+        );
+        projectsData = uniqueProjects;
       } else {
-        projectQuery = projectQuery.or(`owner_id.eq.${currentUser.id},created_by.eq.${currentUser.id}`);
+        // Only primary PM projects
+        const { data } = await supabase
+          .from('projects')
+          .select('id')
+          .eq('pm_id', currentUser.id)
+          .in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']);
+        projectsData = data || [];
       }
 
-      const { data: projects } = await projectQuery;
-      const projectIds = (projects || []).map(p => p.id);
+      const projectIds = projectsData.map(p => p.id);
       setActiveProjects(projectIds.length);
 
       if (projectIds.length === 0) {
@@ -318,12 +368,22 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   };
 
   // ==========================================================================
-  // DERIVED VALUES
+  // DERIVED VALUES - FIXED ROLE PERMISSIONS
   // ==========================================================================
   const displayUser = currentUser || user;
   const userRole = (currentUser?.role || '').toLowerCase();
-  const canSwitchDashboard = currentUser && (userRole === 'director' || userRole === 'admin' || userRole === 'vp');
+  
+  // Determine who can switch dashboards and what they can access
   const isVP = userRole === 'vp';
+  const isDirector = userRole === 'director';
+  const isAdmin = userRole === 'admin';
+  
+  // Directors and Admins can switch between PM and Director views
+  // VPs can switch between PM, Director, and VP views
+  const canSwitchDashboard = isVP || isDirector || isAdmin;
+  
+  // Only VPs can access VP dashboard
+  const canAccessVP = isVP;
 
   const formatCurrency = (amount) => {
     if (!amount) return '$0';
@@ -346,8 +406,10 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     { id: 'dashboard', label: 'Portfolio', icon: BarChart3 },
     { id: 'projects', label: 'All Projects', icon: FolderKanban },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
+    { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+    { id: 'rfis', label: 'RFIs', icon: FileText },
+    { id: 'submittals', label: 'Submittals', icon: ClipboardList },
     { id: 'team', label: 'Team', icon: Users },
-    { id: 'reports', label: 'Reports', icon: TrendingUp },
   ];
 
   const vpNavItems = [
@@ -394,7 +456,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         </div>
       </div>
 
-      {/* DASHBOARD SWITCHER - Only for Director/Admin/VP */}
+      {/* ================================================================== */}
+      {/* DASHBOARD SWITCHER - Role-based access                            */}
+      {/* ================================================================== */}
       {canSwitchDashboard && (
         <div style={{ padding: '8px 16px', marginBottom: '8px' }}>
           <div style={{ position: 'relative' }}>
@@ -457,30 +521,33 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                 zIndex: 100,
                 overflow: 'hidden'
               }}>
-                {/* VP Option */}
-                <button
-                  onClick={() => handleDashboardSwitch('vp')}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 12px',
-                    background: dashboardType === 'vp' ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: dashboardType === 'vp' ? '#8b5cf6' : 'var(--text-primary)',
-                    fontSize: '0.875rem',
-                    textAlign: 'left'
-                  }}
-                >
-                  <TrendingUp size={18} />
-                  <div>
-                    <div style={{ fontWeight: '600' }}>VP View</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Executive overview</div>
-                  </div>
-                </button>
-                {/* Director Option */}
+                {/* VP Option - ONLY shown if user is VP */}
+                {canAccessVP && (
+                  <button
+                    onClick={() => handleDashboardSwitch('vp')}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 12px',
+                      background: dashboardType === 'vp' ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: dashboardType === 'vp' ? '#8b5cf6' : 'var(--text-primary)',
+                      fontSize: '0.875rem',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <TrendingUp size={18} />
+                    <div>
+                      <div style={{ fontWeight: '600' }}>VP View</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Executive overview</div>
+                    </div>
+                  </button>
+                )}
+                
+                {/* Director Option - Shown to Directors, Admins, and VPs */}
                 <button
                   onClick={() => handleDashboardSwitch('director')}
                   style={{
@@ -503,7 +570,8 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Portfolio & team oversight</div>
                   </div>
                 </button>
-                {/* PM Option */}
+                
+                {/* PM Option - Shown to all */}
                 <button
                   onClick={() => handleDashboardSwitch('pm')}
                   style={{

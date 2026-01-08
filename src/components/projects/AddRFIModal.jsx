@@ -1,22 +1,14 @@
 // ============================================================================
-// AddRFIModal.jsx - Create New RFI Modal (POLISHED VERSION)
+// AddRFIModal.jsx - Create New RFI Modal (FIXED VERSION)
 // ============================================================================
 // Modal form for creating new RFIs (Requests for Information).
 // Supports internal and external recipients with auto-numbering.
 //
-// PROPS:
-// - isOpen: Boolean controlling modal visibility
-// - onClose: Callback to close modal
-// - projectId: UUID of parent project
-// - projectNumber: Project number for RFI numbering
-// - projectName: Project name for email drafts
-// - onSuccess: Callback after successful RFI creation
-//
-// FIXES:
-// - Auto-generates RFI number based on existing count
-// - Proper form validation with field-level errors
-// - Loading state prevents double-submission
-// - Email validation for external recipients
+// FIXES (Jan 8, 2026):
+// - Due Date is now MANDATORY (required field)
+// - Cancel button styled gray/subtle
+// - Create & Email button styled blue to differentiate from primary
+// - Better button styling overall
 // ============================================================================
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -197,6 +189,9 @@ const styles = {
     borderRadius: 'var(--radius-md)',
     marginBottom: 'var(--space-lg)'
   },
+  // =========================================================================
+  // FIXED BUTTON STYLES
+  // =========================================================================
   primaryButton: {
     display: 'flex',
     alignItems: 'center',
@@ -210,17 +205,36 @@ const styles = {
     fontWeight: '600',
     fontSize: '0.9375rem',
     cursor: 'pointer',
-    minWidth: '120px'
+    minWidth: '120px',
+    transition: 'opacity 0.15s, transform 0.15s'
   },
-  secondaryButton: {
+  // FIXED: Cancel button is now gray/subtle
+  cancelButton: {
     padding: 'var(--space-sm) var(--space-lg)',
-    background: 'var(--bg-primary)',
+    background: 'var(--bg-tertiary)',
     color: 'var(--text-secondary)',
     border: '1px solid var(--border-color)',
     borderRadius: 'var(--radius-md)',
     fontWeight: '600',
     fontSize: '0.9375rem',
-    cursor: 'pointer'
+    cursor: 'pointer',
+    transition: 'background 0.15s'
+  },
+  // FIXED: Create & Email button is now blue to differentiate
+  emailButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 'var(--space-xs)',
+    padding: 'var(--space-sm) var(--space-lg)',
+    background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+    color: 'white',
+    border: 'none',
+    borderRadius: 'var(--radius-md)',
+    fontWeight: '600',
+    fontSize: '0.9375rem',
+    cursor: 'pointer',
+    transition: 'opacity 0.15s, transform 0.15s'
   },
   disabledButton: {
     opacity: 0.6,
@@ -292,6 +306,10 @@ function AddRFIModal({
   // Reset form and fetch data when modal opens
   useEffect(() => {
     if (isOpen) {
+      // Set default due date to 7 days from now
+      const defaultDueDate = new Date();
+      defaultDueDate.setDate(defaultDueDate.getDate() + 7);
+      
       setFormData({
         subject: '',
         question: '',
@@ -301,7 +319,7 @@ function AddRFIModal({
         internal_owner_id: user?.id || '',
         status: 'Open',
         priority: 'Medium',
-        due_date: '',
+        due_date: defaultDueDate.toISOString().split('T')[0], // Default to 7 days out
         date_sent: new Date().toISOString().split('T')[0],
         spec_section: '',
         drawing_reference: ''
@@ -350,7 +368,7 @@ function AddRFIModal({
   };
 
   // ==========================================================================
-  // VALIDATION
+  // VALIDATION - FIXED: Due date is now required
   // ==========================================================================
   const validateForm = useCallback(() => {
     const errors = {};
@@ -363,6 +381,11 @@ function AddRFIModal({
     // Question is required
     if (!formData.question.trim()) {
       errors.question = 'Question/request is required';
+    }
+
+    // FIXED: Due date is now REQUIRED
+    if (!formData.due_date) {
+      errors.due_date = 'Due date is required';
     }
 
     // External recipient validation
@@ -633,7 +656,7 @@ function AddRFIModal({
             </select>
           </div>
 
-          {/* Status, Priority, Due Date */}
+          {/* Status, Priority, Due Date - FIXED: Due Date now required */}
           <div style={styles.row3}>
             <div style={styles.formGroup}>
               <label style={styles.label}>Status</label>
@@ -661,15 +684,24 @@ function AddRFIModal({
                 ))}
               </select>
             </div>
+            {/* FIXED: Due Date is now required */}
             <div style={styles.formGroup}>
-              <label style={styles.label}>Due Date</label>
+              <label style={styles.label}>
+                Due Date <span style={styles.required}>*</span>
+              </label>
               <input
                 type="date"
                 name="due_date"
                 value={formData.due_date}
                 onChange={handleChange}
-                style={styles.input}
+                style={{
+                  ...styles.input,
+                  ...(fieldErrors.due_date ? styles.inputError : {})
+                }}
               />
+              {fieldErrors.due_date && (
+                <div style={styles.errorText}>{fieldErrors.due_date}</div>
+              )}
             </div>
           </div>
 
@@ -712,35 +744,39 @@ function AddRFIModal({
           </div>
         </form>
 
-        {/* Footer */}
+        {/* Footer - FIXED BUTTON STYLES */}
         <div style={styles.footer}>
+          {/* Cancel Button - Gray/Subtle */}
           <button
             type="button"
             onClick={onClose}
-            style={styles.secondaryButton}
+            style={styles.cancelButton}
             disabled={loading}
+            onMouseEnter={(e) => e.target.style.background = 'var(--bg-primary)'}
+            onMouseLeave={(e) => e.target.style.background = 'var(--bg-tertiary)'}
           >
             Cancel
           </button>
 
+          {/* Create & Email Button - Blue */}
           {formData.recipient_type === 'external' && (
             <button
               type="button"
               onClick={(e) => handleSubmit(e, true)}
               disabled={loading}
               style={{
-                ...styles.secondaryButton,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-xs)',
+                ...styles.emailButton,
                 ...(loading ? styles.disabledButton : {})
               }}
+              onMouseEnter={(e) => { if (!loading) e.target.style.opacity = '0.9'; }}
+              onMouseLeave={(e) => { if (!loading) e.target.style.opacity = '1'; }}
             >
               <Mail size={16} />
               Create & Email
             </button>
           )}
 
+          {/* Primary Create Button - Orange */}
           <button
             type="submit"
             onClick={handleSubmit}
@@ -749,6 +785,8 @@ function AddRFIModal({
               ...styles.primaryButton,
               ...(loading ? styles.disabledButton : {})
             }}
+            onMouseEnter={(e) => { if (!loading) e.target.style.opacity = '0.9'; }}
+            onMouseLeave={(e) => { if (!loading) e.target.style.opacity = '1'; }}
           >
             {loading ? (
               <>

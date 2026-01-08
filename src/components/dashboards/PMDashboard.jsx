@@ -1,5 +1,5 @@
 // ============================================================================
-// PMDashboard.jsx - Project Manager Command Center (COMPLETE VERSION)
+// PMDashboard.jsx - Project Manager Command Center (FIXED VERSION)
 // ============================================================================
 // Full-featured dashboard with:
 // - Status indicators (portfolio health)
@@ -7,6 +7,11 @@
 // - Weekly calendar view
 // - Gantt chart timeline
 // - Active projects table
+//
+// FIXES (Jan 8, 2026):
+// - Now filters to show ONLY user's projects (pm_id = user.id)
+// - Respects "Include backup projects" toggle for secondary_pm_id
+// - Fixed calendar to maintain consistent height
 // ============================================================================
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -27,7 +32,9 @@ import {
   TrendingUp,
   Target,
   DollarSign,
-  Flag
+  Flag,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -39,6 +46,7 @@ import CreateProjectModal from '../projects/CreateProjectModal';
 // ============================================================================
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const TOAST_DURATION = 3000;
+const CALENDAR_MIN_HEIGHT = '140px'; // Fixed height for calendar consistency
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -166,6 +174,20 @@ function PMDashboard() {
   const [toast, setToast] = useState(null);
 
   // ==========================================================================
+  // INCLUDE SECONDARY TOGGLE - Persisted to localStorage
+  // ==========================================================================
+  const [includeSecondary, setIncludeSecondary] = useState(() => {
+    const saved = localStorage.getItem('pmDashboardIncludeSecondary');
+    return saved !== null ? JSON.parse(saved) : false;
+  });
+
+  const toggleIncludeSecondary = () => {
+    const newValue = !includeSecondary;
+    setIncludeSecondary(newValue);
+    localStorage.setItem('pmDashboardIncludeSecondary', JSON.stringify(newValue));
+  };
+
+  // ==========================================================================
   // TOAST
   // ==========================================================================
   const showToast = useCallback((message, type = 'success') => {
@@ -180,46 +202,111 @@ function PMDashboard() {
   }, [toast]);
 
   // ==========================================================================
-  // DATA FETCHING
+  // DATA FETCHING - FILTERED TO USER'S PROJECTS ONLY
   // ==========================================================================
   const fetchDashboardData = useCallback(async () => {
+    if (!user?.id) return;
+    
     setLoading(true);
     setError(null);
 
     try {
-      const [projectsRes, tasksRes, rfisRes, submittalsRes, milestonesRes] = await Promise.all([
-        supabase.from('projects').select('*').order('updated_at', { ascending: false }),
-        supabase.from('tasks').select(`
-          *, 
-          project:project_id(id, name, project_number, color),
-          assignee:assignee_id(id, name),
-          internal_owner:internal_owner_id(id, name)
-        `).order('created_at', { ascending: false }),
-        supabase.from('rfis').select(`
-          *, 
-          project:project_id(id, name, project_number, color)
-        `).order('created_at', { ascending: false }),
-        supabase.from('submittals').select(`
-          *, 
-          project:project_id(id, name, project_number, color)
-        `).order('created_at', { ascending: false }),
-        supabase.from('milestones').select(`
-          *,
-          project:project_id(id, name, project_number, color)
-        `).order('due_date', { ascending: true })
-      ]);
+      // =====================================================================
+      // STEP 1: Fetch ONLY projects where user is PM or Secondary PM
+      // =====================================================================
+      let projectsData = [];
+      
+      if (includeSecondary) {
+        // Include both primary and secondary PM projects
+        // Use two separate queries and combine (Supabase OR on same column is tricky)
+        const [primaryRes, secondaryRes] = await Promise.all([
+          supabase.from('projects').select('*').eq('pm_id', user.id),
+          supabase.from('projects').select('*').eq('secondary_pm_id', user.id)
+        ]);
+        
+        if (primaryRes.error) throw primaryRes.error;
+        if (secondaryRes.error) throw secondaryRes.error;
+        
+        // Combine and deduplicate
+        const allProjects = [...(primaryRes.data || []), ...(secondaryRes.data || [])];
+        const uniqueProjects = allProjects.filter((project, index, self) =>
+          index === self.findIndex(p => p.id === project.id)
+        );
+        projectsData = uniqueProjects;
+      } else {
+        // Only primary PM projects
+        const { data, error: projectsError } = await supabase
+          .from('projects')
+          .select('*')
+          .eq('pm_id', user.id)
+          .order('updated_at', { ascending: false });
+        
+        if (projectsError) throw projectsError;
+        projectsData = data || [];
+      }
 
-      if (projectsRes.error) throw projectsRes.error;
-      if (tasksRes.error) throw tasksRes.error;
-      if (rfisRes.error) throw rfisRes.error;
-      if (submittalsRes.error) throw submittalsRes.error;
-      if (milestonesRes.error) throw milestonesRes.error;
+      // Sort by updated_at
+      projectsData.sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));
+      
+      const myProjectIds = projectsData.map(p => p.id);
 
-      setProjects(projectsRes.data || []);
-      setTasks(tasksRes.data || []);
-      setRFIs(rfisRes.data || []);
-      setSubmittals(submittalsRes.data || []);
-      setMilestones(milestonesRes.data || []);
+      // =====================================================================
+      // STEP 2: Fetch tasks, RFIs, submittals, milestones for MY projects only
+      // =====================================================================
+      let tasksData = [];
+      let rfisData = [];
+      let submittalsData = [];
+      let milestonesData = [];
+
+      if (myProjectIds.length > 0) {
+        const [tasksRes, rfisRes, submittalsRes, milestonesRes] = await Promise.all([
+          supabase.from('tasks').select(`
+            *, 
+            project:project_id(id, name, project_number, color),
+            assignee:assignee_id(id, name),
+            internal_owner:internal_owner_id(id, name)
+          `)
+          .in('project_id', myProjectIds)
+          .order('created_at', { ascending: false }),
+          
+          supabase.from('rfis').select(`
+            *, 
+            project:project_id(id, name, project_number, color)
+          `)
+          .in('project_id', myProjectIds)
+          .order('created_at', { ascending: false }),
+          
+          supabase.from('submittals').select(`
+            *, 
+            project:project_id(id, name, project_number, color)
+          `)
+          .in('project_id', myProjectIds)
+          .order('created_at', { ascending: false }),
+          
+          supabase.from('milestones').select(`
+            *,
+            project:project_id(id, name, project_number, color)
+          `)
+          .in('project_id', myProjectIds)
+          .order('due_date', { ascending: true })
+        ]);
+
+        if (tasksRes.error) throw tasksRes.error;
+        if (rfisRes.error) throw rfisRes.error;
+        if (submittalsRes.error) throw submittalsRes.error;
+        if (milestonesRes.error) throw milestonesRes.error;
+
+        tasksData = tasksRes.data || [];
+        rfisData = rfisRes.data || [];
+        submittalsData = submittalsRes.data || [];
+        milestonesData = milestonesRes.data || [];
+      }
+
+      setProjects(projectsData);
+      setTasks(tasksData);
+      setRFIs(rfisData);
+      setSubmittals(submittalsData);
+      setMilestones(milestonesData);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       setError('Failed to load dashboard data');
@@ -227,14 +314,14 @@ function PMDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [user?.id, includeSecondary, showToast]);
 
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
   // ==========================================================================
-  // COMPUTED: MY ITEMS
+  // COMPUTED: MY ITEMS (tasks, RFIs, submittals assigned to me)
   // ==========================================================================
   const myItems = useMemo(() => {
     const items = [];
@@ -743,7 +830,7 @@ function PMDashboard() {
       )}
 
       {/* ================================================================== */}
-      {/* WEEKLY CALENDAR                                                   */}
+      {/* WEEKLY CALENDAR - FIXED HEIGHT                                    */}
       {/* ================================================================== */}
       <div style={{
         background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)',
@@ -800,7 +887,8 @@ function PMDashboard() {
           </div>
         </div>
         
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', minHeight: '120px' }}>
+        {/* FIXED: Calendar grid now has fixed minHeight */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', minHeight: CALENDAR_MIN_HEIGHT }}>
           {weekDates.map((date, index) => {
             const dayKey = date.toDateString();
             const items = calendarItemsByDay[dayKey] || [];
@@ -813,7 +901,9 @@ function PMDashboard() {
                 style={{
                   padding: 'var(--space-sm)',
                   borderLeft: index > 0 ? '1px solid var(--border-color)' : 'none',
-                  background: isCurrentDay ? 'rgba(255, 107, 53, 0.05)' : isWeekend ? 'var(--bg-tertiary)' : 'transparent'
+                  background: isCurrentDay ? 'rgba(255, 107, 53, 0.05)' : isWeekend ? 'var(--bg-tertiary)' : 'transparent',
+                  display: 'flex',
+                  flexDirection: 'column'
                 }}
               >
                 <div style={{
@@ -830,7 +920,7 @@ function PMDashboard() {
                     {date.getDate()}
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
                   {items.slice(0, 3).map(item => {
                     const Icon = getItemTypeIcon(item.type);
                     return (
@@ -874,14 +964,40 @@ function PMDashboard() {
           overflow: 'hidden'
         }}>
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             padding: 'var(--space-md) var(--space-lg)',
             borderBottom: '1px solid var(--border-color)'
           }}>
-            <Target size={18} style={{ color: 'var(--sunbelt-orange)' }} />
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)' }}>
-              Project Timeline
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+              <Target size={18} style={{ color: 'var(--sunbelt-orange)' }} />
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)' }}>
+                Project Timeline
+              </h3>
+            </div>
+            
+            {/* Include Secondary Toggle */}
+            <button
+              onClick={toggleIncludeSecondary}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                background: 'transparent',
+                border: '1px dashed var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+                color: 'var(--text-tertiary)',
+                fontSize: '0.75rem'
+              }}
+            >
+              <span>Include backup projects</span>
+              {includeSecondary ? (
+                <ToggleRight size={18} style={{ color: 'var(--sunbelt-orange)' }} />
+              ) : (
+                <ToggleLeft size={18} />
+              )}
+            </button>
           </div>
 
           {/* Month Headers */}
@@ -1005,7 +1121,12 @@ function PMDashboard() {
           }}>
             <FolderKanban size={48} style={{ color: 'var(--text-tertiary)', marginBottom: 'var(--space-md)' }} />
             <h3 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>No active projects</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>Create your first project to get started</p>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
+              {includeSecondary 
+                ? "You don't have any projects assigned as primary or secondary PM"
+                : "Create your first project or enable 'Include backup projects' to see secondary PM assignments"
+              }
+            </p>
             <button
               onClick={() => setShowCreateProject(true)}
               style={{
