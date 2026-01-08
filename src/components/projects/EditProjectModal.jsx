@@ -1,5 +1,5 @@
 // ============================================================================
-// EditProjectModal.jsx
+// EditProjectModal.jsx - FIXED
 // ============================================================================
 // Modal component for editing existing Projects.
 // 
@@ -7,8 +7,14 @@
 // - Edit all project fields
 // - Factory selection from standardized list
 // - Status management
+// - Primary PM and Secondary PM assignment (✅ ADDED)
 // - Dealer POC (Point of Contact) field (renamed from "Client Name")
 // - Building details, financials, and schedule
+//
+// FIXES (Jan 8, 2026):
+// - Added Primary PM (owner_id) field
+// - Added Secondary PM (backup_pm_id) field
+// - Fetches users list for PM dropdowns
 //
 // DEPENDENCIES:
 // - supabaseClient: Database operations
@@ -23,6 +29,8 @@
 // - client_name: Displayed as "Dealer POC" in UI (Point of Contact from dealer)
 // - dealer: The dealer company name
 // - factory: Uses standardized format "SHORTHAND - Full Name"
+// - owner_id: Primary PM assigned to project
+// - backup_pm_id: Secondary/Backup PM assigned to project
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -97,12 +105,15 @@ function EditProjectModal({ isOpen, onClose, project, onSuccess }) {
   // ==========================================================================
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [users, setUsers] = useState([]);  // ✅ ADDED: Users for PM dropdowns
   
   // Form fields
   const [formData, setFormData] = useState({
     name: '',
     project_number: '',
     status: 'Planning',
+    owner_id: '',           // ✅ ADDED: Primary PM
+    backup_pm_id: '',       // ✅ ADDED: Secondary PM
     factory: '',
     client_name: '',        // Displayed as "Dealer POC"
     dealer: '',
@@ -122,12 +133,21 @@ function EditProjectModal({ isOpen, onClose, project, onSuccess }) {
   // EFFECTS
   // ==========================================================================
   
+  // ✅ ADDED: Fetch users when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchUsers();
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     if (project && isOpen) {
       setFormData({
         name: project.name || '',
         project_number: project.project_number || '',
         status: project.status || 'Planning',
+        owner_id: project.owner_id || '',           // ✅ ADDED
+        backup_pm_id: project.backup_pm_id || '',   // ✅ ADDED
         factory: project.factory || '',
         client_name: project.client_name || '',
         dealer: project.dealer || '',
@@ -145,6 +165,30 @@ function EditProjectModal({ isOpen, onClose, project, onSuccess }) {
       setError('');
     }
   }, [project, isOpen]);
+
+  // ==========================================================================
+  // FETCH USERS - For PM dropdowns
+  // ==========================================================================
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, name, role')
+        .eq('is_active', true)
+        .order('name');
+
+      if (!error) {
+        setUsers(data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    }
+  };
+
+  // Filter users for PM dropdowns (only show PM-capable roles)
+  const pmUsers = users.filter(u => 
+    ['PM', 'Project Manager', 'Director', 'Admin', 'VP'].includes(u.role)
+  );
 
   // ==========================================================================
   // FORM HANDLERS
@@ -169,6 +213,8 @@ function EditProjectModal({ isOpen, onClose, project, onSuccess }) {
         name: formData.name.trim(),
         project_number: formData.project_number.trim(),
         status: formData.status,
+        owner_id: formData.owner_id || null,           // ✅ ADDED
+        backup_pm_id: formData.backup_pm_id || null,   // ✅ ADDED
         factory: formData.factory,
         client_name: formData.client_name.trim() || null,
         dealer: formData.dealer.trim() || null,
@@ -418,6 +464,76 @@ function EditProjectModal({ isOpen, onClose, project, onSuccess }) {
                   <option value="">Select factory</option>
                   {FACTORY_OPTIONS.map(factory => (
                     <option key={factory} value={factory}>{factory}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* ============================================================ */}
+          {/* SECTION: Team Assignment (✅ NEW SECTION)                    */}
+          {/* ============================================================ */}
+          <div style={{ marginBottom: 'var(--space-xl)' }}>
+            <h3 style={{ 
+              fontSize: '0.875rem', 
+              fontWeight: '600', 
+              color: 'var(--text-primary)', 
+              marginBottom: 'var(--space-md)', 
+              textTransform: 'uppercase', 
+              letterSpacing: '0.05em' 
+            }}>
+              Team Assignment
+            </h3>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
+              {/* Primary PM */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Primary PM
+                </label>
+                <select
+                  name="owner_id"
+                  value={formData.owner_id}
+                  onChange={handleChange}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.9375rem'
+                  }}
+                >
+                  <option value="">Select Primary PM</option>
+                  {pmUsers.map(user => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Secondary PM */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Secondary PM
+                </label>
+                <select
+                  name="backup_pm_id"
+                  value={formData.backup_pm_id}
+                  onChange={handleChange}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.9375rem'
+                  }}
+                >
+                  <option value="">Select Secondary PM</option>
+                  {pmUsers.map(user => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
                   ))}
                 </select>
               </div>
