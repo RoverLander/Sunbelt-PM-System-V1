@@ -143,17 +143,21 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     }
   }, [currentUser, setDashboardType]);
 
+  // VP/Director/IT stats - fetch immediately (don't need currentUser)
   useEffect(() => {
-    if (currentUser) {
-      if (dashboardType === 'vp') {
-        fetchVPStats();
-      } else if (dashboardType === 'director') {
-        fetchDirectorStats();
-      } else if (dashboardType === 'it') {                           // ← IT ADDED
-        fetchITStats();                                              // ← IT ADDED
-      } else {
-        fetchPMStats();
-      }
+    if (dashboardType === 'vp') {
+      fetchVPStats();
+    } else if (dashboardType === 'director') {
+      fetchDirectorStats();
+    } else if (dashboardType === 'it') {
+      fetchITStats();
+    }
+  }, [dashboardType]);
+
+  // PM stats - need currentUser for filtering by user's projects
+  useEffect(() => {
+    if (currentUser && dashboardType === 'pm') {
+      fetchPMStats();
     }
   }, [currentUser, dashboardType, includeSecondary]);
 
