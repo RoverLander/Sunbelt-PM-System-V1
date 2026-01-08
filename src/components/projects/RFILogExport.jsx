@@ -1,64 +1,72 @@
 import React, { useState } from 'react';
 import { Download, FileSpreadsheet } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 function RFILogExport({ rfis, projectName, projectNumber }) {
   const [exporting, setExporting] = useState(false);
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     setExporting(true);
 
     try {
-      // Prepare data for export
-      const exportData = rfis.map((rfi, index) => ({
-        'RFI #': rfi.rfi_number || `RFI-${String(index + 1).padStart(3, '0')}`,
-        'Subject': rfi.subject || '',
-        'Question': rfi.question || '',
-        'Sent To': rfi.external_contact_name || rfi.sent_to || '',
-        'Contact Email': rfi.external_contact_email || '',
-        'Internal Owner': rfi.internal_owner?.name || '',
-        'Status': rfi.status || 'Open',
-        'Priority': rfi.priority || 'Medium',
-        'Date Sent': rfi.date_sent ? new Date(rfi.date_sent).toLocaleDateString() : '',
-        'Due Date': rfi.due_date ? new Date(rfi.due_date).toLocaleDateString() : '',
-        'Response Date': rfi.response_date ? new Date(rfi.response_date).toLocaleDateString() : '',
-        'Days Open': rfi.days_open || calculateDaysOpen(rfi.date_sent, rfi.response_date, rfi.status),
-        'Response Notes': rfi.response_notes || '',
-        'Created': rfi.created_at ? new Date(rfi.created_at).toLocaleDateString() : ''
-      }));
-
       // Create workbook and worksheet
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(exportData);
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('RFI Log');
 
-      // Set column widths
-      const colWidths = [
-        { wch: 18 },  // RFI #
-        { wch: 35 },  // Subject
-        { wch: 50 },  // Question
-        { wch: 25 },  // Sent To
-        { wch: 30 },  // Contact Email
-        { wch: 20 },  // Internal Owner
-        { wch: 12 },  // Status
-        { wch: 10 },  // Priority
-        { wch: 12 },  // Date Sent
-        { wch: 12 },  // Due Date
-        { wch: 14 },  // Response Date
-        { wch: 10 },  // Days Open
-        { wch: 50 },  // Response Notes
-        { wch: 12 },  // Created
+      // Define columns with headers and widths
+      worksheet.columns = [
+        { header: 'RFI #', key: 'rfiNum', width: 18 },
+        { header: 'Subject', key: 'subject', width: 35 },
+        { header: 'Question', key: 'question', width: 50 },
+        { header: 'Sent To', key: 'sentTo', width: 25 },
+        { header: 'Contact Email', key: 'contactEmail', width: 30 },
+        { header: 'Internal Owner', key: 'internalOwner', width: 20 },
+        { header: 'Status', key: 'status', width: 12 },
+        { header: 'Priority', key: 'priority', width: 10 },
+        { header: 'Date Sent', key: 'dateSent', width: 12 },
+        { header: 'Due Date', key: 'dueDate', width: 12 },
+        { header: 'Response Date', key: 'responseDate', width: 14 },
+        { header: 'Days Open', key: 'daysOpen', width: 10 },
+        { header: 'Response Notes', key: 'responseNotes', width: 50 },
+        { header: 'Created', key: 'created', width: 12 },
       ];
-      ws['!cols'] = colWidths;
 
-      // Add worksheet to workbook
-      XLSX.utils.book_append_sheet(wb, ws, 'RFI Log');
+      // Add data rows
+      rfis.forEach((rfi, index) => {
+        worksheet.addRow({
+          rfiNum: rfi.rfi_number || `RFI-${String(index + 1).padStart(3, '0')}`,
+          subject: rfi.subject || '',
+          question: rfi.question || '',
+          sentTo: rfi.external_contact_name || rfi.sent_to || '',
+          contactEmail: rfi.external_contact_email || '',
+          internalOwner: rfi.internal_owner?.name || '',
+          status: rfi.status || 'Open',
+          priority: rfi.priority || 'Medium',
+          dateSent: rfi.date_sent ? new Date(rfi.date_sent).toLocaleDateString() : '',
+          dueDate: rfi.due_date ? new Date(rfi.due_date).toLocaleDateString() : '',
+          responseDate: rfi.response_date ? new Date(rfi.response_date).toLocaleDateString() : '',
+          daysOpen: rfi.days_open || calculateDaysOpen(rfi.date_sent, rfi.response_date, rfi.status),
+          responseNotes: rfi.response_notes || '',
+          created: rfi.created_at ? new Date(rfi.created_at).toLocaleDateString() : ''
+        });
+      });
+
+      // Style header row
+      worksheet.getRow(1).font = { bold: true };
 
       // Generate filename with date
       const today = new Date().toISOString().split('T')[0];
       const filename = `${projectNumber}_RFI_Log_${today}.xlsx`;
 
-      // Save file
-      XLSX.writeFile(wb, filename);
+      // Save file - create blob and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      window.URL.revokeObjectURL(url);
 
     } catch (error) {
       console.error('Error exporting RFI log:', error);
