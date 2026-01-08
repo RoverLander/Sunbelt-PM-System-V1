@@ -1,22 +1,16 @@
 // ============================================================================
-// PMDashboard Component
+// PMDashboard Component - With Gantt Timeline
 // ============================================================================
-// Project Manager dashboard showing only projects assigned to the current user.
-//
-// KEY FEATURES:
-// - Only shows projects where user is PM (primary) or Secondary PM (backup)
-// - Primary projects shown first, secondary projects in separate section
-// - Stats only count primary project items (unless toggle enabled)
+// Project Manager dashboard showing:
+// - Stats cards
+// - Project timeline (Gantt)
+// - My Projects list (primary + secondary)
 // - Week calendar preview
-// - Recent tasks and activities
 //
-// FIXES:
-// - No longer shows all projects to everyone
-// - Proper PM-based filtering
-// - Secondary project organization
+// Only shows projects where user is PM or Secondary PM
 // ============================================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FolderKanban,
   CheckSquare,
@@ -26,18 +20,71 @@ import {
   Calendar,
   AlertTriangle,
   ArrowRight,
-  DollarSign,
   ChevronRight,
   AlertCircle,
-  Users,
-  Shield
+  Shield,
+  Layers,
+  ChevronDown,
+  Target
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import ProjectDetails from '../projects/ProjectDetails';
 import CreateProjectModal from '../projects/CreateProjectModal';
 import CalendarWeekView from '../calendar/CalendarWeekView';
+import GanttTimeline from './GanttTimeline';
 import { buildCalendarItems, getProjectColor } from '../../utils/calendarUtils';
+
+// ============================================================================
+// HELPER - Calculate project health for Gantt
+// ============================================================================
+const calculateProjectHealth = (project, tasks, rfis, submittals) => {
+  const today = new Date().toISOString().split('T')[0];
+  
+  const projectTasks = tasks.filter(t => t.project_id === project.id);
+  const projectRFIs = rfis.filter(r => r.project_id === project.id);
+  const projectSubmittals = submittals.filter(s => s.project_id === project.id);
+
+  const overdueTasks = projectTasks.filter(t =>
+    t.due_date && t.due_date < today && !['Completed', 'Cancelled'].includes(t.status)
+  ).length;
+
+  const overdueRFIs = projectRFIs.filter(r =>
+    r.due_date && r.due_date < today && !['Answered', 'Closed'].includes(r.status)
+  ).length;
+
+  const overdueSubmittals = projectSubmittals.filter(s =>
+    s.due_date && s.due_date < today && ['Pending', 'Submitted', 'Under Review'].includes(s.status)
+  ).length;
+
+  const totalOverdue = overdueTasks + overdueRFIs + overdueSubmittals;
+
+  // Calculate days to delivery
+  let deliveryDays = null;
+  if (project.delivery_date) {
+    const delivery = new Date(project.delivery_date);
+    const now = new Date();
+    deliveryDays = Math.ceil((delivery - now) / (1000 * 60 * 60 * 24));
+  }
+
+  // Determine health status
+  let healthStatus = 'on-track';
+  if (totalOverdue >= 3 || (deliveryDays !== null && deliveryDays <= 3)) {
+    healthStatus = 'critical';
+  } else if (totalOverdue > 0 || (deliveryDays !== null && deliveryDays <= 7)) {
+    healthStatus = 'at-risk';
+  }
+
+  return {
+    ...project,
+    healthStatus,
+    totalOverdue,
+    overdueTasks,
+    overdueRFIs,
+    overdueSubmittals,
+    deliveryDays
+  };
+};
 
 // ============================================================================
 // MAIN COMPONENT
@@ -46,7 +93,7 @@ function PMDashboard() {
   const { user } = useAuth();
   
   // ==========================================================================
-  // STATE - DATA
+  // STATE
   // ==========================================================================
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
@@ -58,16 +105,14 @@ function PMDashboard() {
   const [milestones, setMilestones] = useState([]);
   const [calendarItems, setCalendarItems] = useState([]);
   
-  // ==========================================================================
-  // STATE - UI
-  // ==========================================================================
   const [selectedProject, setSelectedProject] = useState(null);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [showSecondaryProjects, setShowSecondaryProjects] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(true);
   const [toast, setToast] = useState(null);
 
   // ==========================================================================
-  // FETCH DATA ON MOUNT
+  // FETCH DATA
   // ==========================================================================
   useEffect(() => {
     if (user) {
@@ -81,9 +126,6 @@ function PMDashboard() {
     }
   }, [currentUser]);
 
-  // ==========================================================================
-  // FETCH CURRENT USER
-  // ==========================================================================
   const fetchCurrentUser = async () => {
     try {
       const { data, error } = await supabase
@@ -92,105 +134,59 @@ function PMDashboard() {
         .eq('id', user.id)
         .single();
 
-      if (error) throw error;
-      setCurrentUser(data);
+      if (!error && data) {
+        setCurrentUser(data);
+      }
     } catch (error) {
       console.error('Error fetching user:', error);
     }
   };
 
-  // ==========================================================================
-  // FETCH DASHBOARD DATA (FILTERED BY USER)
-  // ==========================================================================
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      // ===== FETCH PRIMARY PROJECTS (where user is PM) =====
-      const { data: primaryProjectsData, error: primaryError } = await supabase
+      // Fetch primary projects
+      const { data: primaryProjectsData } = await supabase
         .from('projects')
         .select('*')
         .eq('pm_id', currentUser.id)
         .order('updated_at', { ascending: false });
 
-      if (primaryError) throw primaryError;
-
-      // ===== FETCH SECONDARY PROJECTS (where user is backup PM) =====
-      const { data: secondaryProjectsData, error: secondaryError } = await supabase
+      // Fetch secondary projects
+      const { data: secondaryProjectsData } = await supabase
         .from('projects')
         .select('*')
         .eq('secondary_pm_id', currentUser.id)
-        .neq('pm_id', currentUser.id) // Exclude if also primary
+        .neq('pm_id', currentUser.id)
         .order('updated_at', { ascending: false });
 
-      // Don't throw error if column doesn't exist yet
-      const secondaryData = secondaryError ? [] : (secondaryProjectsData || []);
+      const primaryProjects = primaryProjectsData || [];
+      const secondaryData = secondaryProjectsData || [];
 
-      // ===== COMBINE PROJECT IDS FOR RELATED DATA =====
       const allProjectIds = [
-        ...(primaryProjectsData || []).map(p => p.id),
+        ...primaryProjects.map(p => p.id),
         ...secondaryData.map(p => p.id)
       ];
 
-      // ===== FETCH TASKS FOR USER'S PROJECTS =====
-      let tasksData = [];
+      // Fetch related data
+      let tasksData = [], rfisData = [], submittalsData = [], milestonesData = [];
+
       if (allProjectIds.length > 0) {
-        const { data } = await supabase
-          .from('tasks')
-          .select(`
-            *,
-            project:project_id(id, name, project_number, color),
-            assignee:assignee_id(name),
-            internal_owner:internal_owner_id(name)
-          `)
-          .in('project_id', allProjectIds)
-          .order('created_at', { ascending: false });
-        tasksData = data || [];
+        const [tasksRes, rfisRes, submittalsRes, milestonesRes] = await Promise.all([
+          supabase.from('tasks').select('*, project:project_id(id, name, project_number, color), assignee:assignee_id(name), internal_owner:internal_owner_id(name)').in('project_id', allProjectIds),
+          supabase.from('rfis').select('*, project:project_id(id, name, project_number, color)').in('project_id', allProjectIds),
+          supabase.from('submittals').select('*, project:project_id(id, name, project_number, color)').in('project_id', allProjectIds),
+          supabase.from('milestones').select('*, project:project_id(id, name, project_number, color)').in('project_id', allProjectIds)
+        ]);
+
+        tasksData = tasksRes.data || [];
+        rfisData = rfisRes.data || [];
+        submittalsData = submittalsRes.data || [];
+        milestonesData = milestonesRes.data || [];
       }
 
-      // ===== FETCH RFIS FOR USER'S PROJECTS =====
-      let rfisData = [];
-      if (allProjectIds.length > 0) {
-        const { data } = await supabase
-          .from('rfis')
-          .select(`
-            *,
-            project:project_id(id, name, project_number, color)
-          `)
-          .in('project_id', allProjectIds)
-          .order('created_at', { ascending: false });
-        rfisData = data || [];
-      }
-
-      // ===== FETCH SUBMITTALS FOR USER'S PROJECTS =====
-      let submittalsData = [];
-      if (allProjectIds.length > 0) {
-        const { data } = await supabase
-          .from('submittals')
-          .select(`
-            *,
-            project:project_id(id, name, project_number, color)
-          `)
-          .in('project_id', allProjectIds)
-          .order('created_at', { ascending: false });
-        submittalsData = data || [];
-      }
-
-      // ===== FETCH MILESTONES FOR USER'S PROJECTS =====
-      let milestonesData = [];
-      if (allProjectIds.length > 0) {
-        const { data } = await supabase
-          .from('milestones')
-          .select(`
-            *,
-            project:project_id(id, name, project_number, color)
-          `)
-          .in('project_id', allProjectIds)
-          .order('due_date', { ascending: true });
-        milestonesData = data || [];
-      }
-
-      // ===== ASSIGN COLORS TO PROJECTS =====
-      const primaryWithColors = (primaryProjectsData || []).map((project, index) => ({
+      // Add colors and isPrimary flag
+      const primaryWithColors = primaryProjects.map((project, index) => ({
         ...project,
         color: project.color || getProjectColor(project, index),
         isPrimary: true
@@ -198,11 +194,10 @@ function PMDashboard() {
 
       const secondaryWithColors = secondaryData.map((project, index) => ({
         ...project,
-        color: project.color || getProjectColor(project, index + primaryWithColors.length),
+        color: project.color || getProjectColor(project, index + primaryProjects.length),
         isPrimary: false
       }));
 
-      // ===== SET STATE =====
       setProjects(primaryWithColors);
       setSecondaryProjects(secondaryWithColors);
       setTasks(tasksData);
@@ -210,7 +205,7 @@ function PMDashboard() {
       setSubmittals(submittalsData);
       setMilestones(milestonesData);
 
-      // ===== BUILD CALENDAR ITEMS (PRIMARY ONLY) =====
+      // Build calendar items
       const items = buildCalendarItems(
         primaryWithColors,
         tasksData.filter(t => primaryWithColors.some(p => p.id === t.project_id)),
@@ -221,22 +216,24 @@ function PMDashboard() {
       setCalendarItems(items);
 
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
   };
 
   // ==========================================================================
-  // TOAST HELPER
+  // PROJECTS WITH HEALTH (for Gantt)
   // ==========================================================================
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  const projectsWithHealth = useMemo(() => {
+    const allProjects = [...projects, ...secondaryProjects];
+    return allProjects
+      .filter(p => ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'].includes(p.status))
+      .map(project => calculateProjectHealth(project, tasks, rfis, submittals));
+  }, [projects, secondaryProjects, tasks, rfis, submittals]);
 
   // ==========================================================================
-  // CALCULATE STATS (PRIMARY PROJECTS ONLY)
+  // STATS
   // ==========================================================================
   const today = new Date().toISOString().split('T')[0];
   
@@ -244,7 +241,6 @@ function PMDashboard() {
     !['Completed', 'Cancelled', 'On Hold', 'Warranty'].includes(p.status)
   ).length;
 
-  // Only count tasks from PRIMARY projects
   const primaryProjectIds = projects.map(p => p.id);
   
   const myTasks = tasks.filter(t => 
@@ -265,27 +261,17 @@ function PMDashboard() {
     ['Pending', 'Submitted', 'Under Review'].includes(s.status)
   );
 
-  const totalContractValue = projects
-    .filter(p => !['Cancelled'].includes(p.status))
-    .reduce((sum, p) => sum + (p.contract_value || 0), 0);
-
   // ==========================================================================
   // HELPERS
   // ==========================================================================
-  const formatCurrency = (amount) => {
-    if (!amount) return '$0';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   const getProjectStatusColor = (status) => {
@@ -305,9 +291,7 @@ function PMDashboard() {
   // ==========================================================================
   // HANDLERS
   // ==========================================================================
-  const handleProjectClick = (project) => {
-    setSelectedProject(project);
-  };
+  const handleProjectClick = (project) => setSelectedProject(project);
 
   const handleProjectUpdate = (updatedProject) => {
     if (updatedProject.isPrimary !== false) {
@@ -316,26 +300,24 @@ function PMDashboard() {
       setSecondaryProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p));
     }
     setSelectedProject(updatedProject);
-    showToast('Project updated successfully');
+    showToast('Project updated');
   };
 
   const handleProjectCreated = (newProject) => {
     setProjects(prev => [{ ...newProject, isPrimary: true }, ...prev]);
     setShowCreateProject(false);
-    showToast('Project created successfully');
+    showToast('Project created');
     fetchDashboardData();
   };
 
   const handleCalendarItemClick = (item) => {
     const allProjects = [...projects, ...secondaryProjects];
     const project = allProjects.find(p => p.id === item.projectId);
-    if (project) {
-      setSelectedProject(project);
-    }
+    if (project) setSelectedProject(project);
   };
 
   // ==========================================================================
-  // RENDER - PROJECT DETAILS VIEW
+  // RENDER - PROJECT DETAILS
   // ==========================================================================
   if (selectedProject) {
     return (
@@ -351,160 +333,147 @@ function PMDashboard() {
   }
 
   // ==========================================================================
-  // RENDER - LOADING STATE
+  // RENDER - LOADING
   // ==========================================================================
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column',
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        height: '50vh' 
-      }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '50vh' }}>
         <div className="loading-spinner"></div>
-        <p style={{ marginTop: 'var(--space-md)', color: 'var(--text-secondary)' }}>
-          Loading dashboard...
-        </p>
+        <p style={{ marginTop: 'var(--space-md)', color: 'var(--text-secondary)' }}>Loading dashboard...</p>
       </div>
     );
   }
 
   // ==========================================================================
-  // RENDER - MAIN DASHBOARD
+  // RENDER - MAIN
   // ==========================================================================
   return (
-    <div>
-      {/* ================================================================== */}
-      {/* WELCOME HEADER                                                    */}
-      {/* ================================================================== */}
-      <div style={{ marginBottom: 'var(--space-xl)' }}>
-        <h1 style={{ 
-          fontSize: '2rem', 
-          fontWeight: '700', 
-          color: 'var(--text-primary)', 
-          marginBottom: 'var(--space-xs)' 
-        }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      {/* HEADER */}
+      <div style={{ marginBottom: 'var(--space-lg)' }}>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
           Welcome back, {currentUser?.name?.split(' ')[0] || 'User'}!
         </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>
           Here's what's happening with your projects today.
         </p>
       </div>
 
-      {/* ================================================================== */}
-      {/* STATS CARDS                                                       */}
-      {/* ================================================================== */}
+      {/* STATS CARDS */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-        gap: 'var(--space-lg)',
-        marginBottom: 'var(--space-xl)'
+        gridTemplateColumns: 'repeat(5, 1fr)', 
+        gap: '12px',
+        marginBottom: 'var(--space-lg)'
       }}>
-        {/* Active Projects */}
-        <div style={{
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-lg)',
-          border: '1px solid var(--border-color)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
-            <FolderKanban size={20} style={{ color: 'var(--sunbelt-orange)' }} />
-            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>My Projects</span>
+        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <FolderKanban size={18} style={{ color: 'var(--sunbelt-orange)' }} />
+            <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>My Projects</span>
           </div>
-          <div style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--text-primary)' }}>
-            {activeProjects}
-          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)' }}>{activeProjects}</div>
           {secondaryProjects.length > 0 && (
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
-              +{secondaryProjects.length} backup
-            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>+{secondaryProjects.length} backup</div>
           )}
         </div>
 
-        {/* My Tasks */}
-        <div style={{
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-lg)',
-          border: '1px solid var(--border-color)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
-            <CheckSquare size={20} style={{ color: 'var(--sunbelt-orange)' }} />
-            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>My Tasks</span>
+        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <CheckSquare size={18} style={{ color: 'var(--sunbelt-orange)' }} />
+            <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>My Tasks</span>
           </div>
-          <div style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--text-primary)' }}>
-            {myTasks.length}
-          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)' }}>{myTasks.length}</div>
         </div>
 
-        {/* Overdue */}
-        <div style={{
-          background: overdueTasks.length > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-lg)',
-          border: `1px solid ${overdueTasks.length > 0 ? 'var(--danger)' : 'var(--border-color)'}`
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
-            <AlertCircle size={20} style={{ color: overdueTasks.length > 0 ? 'var(--danger)' : 'var(--text-tertiary)' }} />
-            <span style={{ fontSize: '0.875rem', color: overdueTasks.length > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>Overdue</span>
+        <div style={{ background: overdueTasks.length > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: overdueTasks.length > 0 ? '1px solid var(--danger)' : '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <AlertCircle size={18} style={{ color: overdueTasks.length > 0 ? 'var(--danger)' : 'var(--text-tertiary)' }} />
+            <span style={{ fontSize: '0.8125rem', color: overdueTasks.length > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>Overdue</span>
           </div>
-          <div style={{ fontSize: '2rem', fontWeight: '700', color: overdueTasks.length > 0 ? 'var(--danger)' : 'var(--text-primary)' }}>
-            {overdueTasks.length}
-          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: '700', color: overdueTasks.length > 0 ? 'var(--danger)' : 'var(--text-primary)' }}>{overdueTasks.length}</div>
         </div>
 
-        {/* Open RFIs */}
-        <div style={{
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-lg)',
-          border: '1px solid var(--border-color)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
-            <MessageSquare size={20} style={{ color: 'var(--sunbelt-orange)' }} />
-            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Open RFIs</span>
+        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <MessageSquare size={18} style={{ color: 'var(--sunbelt-orange)' }} />
+            <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Open RFIs</span>
           </div>
-          <div style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--text-primary)' }}>
-            {openRFIs.length}
-          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)' }}>{openRFIs.length}</div>
         </div>
 
-        {/* Pending Submittals */}
-        <div style={{
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-lg)',
-          border: '1px solid var(--border-color)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
-            <ClipboardList size={20} style={{ color: 'var(--sunbelt-orange)' }} />
-            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Pending Submittals</span>
+        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <ClipboardList size={18} style={{ color: 'var(--sunbelt-orange)' }} />
+            <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Submittals</span>
           </div>
-          <div style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--text-primary)' }}>
-            {pendingSubmittals.length}
-          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)' }}>{pendingSubmittals.length}</div>
         </div>
       </div>
 
-      {/* ================================================================== */}
-      {/* MY PROJECTS SECTION                                               */}
-      {/* ================================================================== */}
+      {/* PROJECT TIMELINE (GANTT) */}
+      {projectsWithHealth.length > 0 && (
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--border-color)',
+          marginBottom: 'var(--space-lg)',
+          overflow: 'hidden'
+        }}>
+          <div
+            onClick={() => setShowTimeline(!showTimeline)}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '16px',
+              cursor: 'pointer',
+              borderBottom: showTimeline ? '1px solid var(--border-color)' : 'none'
+            }}
+          >
+            <h3 style={{
+              fontSize: '1rem',
+              fontWeight: '700',
+              color: 'var(--text-primary)',
+              margin: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <Layers size={18} style={{ color: 'var(--sunbelt-orange)' }} />
+              My Project Timeline
+            </h3>
+            <ChevronDown
+              size={18}
+              style={{
+                color: 'var(--text-tertiary)',
+                transform: showTimeline ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.2s'
+              }}
+            />
+          </div>
+
+          {showTimeline && (
+            <div style={{ padding: '16px' }}>
+              <GanttTimeline
+                projects={projectsWithHealth}
+                onProjectClick={handleProjectClick}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TWO COLUMN - PROJECTS + CALENDAR */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: '1fr 400px', 
-        gap: 'var(--space-xl)',
-        marginBottom: 'var(--space-xl)'
+        gridTemplateColumns: '1fr 380px', 
+        gap: '16px',
+        marginBottom: 'var(--space-lg)'
       }}>
         {/* Projects List */}
         <div>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            marginBottom: 'var(--space-lg)'
-          }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h2 style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
               My Projects
             </h2>
             <button
@@ -512,43 +481,42 @@ function PMDashboard() {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 'var(--space-xs)',
-                padding: '8px 16px',
+                gap: '6px',
+                padding: '8px 14px',
                 background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
                 border: 'none',
                 borderRadius: 'var(--radius-md)',
                 color: 'white',
                 fontWeight: '600',
-                fontSize: '0.875rem',
+                fontSize: '0.8125rem',
                 cursor: 'pointer'
               }}
             >
-              <Plus size={18} />
+              <Plus size={16} />
               New Project
             </button>
           </div>
 
-          {/* Primary Projects */}
           {projects.length === 0 && secondaryProjects.length === 0 ? (
             <div style={{
               background: 'var(--bg-secondary)',
               borderRadius: 'var(--radius-lg)',
-              padding: 'var(--space-2xl)',
+              padding: '40px',
               textAlign: 'center',
               border: '1px solid var(--border-color)'
             }}>
-              <FolderKanban size={48} style={{ color: 'var(--text-tertiary)', marginBottom: 'var(--space-md)' }} />
-              <h3 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>No projects assigned</h3>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
-                You don't have any projects assigned to you yet.
+              <FolderKanban size={40} style={{ color: 'var(--text-tertiary)', marginBottom: '12px' }} />
+              <h3 style={{ color: 'var(--text-primary)', marginBottom: '8px', fontSize: '1rem' }}>No projects assigned</h3>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '0.875rem' }}>
+                Create your first project to get started.
               </p>
               <button
                 onClick={() => setShowCreateProject(true)}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 'var(--space-xs)',
-                  padding: '10px 20px',
+                  gap: '6px',
+                  padding: '10px 18px',
                   background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
                   border: 'none',
                   borderRadius: 'var(--radius-md)',
@@ -557,12 +525,13 @@ function PMDashboard() {
                   cursor: 'pointer'
                 }}
               >
-                <Plus size={18} />
-                Create First Project
+                <Plus size={16} />
+                Create Project
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* Primary Projects */}
               {projects.map(project => (
                 <div
                   key={project.id}
@@ -571,7 +540,7 @@ function PMDashboard() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: 'var(--space-md) var(--space-lg)',
+                    padding: '12px 16px',
                     background: 'var(--bg-secondary)',
                     borderRadius: 'var(--radius-lg)',
                     border: '1px solid var(--border-color)',
@@ -587,27 +556,18 @@ function PMDashboard() {
                     e.currentTarget.style.background = 'var(--bg-secondary)';
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-                    <div style={{
-                      width: '4px',
-                      height: '40px',
-                      borderRadius: '2px',
-                      background: project.color || 'var(--sunbelt-orange)'
-                    }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '4px', height: '36px', borderRadius: '2px', background: project.color || 'var(--sunbelt-orange)' }} />
                     <div>
-                      <div style={{ fontWeight: '600', color: 'var(--text-primary)', marginBottom: '2px' }}>
-                        {project.project_number}
-                      </div>
-                      <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                        {project.name}
-                      </div>
+                      <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.9375rem' }}>{project.project_number}</div>
+                      <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{project.name}</div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <span style={{
-                      padding: '4px 12px',
-                      borderRadius: '20px',
-                      fontSize: '0.75rem',
+                      padding: '4px 10px',
+                      borderRadius: '12px',
+                      fontSize: '0.6875rem',
                       fontWeight: '600',
                       background: `${getProjectStatusColor(project.status)}20`,
                       color: getProjectStatusColor(project.status)
@@ -615,16 +575,16 @@ function PMDashboard() {
                       {project.status}
                     </span>
                     {project.delivery_date && (
-                      <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
                         {formatDate(project.delivery_date)}
                       </span>
                     )}
-                    <ChevronRight size={20} style={{ color: 'var(--text-tertiary)' }} />
+                    <ChevronRight size={18} style={{ color: 'var(--text-tertiary)' }} />
                   </div>
                 </div>
               ))}
 
-              {/* ===== SECONDARY PROJECTS SECTION ===== */}
+              {/* Secondary Projects */}
               {secondaryProjects.length > 0 && (
                 <>
                   <button
@@ -633,22 +593,22 @@ function PMDashboard() {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      padding: 'var(--space-md) var(--space-lg)',
+                      padding: '12px 16px',
                       background: 'var(--bg-tertiary)',
                       borderRadius: 'var(--radius-md)',
                       border: '1px dashed var(--border-color)',
                       cursor: 'pointer',
-                      marginTop: 'var(--space-md)'
+                      marginTop: '8px'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                      <Shield size={18} style={{ color: 'var(--text-tertiary)' }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Shield size={16} style={{ color: 'var(--text-tertiary)' }} />
                       <span style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-secondary)' }}>
                         Backup Projects ({secondaryProjects.length})
                       </span>
                     </div>
                     <ChevronRight 
-                      size={18} 
+                      size={16} 
                       style={{ 
                         color: 'var(--text-tertiary)',
                         transform: showSecondaryProjects ? 'rotate(90deg)' : 'rotate(0deg)',
@@ -665,63 +625,27 @@ function PMDashboard() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        padding: 'var(--space-md) var(--space-lg)',
+                        padding: '12px 16px',
                         background: 'var(--bg-primary)',
                         borderRadius: 'var(--radius-lg)',
                         border: '1px dashed var(--border-color)',
                         cursor: 'pointer',
-                        transition: 'all 0.15s',
-                        marginLeft: 'var(--space-lg)'
-                      }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.borderColor = project.color || 'var(--text-tertiary)';
-                        e.currentTarget.style.background = 'var(--bg-secondary)';
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--border-color)';
-                        e.currentTarget.style.background = 'var(--bg-primary)';
+                        marginLeft: '20px'
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-                        <div style={{
-                          width: '4px',
-                          height: '40px',
-                          borderRadius: '2px',
-                          background: project.color || 'var(--text-tertiary)',
-                          opacity: 0.5
-                        }} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '4px', height: '36px', borderRadius: '2px', background: project.color || 'var(--text-tertiary)', opacity: 0.5 }} />
                         <div>
-                          <div style={{ fontWeight: '600', color: 'var(--text-primary)', marginBottom: '2px' }}>
+                          <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.9375rem' }}>
                             {project.project_number}
-                            <span style={{ 
-                              marginLeft: 'var(--space-sm)',
-                              fontSize: '0.625rem',
-                              padding: '2px 6px',
-                              background: 'var(--bg-tertiary)',
-                              borderRadius: '4px',
-                              color: 'var(--text-tertiary)'
-                            }}>
+                            <span style={{ marginLeft: '8px', fontSize: '0.625rem', padding: '2px 6px', background: 'var(--bg-tertiary)', borderRadius: '4px', color: 'var(--text-tertiary)' }}>
                               BACKUP
                             </span>
                           </div>
-                          <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                            {project.name}
-                          </div>
+                          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{project.name}</div>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)' }}>
-                        <span style={{
-                          padding: '4px 12px',
-                          borderRadius: '20px',
-                          fontSize: '0.75rem',
-                          fontWeight: '600',
-                          background: `${getProjectStatusColor(project.status)}20`,
-                          color: getProjectStatusColor(project.status)
-                        }}>
-                          {project.status}
-                        </span>
-                        <ChevronRight size={20} style={{ color: 'var(--text-tertiary)' }} />
-                      </div>
+                      <ChevronRight size={18} style={{ color: 'var(--text-tertiary)' }} />
                     </div>
                   ))}
                 </>
@@ -732,13 +656,8 @@ function PMDashboard() {
 
         {/* Calendar Preview */}
         <div>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            marginBottom: 'var(--space-lg)'
-          }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h2 style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
               This Week
             </h2>
           </div>
@@ -757,9 +676,7 @@ function PMDashboard() {
         </div>
       </div>
 
-      {/* ================================================================== */}
-      {/* CREATE PROJECT MODAL                                              */}
-      {/* ================================================================== */}
+      {/* CREATE PROJECT MODAL */}
       {showCreateProject && (
         <CreateProjectModal
           isOpen={showCreateProject}
@@ -769,15 +686,13 @@ function PMDashboard() {
         />
       )}
 
-      {/* ================================================================== */}
-      {/* TOAST NOTIFICATION                                                */}
-      {/* ================================================================== */}
+      {/* TOAST */}
       {toast && (
         <div style={{
           position: 'fixed',
-          bottom: 'var(--space-xl)',
-          right: 'var(--space-xl)',
-          padding: 'var(--space-md) var(--space-lg)',
+          bottom: '20px',
+          right: '20px',
+          padding: '12px 20px',
           background: toast.type === 'error' ? 'var(--danger)' : 'var(--success)',
           color: 'white',
           borderRadius: 'var(--radius-md)',

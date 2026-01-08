@@ -1,607 +1,419 @@
 // ============================================================================
-// ProjectsPage.jsx
+// ProjectsPage Component
 // ============================================================================
-// Dedicated page for viewing and managing all projects.
-// 
-// FEATURES:
-// - Grid/List view toggle
-// - Filter by status, factory
-// - Search projects
-// - Create new project
-// - Click to view project details
-//
-// DEPENDENCIES:
-// - supabaseClient: Database operations
-// - CreateProjectModal: For creating new projects
+// Standalone page showing projects list.
+// For Directors: Shows all projects
+// For PMs: Shows their assigned projects (primary + secondary)
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
-import { 
-  Plus, Search, Filter, Grid, List, Building2, 
-  Calendar, DollarSign, MapPin, ChevronRight,
-  FolderKanban, MoreVertical, Users
+import {
+  FolderKanban,
+  Search,
+  Plus,
+  ChevronRight,
+  Calendar,
+  User,
+  Building2,
+  Filter
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
-import CreateProjectModal from '../projects/CreateProjectModal';
 import ProjectDetails from '../projects/ProjectDetails';
+import CreateProjectModal from '../projects/CreateProjectModal';
 
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-const STATUS_COLORS = {
-  'Pre-PM': { bg: 'rgba(100, 116, 139, 0.1)', color: '#64748b' },
-  'Planning': { bg: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' },
-  'PM Handoff': { bg: 'rgba(168, 85, 247, 0.1)', color: '#a855f7' },
-  'In Progress': { bg: 'rgba(255, 107, 53, 0.1)', color: '#ff6b35' },
-  'On Hold': { bg: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' },
-  'Completed': { bg: 'rgba(34, 197, 94, 0.1)', color: '#22c55e' },
-  'Cancelled': { bg: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' },
-  'Warranty': { bg: 'rgba(6, 182, 212, 0.1)', color: '#06b6d4' }
-};
-
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
-function ProjectsPage() {
+function ProjectsPage({ isDirectorView = false }) {
   const { user } = useAuth();
   
-  // ==========================================================================
-  // STATE
-  // ==========================================================================
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState([]);
-  const [filteredProjects, setFilteredProjects] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   
-  // View & Filters
-  const [viewMode, setViewMode] = useState('grid'); // grid, list
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterFactory, setFilterFactory] = useState('all');
-  const [showFilters, setShowFilters] = useState(false);
-  
-  // Modals
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [showCreateProject, setShowCreateProject] = useState(false);
   
-  // Toast
+  // Filters
+  const [filterStatus, setFilterStatus] = useState('active');
+  const [filterPM, setFilterPM] = useState('all');
+  const [filterFactory, setFilterFactory] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  
   const [toast, setToast] = useState(null);
 
   // ==========================================================================
-  // DATA FETCHING
+  // FETCH DATA
   // ==========================================================================
   useEffect(() => {
-    fetchProjects();
-  }, []);
+    if (user) fetchData();
+  }, [user, isDirectorView]);
 
-  const fetchProjects = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data: userData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      setCurrentUser(userData);
+
+      // Get users for filter
+      const { data: usersData } = await supabase
+        .from('users')
+        .select('id, name, role')
+        .eq('is_active', true);
+      setUsers(usersData || []);
+
+      // Get projects
+      let projectsQuery = supabase
         .from('projects')
         .select(`
           *,
-          primary_pm:primary_pm_id(id, name),
-          backup_pm:backup_pm_id(id, name)
+          pm:pm_id(id, name),
+          secondary_pm:secondary_pm_id(id, name)
         `)
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false });
 
-      if (error) throw error;
-      setProjects(data || []);
-      setFilteredProjects(data || []);
+      if (!isDirectorView && userData) {
+        projectsQuery = projectsQuery.or(`pm_id.eq.${userData.id},secondary_pm_id.eq.${userData.id}`);
+      }
+
+      const { data: projectsData } = await projectsQuery;
+      setProjects(projectsData || []);
     } catch (error) {
       console.error('Error fetching projects:', error);
-      showToast('Failed to load projects', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   // ==========================================================================
-  // FILTERING
+  // FILTER PROJECTS
   // ==========================================================================
-  useEffect(() => {
-    let filtered = [...projects];
-
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(p => 
-        p.name?.toLowerCase().includes(query) ||
-        p.project_number?.toLowerCase().includes(query) ||
-        p.dealer?.toLowerCase().includes(query) ||
-        p.site_address?.toLowerCase().includes(query)
-      );
-    }
-
+  const filteredProjects = projects.filter(project => {
     // Status filter
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(p => p.status === filterStatus);
-    }
+    const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
+    if (filterStatus === 'active' && !activeStatuses.includes(project.status)) return false;
+    if (filterStatus === 'completed' && project.status !== 'Completed') return false;
+    if (filterStatus === 'on-hold' && project.status !== 'On Hold') return false;
+
+    // PM filter
+    if (filterPM !== 'all' && project.pm_id !== filterPM) return false;
 
     // Factory filter
-    if (filterFactory !== 'all') {
-      filtered = filtered.filter(p => p.factory === filterFactory);
+    if (filterFactory !== 'all' && project.factory !== filterFactory) return false;
+
+    // Search
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      if (!project.project_number?.toLowerCase().includes(term) &&
+          !project.name?.toLowerCase().includes(term) &&
+          !project.client_name?.toLowerCase().includes(term)) return false;
     }
 
-    setFilteredProjects(filtered);
-  }, [projects, searchQuery, filterStatus, filterFactory]);
+    return true;
+  });
 
   // ==========================================================================
   // HELPERS
   // ==========================================================================
-  const showToast = (message, type = 'info') => {
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      'Planning': 'var(--info)',
+      'Pre-PM': '#f59e0b',
+      'PM Handoff': '#f59e0b',
+      'In Progress': 'var(--sunbelt-orange)',
+      'On Hold': 'var(--text-tertiary)',
+      'Completed': '#22c55e',
+      'Cancelled': '#ef4444',
+      'Warranty': 'var(--info)'
+    };
+    return colors[status] || 'var(--text-secondary)';
+  };
+
+  const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  const formatCurrency = (value) => {
-    if (!value) return '-';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0
-    }).format(value);
-  };
+  const uniqueFactories = [...new Set(projects.map(p => p.factory).filter(Boolean))];
+  const pms = users.filter(u => ['Project Manager', 'Director', 'Admin'].includes(u.role));
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-
-  // Get unique factories for filter dropdown
-  const factories = [...new Set(projects.map(p => p.factory).filter(Boolean))];
-
-  // Get unique statuses for filter dropdown
-  const statuses = [...new Set(projects.map(p => p.status).filter(Boolean))];
-
-  // ==========================================================================
-  // HANDLERS
-  // ==========================================================================
-  const handleProjectClick = (project) => {
-    setSelectedProject(project);
-  };
-
-  const handleProjectCreated = (newProject) => {
-    setProjects(prev => [newProject, ...prev]);
-    showToast('Project created successfully', 'success');
-  };
-
-  const handleProjectUpdated = (updatedProject) => {
-    setProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p));
-    setSelectedProject(updatedProject);
+  const stats = {
+    total: projects.length,
+    active: projects.filter(p => ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'].includes(p.status)).length,
+    completed: projects.filter(p => p.status === 'Completed').length
   };
 
   // ==========================================================================
-  // RENDER - Project Details View
+  // RENDER - PROJECT DETAILS
   // ==========================================================================
   if (selectedProject) {
     return (
       <ProjectDetails
         project={selectedProject}
-        onBack={() => setSelectedProject(null)}
-        onUpdate={handleProjectUpdated}
+        onBack={() => {
+          setSelectedProject(null);
+          fetchData();
+        }}
+        onUpdate={(updated) => {
+          setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
+          setSelectedProject(updated);
+          showToast('Project updated');
+        }}
       />
     );
   }
 
   // ==========================================================================
-  // RENDER - Projects List/Grid
+  // RENDER
   // ==========================================================================
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '50vh' }}>
+        <div className="loading-spinner"></div>
+      </div>
+    );
+  }
+
   return (
-    <div>
-      {/* ================================================================== */}
-      {/* PAGE HEADER                                                       */}
-      {/* ================================================================== */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 'var(--space-xl)',
-        flexWrap: 'wrap',
-        gap: 'var(--space-md)'
-      }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-lg)', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h1 style={{ 
-            fontSize: '2rem', 
-            fontWeight: '700', 
-            color: 'var(--text-primary)',
-            marginBottom: 'var(--space-xs)'
-          }}>
-            Projects
+          <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <FolderKanban size={28} style={{ color: 'var(--sunbelt-orange)' }} />
+            {isDirectorView ? 'All Projects' : 'My Projects'}
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>
-            {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''} 
-            {filterStatus !== 'all' && ` • ${filterStatus}`}
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+            {isDirectorView ? 'All projects across the organization' : 'Projects assigned to you'}
           </p>
         </div>
 
         <button
-          onClick={() => setShowCreateModal(true)}
-          className="btn btn-primary"
-          style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}
+          onClick={() => setShowCreateProject(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '10px 16px',
+            background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+            border: 'none',
+            borderRadius: 'var(--radius-md)',
+            color: 'white',
+            fontWeight: '600',
+            fontSize: '0.875rem',
+            cursor: 'pointer'
+          }}
         >
           <Plus size={18} />
           New Project
         </button>
       </div>
 
-      {/* ================================================================== */}
-      {/* FILTERS & SEARCH BAR                                              */}
-      {/* ================================================================== */}
-      <div style={{
-        display: 'flex',
-        gap: 'var(--space-md)',
-        marginBottom: 'var(--space-lg)',
-        flexWrap: 'wrap',
-        alignItems: 'center'
-      }}>
-        {/* Search */}
-        <div style={{ 
-          flex: 1, 
-          minWidth: '250px',
-          position: 'relative'
-        }}>
-          <Search 
-            size={18} 
-            style={{ 
-              position: 'absolute', 
-              left: '12px', 
-              top: '50%', 
-              transform: 'translateY(-50%)',
-              color: 'var(--text-tertiary)'
-            }} 
-          />
-          <input
-            type="text"
-            placeholder="Search projects..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 12px 10px 40px',
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--text-primary)',
-              fontSize: '0.9375rem'
-            }}
-          />
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: 'var(--space-lg)' }}>
+        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Total Projects</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.total}</div>
         </div>
-
-        {/* Status Filter */}
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          style={{
-            padding: '10px 12px',
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-primary)',
-            fontSize: '0.875rem',
-            minWidth: '140px'
-          }}
-        >
-          <option value="all">All Statuses</option>
-          {statuses.map(status => (
-            <option key={status} value={status}>{status}</option>
-          ))}
-        </select>
-
-        {/* Factory Filter */}
-        <select
-          value={filterFactory}
-          onChange={(e) => setFilterFactory(e.target.value)}
-          style={{
-            padding: '10px 12px',
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-primary)',
-            fontSize: '0.875rem',
-            minWidth: '180px'
-          }}
-        >
-          <option value="all">All Factories</option>
-          {factories.map(factory => (
-            <option key={factory} value={factory}>{factory}</option>
-          ))}
-        </select>
-
-        {/* View Toggle */}
-        <div style={{
-          display: 'flex',
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-md)',
-          padding: '4px',
-          border: '1px solid var(--border-color)'
-        }}>
-          <button
-            onClick={() => setViewMode('grid')}
-            style={{
-              padding: '8px 12px',
-              border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              background: viewMode === 'grid' ? 'var(--bg-primary)' : 'transparent',
-              color: viewMode === 'grid' ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center'
-            }}
-          >
-            <Grid size={18} />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            style={{
-              padding: '8px 12px',
-              border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              background: viewMode === 'list' ? 'var(--bg-primary)' : 'transparent',
-              color: viewMode === 'list' ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center'
-            }}
-          >
-            <List size={18} />
-          </button>
+        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Active</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--sunbelt-orange)' }}>{stats.active}</div>
+        </div>
+        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Completed</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#22c55e' }}>{stats.completed}</div>
         </div>
       </div>
 
-      {/* ================================================================== */}
-      {/* LOADING STATE                                                     */}
-      {/* ================================================================== */}
-      {loading && (
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          padding: 'var(--space-xxl)',
-          color: 'var(--text-secondary)'
-        }}>
-          <div className="loading-spinner" style={{ marginRight: 'var(--space-md)' }}></div>
-          Loading projects...
-        </div>
-      )}
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: 'var(--space-md)', flexWrap: 'wrap', alignItems: 'center' }}>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          style={{ padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+        >
+          <option value="active">Active</option>
+          <option value="completed">Completed</option>
+          <option value="on-hold">On Hold</option>
+          <option value="all">All Statuses</option>
+        </select>
 
-      {/* ================================================================== */}
-      {/* EMPTY STATE                                                       */}
-      {/* ================================================================== */}
-      {!loading && filteredProjects.length === 0 && (
-        <div style={{
-          textAlign: 'center',
-          padding: 'var(--space-xxl)',
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border-color)'
-        }}>
-          <FolderKanban size={48} style={{ color: 'var(--text-tertiary)', marginBottom: 'var(--space-md)' }} />
-          <h3 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>
-            {searchQuery || filterStatus !== 'all' ? 'No projects found' : 'No projects yet'}
-          </h3>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
-            {searchQuery || filterStatus !== 'all' 
-              ? 'Try adjusting your filters' 
-              : 'Create your first project to get started'}
+        {isDirectorView && (
+          <select
+            value={filterPM}
+            onChange={(e) => setFilterPM(e.target.value)}
+            style={{ padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+          >
+            <option value="all">All PMs</option>
+            {pms.map(pm => (
+              <option key={pm.id} value={pm.id}>{pm.name}</option>
+            ))}
+          </select>
+        )}
+
+        <select
+          value={filterFactory}
+          onChange={(e) => setFilterFactory(e.target.value)}
+          style={{ padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+        >
+          <option value="all">All Factories</option>
+          {uniqueFactories.map(f => (
+            <option key={f} value={f}>{f}</option>
+          ))}
+        </select>
+
+        <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+          <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+          <input
+            type="text"
+            placeholder="Search projects..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{ width: '100%', padding: '8px 12px 8px 34px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+          />
+        </div>
+      </div>
+
+      {/* Projects Grid */}
+      {filteredProjects.length === 0 ? (
+        <div style={{ padding: '60px 40px', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)' }}>
+          <FolderKanban size={48} style={{ color: 'var(--text-tertiary)', marginBottom: '16px' }} />
+          <h3 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>No projects found</h3>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+            {searchTerm || filterStatus !== 'active' ? 'Try adjusting your filters' : 'Create your first project to get started'}
           </p>
-          {!searchQuery && filterStatus === 'all' && (
-            <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
-              <Plus size={18} /> Create Project
-            </button>
-          )}
+          <button
+            onClick={() => setShowCreateProject(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '10px 18px',
+              background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+              border: 'none',
+              borderRadius: 'var(--radius-md)',
+              color: 'white',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}
+          >
+            <Plus size={16} />
+            Create Project
+          </button>
         </div>
-      )}
-
-      {/* ================================================================== */}
-      {/* GRID VIEW                                                         */}
-      {/* ================================================================== */}
-      {!loading && filteredProjects.length > 0 && viewMode === 'grid' && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-          gap: 'var(--space-lg)'
-        }}>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
           {filteredProjects.map(project => (
             <div
               key={project.id}
-              onClick={() => handleProjectClick(project)}
+              onClick={() => setSelectedProject(project)}
               style={{
                 background: 'var(--bg-secondary)',
-                border: '1px solid var(--border-color)',
                 borderRadius: 'var(--radius-lg)',
-                padding: 'var(--space-lg)',
+                border: '1px solid var(--border-color)',
+                padding: '20px',
                 cursor: 'pointer',
-                transition: 'all 0.15s',
-                borderLeft: `4px solid ${STATUS_COLORS[project.status]?.color || 'var(--border-color)'}`
+                transition: 'all 0.15s'
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-                e.currentTarget.style.borderColor = 'var(--sunbelt-orange)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = 'none';
-                e.currentTarget.style.borderColor = 'var(--border-color)';
-              }}
+              onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--sunbelt-orange)'}
+              onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--border-color)'}
             >
               {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-md)' }}>
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ 
-                    fontSize: '1.125rem', 
-                    fontWeight: '700', 
-                    color: 'var(--text-primary)',
-                    marginBottom: '4px',
-                    lineHeight: 1.3
-                  }}>
-                    {project.name}
-                  </h3>
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
-                    {project.project_number || 'No project number'}
-                  </p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                <div>
+                  <div style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '1rem', marginBottom: '2px' }}>
+                    {project.project_number}
+                  </div>
+                  <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{project.name}</div>
                 </div>
                 <span style={{
                   padding: '4px 10px',
                   borderRadius: '12px',
-                  fontSize: '0.75rem',
+                  fontSize: '0.6875rem',
                   fontWeight: '600',
-                  background: STATUS_COLORS[project.status]?.bg || 'var(--bg-tertiary)',
-                  color: STATUS_COLORS[project.status]?.color || 'var(--text-secondary)'
+                  background: `${getStatusColor(project.status)}20`,
+                  color: getStatusColor(project.status)
                 }}>
                   {project.status}
                 </span>
               </div>
 
               {/* Details */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                {project.factory && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', fontSize: '0.8125rem' }}>
-                    <Building2 size={14} style={{ color: 'var(--text-tertiary)' }} />
-                    <span style={{ color: 'var(--text-secondary)' }}>{project.factory}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
+                {project.client_name && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Building2 size={14} />
+                    <span>{project.client_name}</span>
                   </div>
                 )}
-                {project.dealer && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', fontSize: '0.8125rem' }}>
-                    <Users size={14} style={{ color: 'var(--text-tertiary)' }} />
-                    <span style={{ color: 'var(--text-secondary)' }}>{project.dealer}</span>
+                {project.pm?.name && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <User size={14} />
+                    <span>{project.pm.name}</span>
+                    {project.secondary_pm?.name && (
+                      <span style={{ color: 'var(--text-tertiary)' }}>
+                        (+{project.secondary_pm.name})
+                      </span>
+                    )}
                   </div>
                 )}
-                {project.site_address && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', fontSize: '0.8125rem' }}>
-                    <MapPin size={14} style={{ color: 'var(--text-tertiary)' }} />
-                    <span style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {project.site_address}
-                    </span>
+                {project.delivery_date && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Calendar size={14} />
+                    <span>Delivery: {formatDate(project.delivery_date)}</span>
                   </div>
                 )}
               </div>
 
               {/* Footer */}
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                marginTop: 'var(--space-md)',
-                paddingTop: 'var(--space-md)',
-                borderTop: '1px solid var(--border-color)'
-              }}>
-                <div style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
-                  {project.primary_pm?.name || 'Unassigned'}
-                </div>
-                {project.contract_value && (
-                  <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--success)' }}>
-                    {formatCurrency(project.contract_value)}
-                  </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+                {project.factory && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                    {project.factory}
+                  </span>
                 )}
+                <ChevronRight size={16} style={{ color: 'var(--text-tertiary)' }} />
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* ================================================================== */}
-      {/* LIST VIEW                                                         */}
-      {/* ================================================================== */}
-      {!loading && filteredProjects.length > 0 && viewMode === 'list' && (
-        <div style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-color)',
-          borderRadius: 'var(--radius-lg)',
-          overflow: 'hidden'
-        }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg-tertiary)' }}>
-                <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Project</th>
-                <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Status</th>
-                <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Factory</th>
-                <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>PM</th>
-                <th style={{ padding: 'var(--space-md)', textAlign: 'right', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Value</th>
-                <th style={{ padding: 'var(--space-md)', width: '40px' }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProjects.map((project, index) => (
-                <tr 
-                  key={project.id}
-                  onClick={() => handleProjectClick(project)}
-                  style={{ 
-                    borderTop: index > 0 ? '1px solid var(--border-color)' : 'none',
-                    cursor: 'pointer',
-                    transition: 'background 0.15s'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                >
-                  <td style={{ padding: 'var(--space-md)' }}>
-                    <div style={{ fontWeight: '600', color: 'var(--text-primary)', marginBottom: '2px' }}>
-                      {project.name}
-                    </div>
-                    <div style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
-                      {project.project_number || '-'}
-                    </div>
-                  </td>
-                  <td style={{ padding: 'var(--space-md)' }}>
-                    <span style={{
-                      padding: '4px 10px',
-                      borderRadius: '12px',
-                      fontSize: '0.75rem',
-                      fontWeight: '600',
-                      background: STATUS_COLORS[project.status]?.bg || 'var(--bg-tertiary)',
-                      color: STATUS_COLORS[project.status]?.color || 'var(--text-secondary)'
-                    }}>
-                      {project.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: 'var(--space-md)', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    {project.factory || '-'}
-                  </td>
-                  <td style={{ padding: 'var(--space-md)', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    {project.primary_pm?.name || 'Unassigned'}
-                  </td>
-                  <td style={{ padding: 'var(--space-md)', textAlign: 'right', fontSize: '0.875rem', fontWeight: '600', color: 'var(--success)' }}>
-                    {formatCurrency(project.contract_value)}
-                  </td>
-                  <td style={{ padding: 'var(--space-md)' }}>
-                    <ChevronRight size={18} style={{ color: 'var(--text-tertiary)' }} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* Create Modal */}
+      {showCreateProject && (
+        <CreateProjectModal
+          isOpen={showCreateProject}
+          onClose={() => setShowCreateProject(false)}
+          onSuccess={(newProject) => {
+            setProjects(prev => [newProject, ...prev]);
+            setShowCreateProject(false);
+            showToast('Project created');
+          }}
+          currentUserId={currentUser?.id}
+        />
       )}
 
-      {/* ================================================================== */}
-      {/* CREATE PROJECT MODAL                                              */}
-      {/* ================================================================== */}
-      <CreateProjectModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={handleProjectCreated}
-      />
-
-      {/* ================================================================== */}
-      {/* TOAST NOTIFICATION                                                */}
-      {/* ================================================================== */}
+      {/* Toast */}
       {toast && (
         <div style={{
           position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          padding: 'var(--space-md) var(--space-lg)',
+          bottom: '20px',
+          right: '20px',
+          padding: '12px 20px',
           background: toast.type === 'error' ? 'var(--danger)' : 'var(--success)',
           color: 'white',
           borderRadius: 'var(--radius-md)',
-          boxShadow: 'var(--shadow-lg)',
-          zIndex: 1001,
-          fontSize: '0.875rem',
-          fontWeight: '500'
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          zIndex: 1000
         }}>
           {toast.message}
         </div>

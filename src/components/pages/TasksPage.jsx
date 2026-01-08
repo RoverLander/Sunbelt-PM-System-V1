@@ -1,245 +1,149 @@
 // ============================================================================
-// TASKS PAGE COMPONENT
-// Landing page showing all tasks across all projects
-// Features: Kanban/List toggle, filters, Add Task with project selection
+// TasksPage Component
+// ============================================================================
+// Standalone page showing all tasks for the current user's projects.
+// For Directors: Shows all tasks across all projects
+// For PMs: Shows tasks from their assigned projects
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
 import {
   CheckSquare,
-  Plus,
   Filter,
-  List,
-  LayoutGrid,
+  Search,
+  Clock,
+  AlertCircle,
+  ChevronRight,
   Calendar,
   User,
-  ChevronRight,
-  ExternalLink,
-  FolderKanban,
-  X,
-  AlertCircle,
-  Search
+  FolderKanban
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
-import KanbanBoard from '../projects/KanbanBoard';
-import AddTaskModal from '../projects/AddTaskModal';
 
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
-function TasksPage({ onNavigateToProject }) {
+function TasksPage({ isDirectorView = false }) {
   const { user } = useAuth();
-
-  // =========================================================================
-  // STATE - DATA
-  // =========================================================================
+  
+  const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  
+  // Filters
+  const [filterStatus, setFilterStatus] = useState('open');
+  const [filterProject, setFilterProject] = useState('all');
+  const [filterPriority, setFilterPriority] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // =========================================================================
-  // STATE - UI
-  // =========================================================================
-  const [viewMode, setViewMode] = useState('board');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [priorityFilter, setPriorityFilter] = useState('all');
-  const [projectFilter, setProjectFilter] = useState('all');
-  const [assigneeFilter, setAssigneeFilter] = useState('all');
-  const [toast, setToast] = useState(null);
-
-  // =========================================================================
-  // STATE - MODALS
-  // =========================================================================
-  const [showProjectSelector, setShowProjectSelector] = useState(false);
-  const [selectedProjectForTask, setSelectedProjectForTask] = useState(null);
-  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
-
-  // =========================================================================
-  // EFFECTS
-  // =========================================================================
+  // ==========================================================================
+  // FETCH DATA
+  // ==========================================================================
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (user) fetchData();
+  }, [user, isDirectorView]);
 
-  // =========================================================================
-  // DATA FETCHING
-  // =========================================================================
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch all tasks with project and assignee info
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('tasks')
-        .select(`
-          *,
-          project:project_id(id, name, project_number, color),
-          assignee:assignee_id(id, name),
-          internal_owner:internal_owner_id(id, name)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (tasksError) throw tasksError;
-
-      // Fetch all active projects for filters and add task modal
-      const { data: projectsData, error: projectsError } = await supabase
-        .from('projects')
-        .select('*')
-        .not('status', 'in', '("Cancelled")')
-        .order('name');
-
-      if (projectsError) throw projectsError;
-
-      // Fetch all active users for filters
-      const { data: usersData, error: usersError } = await supabase
+      // Get current user
+      const { data: userData } = await supabase
         .from('users')
         .select('*')
-        .eq('is_active', true)
-        .order('name');
+        .eq('id', user.id)
+        .single();
 
-      if (usersError) throw usersError;
+      setCurrentUser(userData);
 
-      setTasks(tasksData || []);
+      // Get projects based on view type
+      let projectsQuery = supabase.from('projects').select('id, project_number, name, color');
+      
+      if (!isDirectorView && userData) {
+        projectsQuery = projectsQuery.or(`pm_id.eq.${userData.id},secondary_pm_id.eq.${userData.id}`);
+      }
+
+      const { data: projectsData } = await projectsQuery;
       setProjects(projectsData || []);
-      setUsers(usersData || []);
+
+      const projectIds = (projectsData || []).map(p => p.id);
+
+      // Get tasks
+      if (projectIds.length > 0) {
+        const { data: tasksData } = await supabase
+          .from('tasks')
+          .select(`
+            *,
+            project:project_id(id, project_number, name, color),
+            assignee:assignee_id(name),
+            internal_owner:internal_owner_id(name)
+          `)
+          .in('project_id', projectIds)
+          .order('due_date', { ascending: true });
+
+        setTasks(tasksData || []);
+      } else {
+        setTasks([]);
+      }
     } catch (error) {
-      console.error('Error fetching data:', error);
-      showToastMessage('Failed to load tasks', 'error');
+      console.error('Error fetching tasks:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // =========================================================================
-  // TOAST NOTIFICATIONS
-  // =========================================================================
-  const showToastMessage = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  // =========================================================================
+  // ==========================================================================
   // FILTER TASKS
-  // =========================================================================
+  // ==========================================================================
   const filteredTasks = tasks.filter(task => {
-    // Exclude cancelled tasks
-    if (task.status === 'Cancelled') return false;
-    
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      const matchesTitle = task.title?.toLowerCase().includes(query);
-      const matchesProject = task.project?.name?.toLowerCase().includes(query);
-      const matchesProjectNumber = task.project?.project_number?.toLowerCase().includes(query);
-      if (!matchesTitle && !matchesProject && !matchesProjectNumber) return false;
-    }
-    
     // Status filter
-    if (statusFilter !== 'all' && task.status !== statusFilter) return false;
-    
-    // Priority filter
-    if (priorityFilter !== 'all' && task.priority !== priorityFilter) return false;
-    
-    // Project filter
-    if (projectFilter !== 'all' && task.project_id !== projectFilter) return false;
-    
-    // Assignee filter
-    if (assigneeFilter !== 'all') {
-      if (assigneeFilter === 'me') {
-        if (task.assignee_id !== user?.id && task.internal_owner_id !== user?.id) return false;
-      } else if (assigneeFilter === 'unassigned') {
-        if (task.assignee_id || task.external_assignee_name) return false;
-      } else {
-        if (task.assignee_id !== assigneeFilter && task.internal_owner_id !== assigneeFilter) return false;
-      }
+    if (filterStatus === 'open' && ['Completed', 'Cancelled'].includes(task.status)) return false;
+    if (filterStatus === 'completed' && task.status !== 'Completed') return false;
+    if (filterStatus === 'overdue') {
+      const today = new Date().toISOString().split('T')[0];
+      if (!task.due_date || task.due_date >= today || ['Completed', 'Cancelled'].includes(task.status)) return false;
     }
-    
+
+    // Project filter
+    if (filterProject !== 'all' && task.project_id !== filterProject) return false;
+
+    // Priority filter
+    if (filterPriority !== 'all' && task.priority !== filterPriority) return false;
+
+    // Search
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      if (!task.title?.toLowerCase().includes(term) && 
+          !task.project?.project_number?.toLowerCase().includes(term)) return false;
+    }
+
     return true;
   });
 
-  // =========================================================================
-  // HANDLERS
-  // =========================================================================
-  const handleStatusChange = async (taskId, newStatus) => {
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', taskId);
-
-      if (error) throw error;
-
-      // Update local state
-      setTasks(prev => prev.map(task =>
-        task.id === taskId ? { ...task, status: newStatus } : task
-      ));
-
-      showToastMessage(`Task moved to ${newStatus}`);
-    } catch (error) {
-      console.error('Error updating task status:', error);
-      showToastMessage('Failed to update task status', 'error');
-    }
-  };
-
-  const handleTaskClick = (task) => {
-    // Navigate to the project's Tasks tab
-    if (task.project_id && onNavigateToProject) {
-      onNavigateToProject(task.project_id, 'Tasks');
-    }
-  };
-
-  const handleAddTaskClick = () => {
-    setShowProjectSelector(true);
-  };
-
-  const handleProjectSelect = (project) => {
-    setSelectedProjectForTask(project);
-    setShowProjectSelector(false);
-    setShowAddTaskModal(true);
-  };
-
-  const handleTaskCreated = () => {
-    fetchData();
-    setShowAddTaskModal(false);
-    setSelectedProjectForTask(null);
-    showToastMessage('Task created successfully');
-  };
-
-  const clearFilters = () => {
-    setSearchQuery('');
-    setStatusFilter('all');
-    setPriorityFilter('all');
-    setProjectFilter('all');
-    setAssigneeFilter('all');
-  };
-
-  const hasActiveFilters = searchQuery || statusFilter !== 'all' || priorityFilter !== 'all' || 
-                           projectFilter !== 'all' || assigneeFilter !== 'all';
-
-  // =========================================================================
-  // FORMAT HELPERS
-  // =========================================================================
+  // ==========================================================================
+  // HELPERS
+  // ==========================================================================
   const formatDate = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const isOverdue = (dateString, status) => {
+    if (!dateString || ['Completed', 'Cancelled'].includes(status)) return false;
+    return dateString < new Date().toISOString().split('T')[0];
   };
 
   const getStatusColor = (status) => {
     const colors = {
-      'Not Started': 'var(--text-muted)',
-      'In Progress': 'var(--sunbelt-orange)',
-      'On Hold': '#f59e0b',
-      'Completed': 'var(--success)'
+      'Not Started': 'var(--text-tertiary)',
+      'In Progress': 'var(--info)',
+      'Blocked': 'var(--danger)',
+      'Completed': 'var(--success)',
+      'Cancelled': 'var(--text-tertiary)'
     };
     return colors[status] || 'var(--text-secondary)';
   };
 
   const getPriorityColor = (priority) => {
     const colors = {
-      'Critical': '#8b0000',
       'High': '#ef4444',
       'Medium': '#f59e0b',
       'Low': '#22c55e'
@@ -247,661 +151,203 @@ function TasksPage({ onNavigateToProject }) {
     return colors[priority] || 'var(--text-secondary)';
   };
 
-  // =========================================================================
-  // LOADING STATE
-  // =========================================================================
+  const stats = {
+    total: tasks.filter(t => !['Completed', 'Cancelled'].includes(t.status)).length,
+    overdue: tasks.filter(t => isOverdue(t.due_date, t.status)).length,
+    dueThisWeek: tasks.filter(t => {
+      if (!t.due_date || ['Completed', 'Cancelled'].includes(t.status)) return false;
+      const due = new Date(t.due_date);
+      const today = new Date();
+      const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+      return due >= today && due <= weekFromNow;
+    }).length
+  };
+
+  // ==========================================================================
+  // RENDER
+  // ==========================================================================
   if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '50vh'
-      }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '50vh' }}>
         <div className="loading-spinner"></div>
-        <p style={{ marginTop: 'var(--space-md)', color: 'var(--text-secondary)' }}>
-          Loading tasks...
-        </p>
       </div>
     );
   }
 
-  // =========================================================================
-  // RENDER
-  // =========================================================================
   return (
-    <div>
-      {/* ================================================================== */}
-      {/* PAGE HEADER                                                        */}
-      {/* ================================================================== */}
-      <div style={{ marginBottom: 'var(--space-xl)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 'var(--space-lg)' }}>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <CheckSquare size={28} style={{ color: 'var(--sunbelt-orange)' }} />
+          {isDirectorView ? 'All Tasks' : 'My Tasks'}
+        </h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+          {isDirectorView ? 'Tasks across all projects' : 'Tasks from your assigned projects'}
+        </p>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: 'var(--space-lg)' }}>
+        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Open Tasks</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.total}</div>
+        </div>
+        <div style={{ background: stats.overdue > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: stats.overdue > 0 ? '1px solid var(--danger)' : '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '0.8125rem', color: stats.overdue > 0 ? 'var(--danger)' : 'var(--text-secondary)', marginBottom: '4px' }}>Overdue</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: stats.overdue > 0 ? 'var(--danger)' : 'var(--text-primary)' }}>{stats.overdue}</div>
+        </div>
+        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Due This Week</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.dueThisWeek}</div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div style={{
+        display: 'flex',
+        gap: '10px',
+        marginBottom: 'var(--space-md)',
+        flexWrap: 'wrap',
+        alignItems: 'center'
+      }}>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          style={{ padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+        >
+          <option value="open">Open Tasks</option>
+          <option value="overdue">Overdue</option>
+          <option value="completed">Completed</option>
+          <option value="all">All Tasks</option>
+        </select>
+
+        <select
+          value={filterProject}
+          onChange={(e) => setFilterProject(e.target.value)}
+          style={{ padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+        >
+          <option value="all">All Projects</option>
+          {projects.map(p => (
+            <option key={p.id} value={p.id}>{p.project_number}</option>
+          ))}
+        </select>
+
+        <select
+          value={filterPriority}
+          onChange={(e) => setFilterPriority(e.target.value)}
+          style={{ padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+        >
+          <option value="all">All Priorities</option>
+          <option value="High">High</option>
+          <option value="Medium">Medium</option>
+          <option value="Low">Low</option>
+        </select>
+
+        <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+          <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+          <input
+            type="text"
+            placeholder="Search tasks..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{ width: '100%', padding: '8px 12px 8px 34px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+          />
+        </div>
+      </div>
+
+      {/* Tasks List */}
+      <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+        {filteredTasks.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            <CheckSquare size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
+            <p>No tasks match your filters</p>
+          </div>
+        ) : (
           <div>
-            <h1 style={{
-              fontSize: '2rem',
-              fontWeight: '700',
-              color: 'var(--text-primary)',
-              marginBottom: 'var(--space-xs)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-sm)'
-            }}>
-              <CheckSquare size={32} style={{ color: 'var(--sunbelt-orange)' }} />
-              Tasks
-            </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>
-              Manage all tasks across your projects
-            </p>
-          </div>
-          <button
-            onClick={handleAddTaskClick}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-sm)',
-              padding: 'var(--space-md) var(--space-lg)',
-              background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
-              color: 'white',
-              border: 'none',
-              borderRadius: 'var(--radius-md)',
-              fontWeight: '600',
-              cursor: 'pointer',
-              fontSize: '0.9375rem'
-            }}
-          >
-            <Plus size={20} />
-            Add Task
-          </button>
-        </div>
-      </div>
-
-      {/* ================================================================== */}
-      {/* STATS BAR                                                          */}
-      {/* ================================================================== */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: 'var(--space-md)',
-        marginBottom: 'var(--space-xl)'
-      }}>
-        <div style={{
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-lg)',
-          border: '1px solid var(--border-color)'
-        }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Total Tasks</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>
-            {tasks.filter(t => t.status !== 'Cancelled').length}
-          </div>
-        </div>
-        <div style={{
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-lg)',
-          border: '1px solid var(--border-color)'
-        }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>In Progress</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--sunbelt-orange)' }}>
-            {tasks.filter(t => t.status === 'In Progress').length}
-          </div>
-        </div>
-        <div style={{
-          background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-lg)',
-          border: '1px solid var(--border-color)'
-        }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Completed</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--success)' }}>
-            {tasks.filter(t => t.status === 'Completed').length}
-          </div>
-        </div>
-        <div style={{
-          background: tasks.filter(t => t.due_date && t.due_date < new Date().toISOString().split('T')[0] && t.status !== 'Completed').length > 0 
-            ? 'var(--danger-light)' : 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-lg)',
-          border: tasks.filter(t => t.due_date && t.due_date < new Date().toISOString().split('T')[0] && t.status !== 'Completed').length > 0
-            ? '1px solid var(--danger)' : '1px solid var(--border-color)'
-        }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Overdue</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--danger)' }}>
-            {tasks.filter(t => t.due_date && t.due_date < new Date().toISOString().split('T')[0] && t.status !== 'Completed').length}
-          </div>
-        </div>
-      </div>
-
-      {/* ================================================================== */}
-      {/* FILTERS & VIEW TOGGLE                                              */}
-      {/* ================================================================== */}
-      <div style={{
-        background: 'var(--bg-secondary)',
-        borderRadius: 'var(--radius-lg)',
-        padding: 'var(--space-lg)',
-        marginBottom: 'var(--space-xl)',
-        border: '1px solid var(--border-color)'
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 'var(--space-md)'
-        }}>
-          {/* Search & Filters */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
-            {/* Search */}
-            <div style={{ position: 'relative' }}>
-              <Search size={16} style={{
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: 'var(--text-muted)'
-              }} />
-              <input
-                type="text"
-                placeholder="Search tasks..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+            {filteredTasks.map((task, idx) => (
+              <div
+                key={task.id}
                 style={{
-                  padding: '8px 12px 8px 36px',
-                  background: 'var(--bg-primary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.875rem',
-                  width: '200px'
-                }}
-              />
-            </div>
-
-            <Filter size={16} color="var(--text-secondary)" />
-
-            {/* Status Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-primary)',
-                fontSize: '0.875rem',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="all">All Status</option>
-              <option value="Not Started">Not Started</option>
-              <option value="In Progress">In Progress</option>
-              <option value="On Hold">On Hold</option>
-              <option value="Completed">Completed</option>
-            </select>
-
-            {/* Priority Filter */}
-            <select
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-primary)',
-                fontSize: '0.875rem',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="all">All Priority</option>
-              <option value="Critical">Critical</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-            </select>
-
-            {/* Project Filter */}
-            <select
-              value={projectFilter}
-              onChange={(e) => setProjectFilter(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-primary)',
-                fontSize: '0.875rem',
-                cursor: 'pointer',
-                maxWidth: '180px'
-              }}
-            >
-              <option value="all">All Projects</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.project_number} - {p.name}</option>
-              ))}
-            </select>
-
-            {/* Assignee Filter */}
-            <select
-              value={assigneeFilter}
-              onChange={(e) => setAssigneeFilter(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-primary)',
-                fontSize: '0.875rem',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="all">All Assignees</option>
-              <option value="me">Assigned to Me</option>
-              <option value="unassigned">Unassigned</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
-
-            {/* Clear Filters */}
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                style={{
-                  padding: '8px 12px',
-                  background: 'transparent',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--text-secondary)',
-                  fontSize: '0.875rem',
-                  cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px'
+                  padding: '14px 16px',
+                  borderBottom: idx < filteredTasks.length - 1 ? '1px solid var(--border-color)' : 'none',
+                  gap: '16px'
                 }}
               >
-                <X size={14} />
-                Clear
-              </button>
-            )}
-          </div>
+                {/* Status indicator */}
+                <div style={{
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '50%',
+                  background: getStatusColor(task.status),
+                  flexShrink: 0
+                }} />
 
-          {/* View Toggle */}
-          <div style={{
-            display: 'flex',
-            background: 'var(--bg-primary)',
-            borderRadius: 'var(--radius-md)',
-            padding: '4px',
-            border: '1px solid var(--border-color)'
-          }}>
-            <button
-              onClick={() => setViewMode('list')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 16px',
-                background: viewMode === 'list' ? 'var(--sunbelt-orange)' : 'transparent',
-                color: viewMode === 'list' ? 'white' : 'var(--text-secondary)',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '0.875rem',
-                transition: 'all 0.15s'
-              }}
-            >
-              <List size={18} />
-              List
-            </button>
-            <button
-              onClick={() => setViewMode('board')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 16px',
-                background: viewMode === 'board' ? 'var(--sunbelt-orange)' : 'transparent',
-                color: viewMode === 'board' ? 'white' : 'var(--text-secondary)',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '0.875rem',
-                transition: 'all 0.15s'
-              }}
-            >
-              <LayoutGrid size={18} />
-              Board
-            </button>
-          </div>
-        </div>
-
-        {/* Active Filters Summary */}
-        {hasActiveFilters && (
-          <div style={{
-            marginTop: 'var(--space-md)',
-            paddingTop: 'var(--space-md)',
-            borderTop: '1px solid var(--border-color)',
-            fontSize: '0.875rem',
-            color: 'var(--text-secondary)'
-          }}>
-            Showing {filteredTasks.length} of {tasks.filter(t => t.status !== 'Cancelled').length} tasks
-          </div>
-        )}
-      </div>
-
-      {/* ================================================================== */}
-      {/* TASKS CONTENT                                                      */}
-      {/* ================================================================== */}
-      <div style={{
-        background: 'var(--bg-secondary)',
-        borderRadius: 'var(--radius-lg)',
-        padding: 'var(--space-lg)',
-        border: '1px solid var(--border-color)',
-        minHeight: '500px'
-      }}>
-        {filteredTasks.length === 0 ? (
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '400px',
-            color: 'var(--text-tertiary)'
-          }}>
-            <CheckSquare size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
-            <h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>
-              {hasActiveFilters ? 'No tasks match your filters' : 'No tasks yet'}
-            </h4>
-            <p>{hasActiveFilters ? 'Try adjusting your filters' : 'Create your first task to get started'}</p>
-          </div>
-        ) : viewMode === 'board' ? (
-          /* KANBAN BOARD VIEW */
-          <KanbanBoard
-            tasks={filteredTasks}
-            onStatusChange={handleStatusChange}
-            onTaskClick={handleTaskClick}
-            showProject={true}
-          />
-        ) : (
-          /* LIST VIEW */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-            {filteredTasks.map(task => {
-              const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed';
-
-              return (
-                <div
-                  key={task.id}
-                  onClick={() => handleTaskClick(task)}
-                  style={{
-                    padding: 'var(--space-md) var(--space-lg)',
-                    background: 'var(--bg-primary)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-color)',
-                    borderLeft: `4px solid ${task.project?.color || 'var(--sunbelt-orange)'}`,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--sunbelt-orange)';
-                    e.currentTarget.style.transform = 'translateX(4px)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--border-color)';
-                    e.currentTarget.style.transform = 'translateX(0)';
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    {/* Project Badge */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      marginBottom: '6px'
-                    }}>
-                      <FolderKanban size={12} color={task.project?.color || 'var(--sunbelt-orange)'} />
-                      <span style={{
-                        fontSize: '0.75rem',
-                        color: 'var(--text-secondary)',
-                        fontWeight: '500'
-                      }}>
-                        {task.project?.project_number} - {task.project?.name}
-                      </span>
-                    </div>
-
-                    {/* Title & Badges */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-sm)',
-                      marginBottom: '4px',
-                      flexWrap: 'wrap'
-                    }}>
-                      {(task.external_assignee_email || task.external_assignee_name) && (
-                        <ExternalLink size={14} color="var(--sunbelt-orange)" title="External Task" />
-                      )}
-                      <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
-                        {task.title}
-                      </span>
-                      <span style={{
-                        padding: '2px 8px',
-                        borderRadius: '10px',
-                        fontSize: '0.7rem',
-                        fontWeight: '600',
-                        background: `${getStatusColor(task.status)}20`,
-                        color: getStatusColor(task.status)
-                      }}>
-                        {task.status}
-                      </span>
-                      <span style={{
-                        padding: '2px 8px',
-                        borderRadius: '10px',
-                        fontSize: '0.7rem',
-                        fontWeight: '600',
-                        background: `${getPriorityColor(task.priority)}20`,
-                        color: getPriorityColor(task.priority)
-                      }}>
-                        {task.priority}
-                      </span>
-                      {isOverdue && (
-                        <span style={{
-                          padding: '2px 8px',
-                          borderRadius: '10px',
-                          fontSize: '0.7rem',
-                          fontWeight: '600',
-                          background: 'var(--danger-light)',
-                          color: 'var(--danger)'
-                        }}>
-                          Overdue
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Meta Info */}
-                    <div style={{
-                      fontSize: '0.8125rem',
-                      color: 'var(--text-secondary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-md)'
-                    }}>
-                      {(task.assignee?.name || task.external_assignee_name) && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <User size={12} />
-                          {task.assignee?.name || task.external_assignee_name}
-                        </span>
-                      )}
-                      {task.due_date && (
-                        <>
-                          <span>•</span>
-                          <span style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            color: isOverdue ? 'var(--danger)' : 'var(--text-secondary)'
-                          }}>
-                            <Calendar size={12} />
-                            Due: {formatDate(task.due_date)}
-                          </span>
-                        </>
-                      )}
-                    </div>
+                {/* Main content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.9375rem', marginBottom: '2px' }}>
+                    {task.title}
                   </div>
-
-                  <ChevronRight size={20} style={{ color: 'var(--text-tertiary)' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <FolderKanban size={12} />
+                      {task.project?.project_number}
+                    </span>
+                    {(task.assignee?.name || task.external_assignee_name) && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <User size={12} />
+                        {task.assignee?.name || task.external_assignee_name}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              );
-            })}
+
+                {/* Priority */}
+                <span style={{
+                  padding: '3px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.6875rem',
+                  fontWeight: '600',
+                  background: `${getPriorityColor(task.priority)}20`,
+                  color: getPriorityColor(task.priority)
+                }}>
+                  {task.priority}
+                </span>
+
+                {/* Status */}
+                <span style={{
+                  padding: '3px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.6875rem',
+                  fontWeight: '600',
+                  background: 'var(--bg-tertiary)',
+                  color: getStatusColor(task.status),
+                  minWidth: '80px',
+                  textAlign: 'center'
+                }}>
+                  {task.status}
+                </span>
+
+                {/* Due date */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.8125rem',
+                  color: isOverdue(task.due_date, task.status) ? 'var(--danger)' : 'var(--text-secondary)',
+                  fontWeight: isOverdue(task.due_date, task.status) ? '600' : '400',
+                  minWidth: '70px'
+                }}>
+                  <Calendar size={14} />
+                  {formatDate(task.due_date)}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
-
-      {/* ================================================================== */}
-      {/* PROJECT SELECTOR MODAL                                             */}
-      {/* ================================================================== */}
-      {showProjectSelector && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.7)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: 'var(--bg-primary)',
-            borderRadius: 'var(--radius-lg)',
-            width: '100%',
-            maxWidth: '500px',
-            maxHeight: '80vh',
-            overflow: 'auto',
-            boxShadow: 'var(--shadow-xl)'
-          }}>
-            {/* Modal Header */}
-            <div style={{
-              padding: 'var(--space-xl)',
-              borderBottom: '1px solid var(--border-color)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <div>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                  Select Project
-                </h2>
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: 0 }}>
-                  Choose a project to add the task to
-                </p>
-              </div>
-              <button
-                onClick={() => setShowProjectSelector(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  padding: '8px',
-                  display: 'flex',
-                  borderRadius: '6px'
-                }}
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            {/* Project List */}
-            <div style={{ padding: 'var(--space-lg)' }}>
-              {projects.filter(p => !['Completed', 'Cancelled'].includes(p.status)).length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--text-tertiary)' }}>
-                  <FolderKanban size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
-                  <p>No active projects found</p>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                  {projects
-                    .filter(p => !['Completed', 'Cancelled'].includes(p.status))
-                    .map(project => (
-                      <button
-                        key={project.id}
-                        onClick={() => handleProjectSelect(project)}
-                        style={{
-                          padding: 'var(--space-md) var(--space-lg)',
-                          background: 'var(--bg-secondary)',
-                          border: '1px solid var(--border-color)',
-                          borderLeft: `4px solid ${project.color || 'var(--sunbelt-orange)'}`,
-                          borderRadius: 'var(--radius-md)',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          transition: 'all 0.15s',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center'
-                        }}
-                        onMouseOver={(e) => {
-                          e.currentTarget.style.borderColor = 'var(--sunbelt-orange)';
-                          e.currentTarget.style.background = 'var(--bg-tertiary)';
-                        }}
-                        onMouseOut={(e) => {
-                          e.currentTarget.style.borderColor = 'var(--border-color)';
-                          e.currentTarget.style.background = 'var(--bg-secondary)';
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: '600', color: 'var(--text-primary)', marginBottom: '2px' }}>
-                            {project.name}
-                          </div>
-                          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                            {project.project_number} • {project.status}
-                          </div>
-                        </div>
-                        <ChevronRight size={20} style={{ color: 'var(--text-tertiary)' }} />
-                      </button>
-                    ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================================================================== */}
-      {/* ADD TASK MODAL                                                     */}
-      {/* ================================================================== */}
-      {showAddTaskModal && selectedProjectForTask && (
-        <AddTaskModal
-          isOpen={showAddTaskModal}
-          onClose={() => {
-            setShowAddTaskModal(false);
-            setSelectedProjectForTask(null);
-          }}
-          projectId={selectedProjectForTask.id}
-          projectName={selectedProjectForTask.name}
-          projectNumber={selectedProjectForTask.project_number}
-          onSuccess={handleTaskCreated}
-        />
-      )}
-
-      {/* ================================================================== */}
-      {/* TOAST NOTIFICATION                                                 */}
-      {/* ================================================================== */}
-      {toast && (
-        <div className={`toast toast-${toast.type}`}>
-          {toast.type === 'success' && <CheckSquare size={18} style={{ color: 'var(--success)' }} />}
-          {toast.type === 'error' && <AlertCircle size={18} style={{ color: 'var(--danger)' }} />}
-          {toast.message}
-        </div>
-      )}
     </div>
   );
 }
