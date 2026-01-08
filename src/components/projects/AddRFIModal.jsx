@@ -1,823 +1,768 @@
 // ============================================================================
-// AddRFIModal.jsx
+// AddRFIModal.jsx - Create New RFI Modal (POLISHED VERSION)
 // ============================================================================
-// Modal component for creating new RFIs (Requests for Information).
-// 
-// FEATURES:
-// - Create RFIs to internal team members OR external contacts
-// - Auto-generates RFI number based on project (e.g., NWBS-25001-RFI-001)
-// - File attachment support with drag-and-drop
-// - Email draft integration for external RFIs
-// - PDF export capability
-//
-// DEPENDENCIES:
-// - useContacts hook: Fetches both users (PMs) and factory contacts
-// - supabaseClient: Database operations
-// - emailUtils: Email draft generation
-// - pdfUtils: PDF export
+// Modal form for creating new RFIs (Requests for Information).
+// Supports internal and external recipients with auto-numbering.
 //
 // PROPS:
-// - isOpen: Boolean to control modal visibility
-// - onClose: Function called when modal closes
-// - projectId: UUID of the parent project
-// - projectNumber: Project number for RFI numbering (e.g., "NWBS-25001")
-// - projectName: Project name for display/export
-// - onSuccess: Callback with created RFI data
+// - isOpen: Boolean controlling modal visibility
+// - onClose: Callback to close modal
+// - projectId: UUID of parent project
+// - projectNumber: Project number for RFI numbering
+// - projectName: Project name for email drafts
+// - onSuccess: Callback after successful RFI creation
+//
+// FIXES:
+// - Auto-generates RFI number based on existing count
+// - Proper form validation with field-level errors
+// - Loading state prevents double-submission
+// - Email validation for external recipients
 // ============================================================================
 
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Upload, FileText, Image, File, Trash2, Paperclip, Mail } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  X,
+  Plus,
+  Mail,
+  AlertCircle,
+  Loader,
+  MessageSquare
+} from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
-import { useContacts } from '../../hooks/useContacts';
 import { draftRFIEmail } from '../../utils/emailUtils';
-import { exportRFIToPDF } from '../../utils/pdfUtils';
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+const STATUS_OPTIONS = [
+  { value: 'Draft', label: 'Draft' },
+  { value: 'Open', label: 'Open' },
+  { value: 'Pending', label: 'Pending Response' },
+  { value: 'Answered', label: 'Answered' },
+  { value: 'Closed', label: 'Closed' }
+];
+
+const PRIORITY_OPTIONS = [
+  { value: 'Low', label: 'Low' },
+  { value: 'Medium', label: 'Medium' },
+  { value: 'High', label: 'High' },
+  { value: 'Critical', label: 'Critical' }
+];
+
+// ============================================================================
+// STYLES
+// ============================================================================
+const styles = {
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0, 0, 0, 0.7)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    padding: 'var(--space-lg)'
+  },
+  modal: {
+    background: 'var(--bg-secondary)',
+    borderRadius: 'var(--radius-xl)',
+    width: '100%',
+    maxWidth: '650px',
+    maxHeight: '90vh',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    boxShadow: 'var(--shadow-xl)'
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 'var(--space-lg)',
+    borderBottom: '1px solid var(--border-color)'
+  },
+  body: {
+    padding: 'var(--space-lg)',
+    overflowY: 'auto',
+    flex: 1
+  },
+  footer: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: 'var(--space-sm)',
+    padding: 'var(--space-lg)',
+    borderTop: '1px solid var(--border-color)',
+    background: 'var(--bg-primary)'
+  },
+  formGroup: {
+    marginBottom: 'var(--space-lg)'
+  },
+  label: {
+    display: 'block',
+    fontSize: '0.875rem',
+    fontWeight: '600',
+    color: 'var(--text-primary)',
+    marginBottom: 'var(--space-xs)'
+  },
+  required: {
+    color: 'var(--danger)',
+    marginLeft: '2px'
+  },
+  input: {
+    width: '100%',
+    padding: 'var(--space-sm) var(--space-md)',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--border-color)',
+    background: 'var(--bg-primary)',
+    color: 'var(--text-primary)',
+    fontSize: '0.9375rem'
+  },
+  inputError: {
+    borderColor: 'var(--danger)'
+  },
+  inputDisabled: {
+    background: 'var(--bg-tertiary)',
+    cursor: 'not-allowed'
+  },
+  textarea: {
+    width: '100%',
+    padding: 'var(--space-sm) var(--space-md)',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--border-color)',
+    background: 'var(--bg-primary)',
+    color: 'var(--text-primary)',
+    fontSize: '0.9375rem',
+    minHeight: '120px',
+    resize: 'vertical',
+    fontFamily: 'inherit'
+  },
+  select: {
+    width: '100%',
+    padding: 'var(--space-sm) var(--space-md)',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--border-color)',
+    background: 'var(--bg-primary)',
+    color: 'var(--text-primary)',
+    fontSize: '0.9375rem',
+    cursor: 'pointer'
+  },
+  errorText: {
+    color: 'var(--danger)',
+    fontSize: '0.75rem',
+    marginTop: 'var(--space-xs)'
+  },
+  errorBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 'var(--space-sm)',
+    padding: 'var(--space-md)',
+    background: 'var(--danger-light)',
+    border: '1px solid var(--danger)',
+    borderRadius: 'var(--radius-md)',
+    color: 'var(--danger)',
+    fontSize: '0.875rem',
+    marginBottom: 'var(--space-lg)'
+  },
+  radioGroup: {
+    display: 'flex',
+    gap: 'var(--space-lg)',
+    marginBottom: 'var(--space-md)'
+  },
+  radioLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 'var(--space-xs)',
+    cursor: 'pointer',
+    fontSize: '0.9375rem',
+    color: 'var(--text-primary)'
+  },
+  row: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 'var(--space-md)'
+  },
+  row3: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr 1fr',
+    gap: 'var(--space-md)'
+  },
+  rfiNumberBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 'var(--space-sm)',
+    padding: 'var(--space-sm) var(--space-md)',
+    background: 'var(--bg-primary)',
+    border: '1px solid var(--border-color)',
+    borderRadius: 'var(--radius-md)',
+    marginBottom: 'var(--space-lg)'
+  },
+  primaryButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 'var(--space-xs)',
+    padding: 'var(--space-sm) var(--space-lg)',
+    background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+    color: 'white',
+    border: 'none',
+    borderRadius: 'var(--radius-md)',
+    fontWeight: '600',
+    fontSize: '0.9375rem',
+    cursor: 'pointer',
+    minWidth: '120px'
+  },
+  secondaryButton: {
+    padding: 'var(--space-sm) var(--space-lg)',
+    background: 'var(--bg-primary)',
+    color: 'var(--text-secondary)',
+    border: '1px solid var(--border-color)',
+    borderRadius: 'var(--radius-md)',
+    fontWeight: '600',
+    fontSize: '0.9375rem',
+    cursor: 'pointer'
+  },
+  disabledButton: {
+    opacity: 0.6,
+    cursor: 'not-allowed'
+  }
+};
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Validate email format
+ */
+const isValidEmail = (email) => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+/**
+ * Generate RFI number based on project and count
+ */
+const generateRFINumber = (projectNumber, count) => {
+  const num = String(count + 1).padStart(3, '0');
+  return projectNumber ? `${projectNumber}-RFI-${num}` : `RFI-${num}`;
+};
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-function AddRFIModal({ isOpen, onClose, projectId, projectNumber, projectName = '', onSuccess }) {
-  
-  // ==========================================================================
-  // HOOKS
-  // ==========================================================================
+function AddRFIModal({
+  isOpen,
+  onClose,
+  projectId,
+  projectNumber = '',
+  projectName = '',
+  onSuccess
+}) {
   const { user } = useAuth();
-  const { contacts, loading: contactsLoading } = useContacts(isOpen); // Only fetch when modal opens
 
   // ==========================================================================
-  // STATE - Form Data
+  // STATE
   // ==========================================================================
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [nextRFINumber, setNextRFINumber] = useState('');
-  const [pendingFiles, setPendingFiles] = useState([]);
-  const fileInputRef = useRef(null);
-  
-  // Form fields for RFI creation
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [users, setUsers] = useState([]);
+  const [rfiNumber, setRfiNumber] = useState('');
+  const [nextNumber, setNextNumber] = useState(1);
+
   const [formData, setFormData] = useState({
-    subject: '',              // RFI subject line (required)
-    question: '',             // Detailed question/request (required)
-    recipient_type: 'external', // 'external' or 'internal'
-    sent_to: '',              // Recipient name or company
-    sent_to_email: '',        // Recipient email (for external)
-    internal_owner_id: '',    // User ID responsible for tracking
-    priority: 'Medium',       // 'Low', 'Medium', 'High'
-    due_date: ''              // Expected response date
+    subject: '',
+    question: '',
+    recipient_type: 'external',
+    sent_to: '',
+    sent_to_email: '',
+    internal_owner_id: '',
+    status: 'Open',
+    priority: 'Medium',
+    due_date: '',
+    date_sent: new Date().toISOString().split('T')[0],
+    spec_section: '',
+    drawing_reference: ''
   });
 
   // ==========================================================================
   // EFFECTS
   // ==========================================================================
-  
-  // Initialize form when modal opens
+
+  // Reset form and fetch data when modal opens
   useEffect(() => {
     if (isOpen) {
-      generateRFINumber();
-      // Set current user as default internal owner
-      setFormData(prev => ({ ...prev, internal_owner_id: user?.id || '' }));
-      setPendingFiles([]);
+      setFormData({
+        subject: '',
+        question: '',
+        recipient_type: 'external',
+        sent_to: '',
+        sent_to_email: '',
+        internal_owner_id: user?.id || '',
+        status: 'Open',
+        priority: 'Medium',
+        due_date: '',
+        date_sent: new Date().toISOString().split('T')[0],
+        spec_section: '',
+        drawing_reference: ''
+      });
       setError('');
+      setFieldErrors({});
+      fetchUsers();
+      fetchNextRFINumber();
     }
-  }, [isOpen, user]);
+  }, [isOpen, user, projectId]);
 
   // ==========================================================================
-  // RFI NUMBER GENERATION
+  // DATA FETCHING
   // ==========================================================================
-  // Format: {PROJECT_NUMBER}-RFI-{SEQUENCE}
-  // Example: NWBS-25001-RFI-001
-  
-  const generateRFINumber = async () => {
+  const fetchUsers = async () => {
     try {
-      // Count existing RFIs for this project
-      const { count } = await supabase
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    }
+  };
+
+  const fetchNextRFINumber = async () => {
+    try {
+      const { count, error } = await supabase
         .from('rfis')
         .select('*', { count: 'exact', head: true })
         .eq('project_id', projectId);
-      
-      // Generate next sequential number
-      const rfiNum = (count || 0) + 1;
-      const newRFINumber = `${projectNumber}-RFI-${String(rfiNum).padStart(3, '0')}`;
-      setNextRFINumber(newRFINumber);
-    } catch (error) {
-      console.error('Error generating RFI number:', error);
-      setNextRFINumber(`${projectNumber}-RFI-001`);
+
+      if (error) throw error;
+
+      const num = (count || 0) + 1;
+      setNextNumber(num);
+      setRfiNumber(generateRFINumber(projectNumber, count || 0));
+    } catch (err) {
+      console.error('Error fetching RFI count:', err);
+      setRfiNumber(generateRFINumber(projectNumber, 0));
     }
   };
 
   // ==========================================================================
-  // FORM HANDLERS
+  // VALIDATION
   // ==========================================================================
-  
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  const validateForm = useCallback(() => {
+    const errors = {};
 
-  // ==========================================================================
-  // FILE ATTACHMENT HELPERS
-  // ==========================================================================
-  
-  // Get appropriate icon based on file type
-  const getFileIcon = (fileType) => {
-    if (fileType?.startsWith('image/')) return <Image size={16} style={{ color: 'var(--info)' }} />;
-    if (fileType?.includes('pdf')) return <FileText size={16} style={{ color: '#ef4444' }} />;
-    if (fileType?.includes('word') || fileType?.includes('document')) return <FileText size={16} style={{ color: '#3b82f6' }} />;
-    if (fileType?.includes('sheet') || fileType?.includes('excel')) return <FileText size={16} style={{ color: '#22c55e' }} />;
-    return <File size={16} />;
-  };
+    // Subject is required
+    if (!formData.subject.trim()) {
+      errors.subject = 'Subject is required';
+    }
 
-  // Format file size for display (e.g., "1.5 MB")
-  const formatFileSize = (bytes) => {
-    if (!bytes) return '';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  };
+    // Question is required
+    if (!formData.question.trim()) {
+      errors.question = 'Question/request is required';
+    }
 
-  // Handle file selection from input
-  const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
-
-    // Create pending file objects with unique IDs
-    const newFiles = files.map(file => ({
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      file: file,
-      name: file.name,
-      size: file.size,
-      type: file.type
-    }));
-
-    setPendingFiles(prev => [...prev, ...newFiles]);
-    
-    // Clear input for re-selection of same file
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  // Remove a pending file before submission
-  const handleRemovePendingFile = (fileId) => {
-    setPendingFiles(prev => prev.filter(f => f.id !== fileId));
-  };
-
-  // ==========================================================================
-  // FILE UPLOAD
-  // ==========================================================================
-  // Upload files to Supabase storage and create attachment records
-  
-  const uploadPendingFiles = async (rfiId) => {
-    const uploadedAttachments = [];
-
-    for (const pendingFile of pendingFiles) {
-      try {
-        // Create unique storage path: {project_id}/rfis/{rfi_id}/{timestamp}_{filename}
-        const timestamp = Date.now();
-        const safeName = pendingFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const storagePath = `${projectId}/rfis/${rfiId}/${timestamp}_${safeName}`;
-
-        // Upload to Supabase Storage
-        const { error: uploadError } = await supabase.storage
-          .from('project-files')
-          .upload(storagePath, pendingFile.file);
-
-        if (uploadError) {
-          console.error('Error uploading file:', uploadError);
-          continue;
-        }
-
-        // Get public URL for the uploaded file
-        const { data: urlData } = supabase.storage
-          .from('project-files')
-          .getPublicUrl(storagePath);
-
-        // Create attachment record in database
-        const attachmentData = {
-          project_id: projectId,
-          rfi_id: rfiId,
-          file_name: pendingFile.name,
-          file_size: pendingFile.size,
-          file_type: pendingFile.type,
-          storage_path: storagePath,
-          public_url: urlData.publicUrl,
-          uploaded_by: user.id
-        };
-
-        const { data: newAttachment, error: insertError } = await supabase
-          .from('file_attachments')
-          .insert([attachmentData])
-          .select()
-          .single();
-
-        if (!insertError && newAttachment) {
-          uploadedAttachments.push(newAttachment);
-        }
-      } catch (error) {
-        console.error('Error processing file:', error);
+    // External recipient validation
+    if (formData.recipient_type === 'external') {
+      if (!formData.sent_to.trim()) {
+        errors.sent_to = 'Recipient name is required';
+      }
+      if (!formData.sent_to_email.trim()) {
+        errors.sent_to_email = 'Recipient email is required';
+      } else if (!isValidEmail(formData.sent_to_email)) {
+        errors.sent_to_email = 'Please enter a valid email address';
       }
     }
 
-    return uploadedAttachments;
-  };
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [formData]);
 
   // ==========================================================================
-  // RFI CREATION
+  // HANDLERS
   // ==========================================================================
-  
-  const createRFI = async () => {
-    // Build RFI data object
-    const rfiData = {
-      project_id: projectId,
-      rfi_number: nextRFINumber,
-      subject: formData.subject.trim(),
-      question: formData.question.trim(),
-      // For external: use text input; for internal: use selected contact name
-      sent_to: formData.recipient_type === 'external' 
-        ? formData.sent_to.trim() 
-        : formData.sent_to,
-      sent_to_email: formData.recipient_type === 'external' ? formData.sent_to_email.trim() : null,
-      is_external: formData.recipient_type === 'external',
-      internal_owner_id: formData.internal_owner_id || null,
-      priority: formData.priority,
-      due_date: formData.due_date || null,
-      status: 'Open',
-      date_sent: new Date().toISOString().split('T')[0],
-      created_by: user.id
-    };
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
 
-    // Insert RFI into database
-    const { data, error: insertError } = await supabase
-      .from('rfis')
-      .insert([rfiData])
-      .select()
-      .single();
-
-    if (insertError) throw insertError;
-
-    // Upload any pending files
-    let attachments = [];
-    if (pendingFiles.length > 0) {
-      attachments = await uploadPendingFiles(data.id);
+    // Clear field error when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({ ...prev, [name]: null }));
     }
-
-    return { rfi: data, attachments };
   };
 
-  // ==========================================================================
-  // FORM SUBMISSION HANDLERS
-  // ==========================================================================
-
-  // Standard submit - create RFI only
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e, shouldEmail = false) => {
     e.preventDefault();
+
+    if (!validateForm()) return;
+
     setLoading(true);
     setError('');
 
     try {
-      const { rfi } = await createRFI();
-      onSuccess(rfi);
-      handleClose();
-    } catch (error) {
-      console.error('Error creating RFI:', error);
-      setError(error.message || 'Failed to create RFI');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Create and open email draft
-  const handleCreateAndEmail = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const { rfi } = await createRFI();
-      
-      // Open email client with pre-filled draft
-      const rfiForEmail = {
-        ...rfi,
-        sent_to_email: formData.sent_to_email
+      // Prepare RFI data
+      const rfiData = {
+        project_id: projectId,
+        rfi_number: rfiNumber,
+        number: nextNumber,
+        subject: formData.subject.trim(),
+        question: formData.question.trim(),
+        status: formData.status,
+        priority: formData.priority,
+        due_date: formData.due_date || null,
+        date_sent: formData.date_sent || null,
+        spec_section: formData.spec_section.trim() || null,
+        drawing_reference: formData.drawing_reference.trim() || null,
+        internal_owner_id: formData.internal_owner_id || user?.id,
+        created_by: user?.id
       };
-      draftRFIEmail(rfiForEmail, projectName, projectNumber);
-      
+
+      // Handle recipient
+      if (formData.recipient_type === 'external') {
+        rfiData.is_external = true;
+        rfiData.sent_to = formData.sent_to.trim();
+        rfiData.sent_to_email = formData.sent_to_email.trim().toLowerCase();
+      } else {
+        rfiData.is_external = false;
+        rfiData.sent_to = null;
+        rfiData.sent_to_email = null;
+      }
+
+      // Create RFI
+      const { data: rfi, error: rfiError } = await supabase
+        .from('rfis')
+        .insert([rfiData])
+        .select()
+        .single();
+
+      if (rfiError) throw rfiError;
+
+      // Draft email if requested
+      if (shouldEmail && formData.recipient_type === 'external') {
+        draftRFIEmail(rfi, projectName, projectNumber);
+      }
+
       onSuccess(rfi);
-      handleClose();
-    } catch (error) {
-      console.error('Error creating RFI:', error);
-      setError(error.message || 'Failed to create RFI');
+    } catch (err) {
+      console.error('Error creating RFI:', err);
+      setError(err.message || 'Failed to create RFI. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Create and export PDF
-  const handleCreateAndExportPDF = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const { rfi, attachments } = await createRFI();
-      
-      // Generate PDF with RFI details
-      exportRFIToPDF(rfi, projectName, projectNumber, attachments);
-      
-      onSuccess(rfi);
-      handleClose();
-    } catch (error) {
-      console.error('Error creating RFI:', error);
-      setError(error.message || 'Failed to create RFI');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // ==========================================================================
-  // MODAL CLOSE
+  // RENDER
   // ==========================================================================
-  
-  const handleClose = () => {
-    // Reset form state
-    setFormData({
-      subject: '',
-      question: '',
-      recipient_type: 'external',
-      sent_to: '',
-      sent_to_email: '',
-      internal_owner_id: '',
-      priority: 'Medium',
-      due_date: ''
-    });
-    setPendingFiles([]);
-    setError('');
-    onClose();
-  };
-
-  // ==========================================================================
-  // RENDER - Early return if not open
-  // ==========================================================================
-  
   if (!isOpen) return null;
 
-  // ==========================================================================
-  // RENDER - Modal UI
-  // ==========================================================================
-  
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(0, 0, 0, 0.7)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      padding: '20px'
-    }}>
-      <div style={{
-        background: 'var(--bg-primary)',
-        borderRadius: 'var(--radius-lg)',
-        width: '100%',
-        maxWidth: '700px',
-        maxHeight: '90vh',
-        overflow: 'auto',
-        boxShadow: 'var(--shadow-xl)'
-      }}>
-        {/* ================================================================ */}
-        {/* HEADER                                                          */}
-        {/* ================================================================ */}
-        <div style={{
-          padding: 'var(--space-xl)',
-          borderBottom: '1px solid var(--border-color)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          position: 'sticky',
-          top: 0,
-          background: 'var(--bg-primary)',
-          zIndex: 1
-        }}>
-          <div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
-              Create RFI
+    <div style={styles.overlay} onClick={onClose}>
+      <div style={styles.modal} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={styles.header}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+            <MessageSquare size={24} style={{ color: 'var(--sunbelt-orange)' }} />
+            <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+              Create New RFI
             </h2>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-              RFI Number: <span style={{ color: 'var(--sunbelt-orange)', fontWeight: '600' }}>{nextRFINumber}</span>
-            </p>
           </div>
           <button
-            onClick={handleClose}
+            onClick={onClose}
             style={{
               background: 'none',
               border: 'none',
               color: 'var(--text-secondary)',
               cursor: 'pointer',
-              padding: '8px',
-              display: 'flex',
-              borderRadius: '6px'
+              padding: '4px'
             }}
           >
             <X size={24} />
           </button>
         </div>
 
-        {/* ================================================================ */}
-        {/* FORM                                                            */}
-        {/* ================================================================ */}
-        <form onSubmit={handleSubmit} style={{ padding: 'var(--space-xl)' }}>
-          
-          {/* Error Display */}
+        {/* Body */}
+        <form onSubmit={handleSubmit} style={styles.body}>
+          {/* Error Banner */}
           {error && (
-            <div style={{
-              padding: 'var(--space-md)',
-              background: 'var(--danger-light)',
-              border: '1px solid var(--danger)',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: 'var(--space-lg)',
-              color: 'var(--danger)',
-              fontSize: '0.875rem'
-            }}>
+            <div style={styles.errorBanner}>
+              <AlertCircle size={18} />
               {error}
             </div>
           )}
 
-          {/* ============================================================ */}
-          {/* SUBJECT FIELD                                                */}
-          {/* ============================================================ */}
-          <div className="form-group">
-            <label className="form-label">Subject *</label>
+          {/* RFI Number Badge */}
+          <div style={styles.rfiNumberBadge}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
+              RFI Number:
+            </span>
+            <span style={{ fontWeight: '700', color: 'var(--sunbelt-orange)', fontSize: '1rem' }}>
+              {rfiNumber}
+            </span>
+          </div>
+
+          {/* Subject */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              Subject <span style={styles.required}>*</span>
+            </label>
             <input
               type="text"
               name="subject"
               value={formData.subject}
               onChange={handleChange}
-              required
-              className="form-input"
-              placeholder="e.g., Electrical panel location clarification"
+              placeholder="Brief description of the request"
+              style={{
+                ...styles.input,
+                ...(fieldErrors.subject ? styles.inputError : {})
+              }}
+              autoFocus
             />
+            {fieldErrors.subject && (
+              <div style={styles.errorText}>{fieldErrors.subject}</div>
+            )}
           </div>
 
-          {/* ============================================================ */}
-          {/* QUESTION FIELD                                               */}
-          {/* ============================================================ */}
-          <div className="form-group">
-            <label className="form-label">Question / Request *</label>
+          {/* Question */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              Question/Request <span style={styles.required}>*</span>
+            </label>
             <textarea
               name="question"
               value={formData.question}
               onChange={handleChange}
-              required
-              className="form-input"
-              rows="4"
-              placeholder="Describe the information you need..."
-              style={{ resize: 'vertical', minHeight: '100px' }}
+              placeholder="Detailed question or request for information..."
+              style={{
+                ...styles.textarea,
+                ...(fieldErrors.question ? styles.inputError : {})
+              }}
             />
+            {fieldErrors.question && (
+              <div style={styles.errorText}>{fieldErrors.question}</div>
+            )}
           </div>
 
-          {/* ============================================================ */}
-          {/* RECIPIENT TYPE TOGGLE                                        */}
-          {/* External = Outside company (architect, engineer, etc.)       */}
-          {/* Internal = Team members or factory contacts                  */}
-          {/* ============================================================ */}
-          <div className="form-group">
-            <label className="form-label">Send To</label>
-            <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
-              {/* External Option */}
-              <label style={{
-                flex: 1,
-                padding: 'var(--space-md)',
-                border: `2px solid ${formData.recipient_type === 'external' ? 'var(--sunbelt-orange)' : 'var(--border-color)'}`,
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-                textAlign: 'center',
-                background: formData.recipient_type === 'external' ? 'rgba(255, 107, 53, 0.1)' : 'var(--bg-secondary)',
-                transition: 'all 0.15s'
-              }}>
+          {/* Recipient Type */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Send To</label>
+            <div style={styles.radioGroup}>
+              <label style={styles.radioLabel}>
                 <input
                   type="radio"
                   name="recipient_type"
                   value="external"
                   checked={formData.recipient_type === 'external'}
                   onChange={handleChange}
-                  style={{ marginRight: '8px' }}
                 />
-                <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>External Contact</span>
+                External Contact
               </label>
-              
-              {/* Internal Option */}
-              <label style={{
-                flex: 1,
-                padding: 'var(--space-md)',
-                border: `2px solid ${formData.recipient_type === 'internal' ? 'var(--sunbelt-orange)' : 'var(--border-color)'}`,
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-                textAlign: 'center',
-                background: formData.recipient_type === 'internal' ? 'rgba(255, 107, 53, 0.1)' : 'var(--bg-secondary)',
-                transition: 'all 0.15s'
-              }}>
+              <label style={styles.radioLabel}>
                 <input
                   type="radio"
                   name="recipient_type"
                   value="internal"
                   checked={formData.recipient_type === 'internal'}
                   onChange={handleChange}
-                  style={{ marginRight: '8px' }}
                 />
-                <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>Internal Team</span>
+                Internal (No Recipient)
               </label>
             </div>
           </div>
 
-          {/* ============================================================ */}
-          {/* EXTERNAL RECIPIENT FIELDS                                    */}
-          {/* Shown when recipient_type === 'external'                     */}
-          {/* ============================================================ */}
+          {/* External Recipient */}
           {formData.recipient_type === 'external' && (
-            <div style={{ 
-              padding: 'var(--space-lg)', 
-              background: 'rgba(255, 107, 53, 0.05)', 
-              border: '1px solid rgba(255, 107, 53, 0.2)',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: 'var(--space-lg)'
-            }}>
-              <h4 style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: 'var(--space-md)' }}>
-                External Recipient Details
-              </h4>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
-                {/* Contact Name/Company */}
-                <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
-                  <label className="form-label">Contact Name / Company *</label>
-                  <input
-                    type="text"
-                    name="sent_to"
-                    value={formData.sent_to}
-                    onChange={handleChange}
-                    required
-                    className="form-input"
-                    placeholder="e.g., ABC Architecture"
-                  />
-                </div>
-                
-                {/* Contact Email */}
-                <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
-                  <label className="form-label">Contact Email *</label>
-                  <input
-                    type="email"
-                    name="sent_to_email"
-                    value={formData.sent_to_email}
-                    onChange={handleChange}
-                    required
-                    className="form-input"
-                    placeholder="contact@example.com"
-                  />
-                </div>
-              </div>
-
-              {/* Internal Owner - Who tracks this RFI */}
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Internal Owner (Tracking) *</label>
-                <select
-                  name="internal_owner_id"
-                  value={formData.internal_owner_id}
+            <div style={styles.row}>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>
+                  Recipient Name <span style={styles.required}>*</span>
+                </label>
+                <input
+                  type="text"
+                  name="sent_to"
+                  value={formData.sent_to}
                   onChange={handleChange}
-                  required
-                  className="form-input"
-                >
-                  <option value="">Select team member</option>
-                  {/* Only show users (PMs, Directors) for internal owner */}
-                  {contacts.filter(c => c.contact_type === 'user').map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.role})
-                    </option>
-                  ))}
-                </select>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                  Responsible for following up and logging the response.
-                </p>
+                  placeholder="Contact name"
+                  style={{
+                    ...styles.input,
+                    ...(fieldErrors.sent_to ? styles.inputError : {})
+                  }}
+                />
+                {fieldErrors.sent_to && (
+                  <div style={styles.errorText}>{fieldErrors.sent_to}</div>
+                )}
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>
+                  Recipient Email <span style={styles.required}>*</span>
+                </label>
+                <input
+                  type="email"
+                  name="sent_to_email"
+                  value={formData.sent_to_email}
+                  onChange={handleChange}
+                  placeholder="contact@example.com"
+                  style={{
+                    ...styles.input,
+                    ...(fieldErrors.sent_to_email ? styles.inputError : {})
+                  }}
+                />
+                {fieldErrors.sent_to_email && (
+                  <div style={styles.errorText}>{fieldErrors.sent_to_email}</div>
+                )}
               </div>
             </div>
           )}
 
-          {/* ============================================================ */}
-          {/* INTERNAL RECIPIENT DROPDOWN                                  */}
-          {/* Includes both users AND factory contacts                     */}
-          {/* Shown when recipient_type === 'internal'                     */}
-          {/* ============================================================ */}
-          {formData.recipient_type === 'internal' && (
-            <div className="form-group">
-              <label className="form-label">Send To (Internal) *</label>
+          {/* Internal Owner */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Internal Owner</label>
+            <select
+              name="internal_owner_id"
+              value={formData.internal_owner_id}
+              onChange={handleChange}
+              style={styles.select}
+            >
+              <option value="">Select owner</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status, Priority, Due Date */}
+          <div style={styles.row3}>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Status</label>
               <select
-                name="sent_to"
-                value={formData.sent_to}
+                name="status"
+                value={formData.status}
                 onChange={handleChange}
-                required
-                className="form-input"
+                style={styles.select}
               >
-                <option value="">Select team member</option>
-                
-                {/* Group 1: Users (PMs, Directors, VPs) */}
-                <optgroup label="── Internal Team ──">
-                  {contacts.filter(c => c.contact_type === 'user').map(u => (
-                    <option key={u.id} value={u.name}>
-                      {u.name} ({u.role})
-                    </option>
-                  ))}
-                </optgroup>
-                
-                {/* Group 2: Factory Contacts by Department */}
-                <optgroup label="── Factory Contacts ──">
-                  {contacts.filter(c => c.contact_type === 'factory').map(c => (
-                    <option key={c.id} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
-                </optgroup>
+                {STATUS_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
-          )}
-
-          {/* ============================================================ */}
-          {/* PRIORITY & DUE DATE                                          */}
-          {/* ============================================================ */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)' }}>
-            <div className="form-group">
-              <label className="form-label">Priority</label>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Priority</label>
               <select
                 name="priority"
                 value={formData.priority}
                 onChange={handleChange}
-                className="form-input"
+                style={styles.select}
               >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
+                {PRIORITY_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
-            
-            <div className="form-group">
-              <label className="form-label">Due Date</label>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Due Date</label>
               <input
                 type="date"
                 name="due_date"
                 value={formData.due_date}
                 onChange={handleChange}
-                className="form-input"
+                style={styles.input}
               />
             </div>
           </div>
 
-          {/* ============================================================ */}
-          {/* FILE ATTACHMENTS                                             */}
-          {/* ============================================================ */}
-          <div className="form-group">
-            <label className="form-label">Attachments</label>
-            
-            {/* File Upload Button */}
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                border: '2px dashed var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                padding: 'var(--space-lg)',
-                textAlign: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                marginBottom: pendingFiles.length > 0 ? 'var(--space-md)' : 0
-              }}
-              onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--sunbelt-orange)'}
-              onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--border-color)'}
-            >
-              <Upload size={24} style={{ color: 'var(--text-tertiary)', marginBottom: '8px' }} />
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', margin: 0 }}>
-                Click to upload files or drag and drop
-              </p>
+          {/* Reference Fields */}
+          <div style={styles.row}>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Spec Section</label>
               <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={handleFileSelect}
-                style={{ display: 'none' }}
+                type="text"
+                name="spec_section"
+                value={formData.spec_section}
+                onChange={handleChange}
+                placeholder="e.g., 03 30 00"
+                style={styles.input}
               />
             </div>
-
-            {/* Pending Files List */}
-            {pendingFiles.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                {pendingFiles.map(file => (
-                  <div
-                    key={file.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-sm)',
-                      padding: 'var(--space-sm) var(--space-md)',
-                      background: 'var(--bg-secondary)',
-                      borderRadius: 'var(--radius-sm)',
-                      fontSize: '0.875rem'
-                    }}
-                  >
-                    {getFileIcon(file.type)}
-                    <span style={{ flex: 1, color: 'var(--text-primary)' }}>{file.name}</span>
-                    <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>
-                      {formatFileSize(file.size)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemovePendingFile(file.id)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--danger)',
-                        cursor: 'pointer',
-                        padding: '4px',
-                        display: 'flex'
-                      }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Drawing Reference</label>
+              <input
+                type="text"
+                name="drawing_reference"
+                value={formData.drawing_reference}
+                onChange={handleChange}
+                placeholder="e.g., A-101"
+                style={styles.input}
+              />
+            </div>
           </div>
 
-          {/* ============================================================ */}
-          {/* ACTION BUTTONS                                               */}
-          {/* ============================================================ */}
-          <div style={{
-            display: 'flex',
-            gap: 'var(--space-md)',
-            justifyContent: 'flex-end',
-            paddingTop: 'var(--space-lg)',
-            borderTop: '1px solid var(--border-color)',
-            marginTop: 'var(--space-lg)',
-            flexWrap: 'wrap'
-          }}>
-            {/* Cancel Button */}
-            <button type="button" onClick={handleClose} className="btn btn-secondary" disabled={loading}>
-              Cancel
-            </button>
-            
-            {/* Create & PDF Button */}
-            <button 
-              type="button" 
-              onClick={handleCreateAndExportPDF}
+          {/* Date Sent */}
+          <div style={{ ...styles.formGroup, maxWidth: '200px' }}>
+            <label style={styles.label}>Date Sent</label>
+            <input
+              type="date"
+              name="date_sent"
+              value={formData.date_sent}
+              onChange={handleChange}
+              style={styles.input}
+            />
+          </div>
+        </form>
+
+        {/* Footer */}
+        <div style={styles.footer}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={styles.secondaryButton}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+
+          {formData.recipient_type === 'external' && (
+            <button
+              type="button"
+              onClick={(e) => handleSubmit(e, true)}
               disabled={loading}
               style={{
+                ...styles.secondaryButton,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 'var(--space-xs)',
-                padding: '10px 20px',
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--danger)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--danger)',
-                fontWeight: '600',
-                fontSize: '0.9375rem',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1
+                ...(loading ? styles.disabledButton : {})
               }}
-              title="Create RFI and export as PDF"
             >
-              <FileText size={18} />
-              Create & PDF
+              <Mail size={16} />
+              Create & Email
             </button>
-            
-            {/* Create & Email Button (only for external with email) */}
-            {formData.recipient_type === 'external' && formData.sent_to_email && (
-              <button 
-                type="button" 
-                onClick={handleCreateAndEmail}
-                disabled={loading}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-xs)',
-                  padding: '10px 20px',
-                  background: 'var(--bg-secondary)',
-                  border: '1px solid var(--success)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--success)',
-                  fontWeight: '600',
-                  fontSize: '0.9375rem',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  opacity: loading ? 0.7 : 1
-                }}
-                title="Create RFI and open email draft"
-              >
-                <Mail size={18} />
-                Create & Email
-              </button>
+          )}
+
+          <button
+            type="submit"
+            onClick={handleSubmit}
+            disabled={loading}
+            style={{
+              ...styles.primaryButton,
+              ...(loading ? styles.disabledButton : {})
+            }}
+          >
+            {loading ? (
+              <>
+                <Loader size={16} className="spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Plus size={16} />
+                Create RFI
+              </>
             )}
-            
-            {/* Primary Submit Button */}
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? (
-                pendingFiles.length > 0 ? 'Creating & Uploading...' : 'Creating...'
-              ) : (
-                <><Send size={18} /> Create RFI</>
-              )}
-            </button>
-          </div>
-        </form>
+          </button>
+        </div>
       </div>
     </div>
   );
