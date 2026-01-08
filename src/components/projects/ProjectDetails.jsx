@@ -43,6 +43,7 @@ import EditRFIModal from './EditRFIModal';
 import AddSubmittalModal from './AddSubmittalModal';
 import EditSubmittalModal from './EditSubmittalModal';
 import AddMilestoneModal from './AddMilestoneModal';
+import { FloorPlansTab } from '../floorplans';
 
 // ============================================================================
 // CONSTANTS
@@ -508,7 +509,6 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                 <PlaceholderTab icon={FolderOpen} message="File management coming soon" />
               )}
 
-              {/* FLOORPLAN TAB */}
               {/* FLOORPLAN TAB */}
               {activeTab === 'floorplan' && (
                 <FloorPlansTab
