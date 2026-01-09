@@ -100,8 +100,11 @@ function Login() {
     <>
       <style>{`
         .login-page {
-          min-height: 100vh;
-          width: 100%;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -109,7 +112,8 @@ function Login() {
           background: linear-gradient(135deg, #0a1628 0%, #1a2c47 50%, #0f172a 100%);
           padding: 20px;
           box-sizing: border-box;
-          overflow: hidden;
+          overflow: auto;
+          z-index: 9999;
         }
 
         .login-content {
@@ -132,7 +136,7 @@ function Login() {
         .factory-ring {
           position: absolute;
           inset: 0;
-          animation: rotateRing 40s linear infinite;
+          animation: rotateRing 80s linear infinite;
         }
 
         .factory-ring.animating {
@@ -159,7 +163,7 @@ function Login() {
           box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 20px rgba(255, 107, 53, 0.15);
           opacity: 0.8;
           transition: opacity 0.3s ease, box-shadow 0.3s ease;
-          animation: counterRotate 40s linear infinite;
+          animation: counterRotate 80s linear infinite;
         }
 
         .factory-logo:hover {
