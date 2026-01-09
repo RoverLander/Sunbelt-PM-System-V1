@@ -1,9 +1,24 @@
 // ============================================================================
-// RFIsPage Component
+// RFIsPage.jsx - RFIs Landing Page with Table Layout
 // ============================================================================
 // Standalone page showing all RFIs for the current user's projects.
 // For Directors: Shows all RFIs across all projects
 // For PMs: Shows RFIs from their assigned projects
+//
+// FEATURES:
+// - Table layout for proper width handling
+// - Filters: status, project, search
+// - Stats cards: Open, Overdue, Answered
+// - Click row to navigate to project RFIs tab
+// - Wider layout (maxWidth: 1600px)
+//
+// FIXES (Jan 9, 2026):
+// - ✅ FIXED: Converted to table layout for full-width display
+// - ✅ FIXED: maxWidth increased to 1600px
+//
+// DEPENDENCIES:
+// - supabaseClient: Database operations
+// - AuthContext: User authentication
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -11,24 +26,38 @@ import {
   FileText,
   Search,
   Calendar,
-  User,
-  FolderKanban,
-  Clock,
-  AlertCircle,
-  MessageSquare
+  AlertCircle
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+const STATUS_COLORS = {
+  'Draft': 'var(--text-tertiary)',
+  'Open': '#f59e0b',
+  'Answered': '#22c55e',
+  'Closed': 'var(--text-tertiary)'
+};
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
   const { user } = useAuth();
-  
+
+  // ==========================================================================
+  // STATE - DATA
+  // ==========================================================================
   const [loading, setLoading] = useState(true);
   const [rfis, setRFIs] = useState([]);
   const [projects, setProjects] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
-  
-  // Filters
+
+  // ==========================================================================
+  // STATE - FILTERS
+  // ==========================================================================
   const [filterStatus, setFilterStatus] = useState('open');
   const [filterProject, setFilterProject] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,9 +81,8 @@ function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
       setCurrentUser(userData);
 
       let projectsQuery = supabase.from('projects').select('id, project_number, name, color');
-      
+
       if (!isDirectorView && userData) {
-        // Include projects where user is: PM (owner_id), Backup PM, or Creator
         projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
       }
 
@@ -99,7 +127,7 @@ function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
 
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      if (!rfi.subject?.toLowerCase().includes(term) && 
+      if (!rfi.subject?.toLowerCase().includes(term) &&
           !rfi.project?.project_number?.toLowerCase().includes(term) &&
           !rfi.rfi_number?.toLowerCase().includes(term)) return false;
     }
@@ -121,15 +149,12 @@ function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
   };
 
   const getStatusColor = (status) => {
-    const colors = {
-      'Draft': 'var(--text-tertiary)',
-      'Open': '#f59e0b',
-      'Answered': '#22c55e',
-      'Closed': 'var(--text-tertiary)'
-    };
-    return colors[status] || 'var(--text-secondary)';
+    return STATUS_COLORS[status] || 'var(--text-secondary)';
   };
 
+  // ==========================================================================
+  // STATS
+  // ==========================================================================
   const stats = {
     total: rfis.filter(r => !['Answered', 'Closed'].includes(r.status)).length,
     overdue: rfis.filter(r => isOverdue(r.due_date, r.status)).length,
@@ -137,7 +162,7 @@ function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
   };
 
   // ==========================================================================
-  // RENDER
+  // RENDER - LOADING
   // ==========================================================================
   if (loading) {
     return (
@@ -147,11 +172,24 @@ function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
     );
   }
 
+  // ==========================================================================
+  // RENDER - MAIN
+  // ==========================================================================
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
-      {/* Header */}
+      {/* ================================================================== */}
+      {/* HEADER                                                            */}
+      {/* ================================================================== */}
       <div style={{ marginBottom: 'var(--space-lg)' }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <h1 style={{
+          fontSize: '1.75rem',
+          fontWeight: '700',
+          color: 'var(--text-primary)',
+          marginBottom: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
           <FileText size={28} style={{ color: 'var(--sunbelt-orange)' }} />
           {isDirectorView ? 'All RFIs' : 'My RFIs'}
         </h1>
@@ -160,13 +198,20 @@ function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
         </p>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: 'var(--space-lg)' }}>
+      {/* ================================================================== */}
+      {/* STATS                                                             */}
+      {/* ================================================================== */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: 'var(--space-lg)', maxWidth: '600px' }}>
         <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
           <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Open RFIs</div>
           <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.total}</div>
         </div>
-        <div style={{ background: stats.overdue > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: stats.overdue > 0 ? '1px solid var(--danger)' : '1px solid var(--border-color)' }}>
+        <div style={{
+          background: stats.overdue > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '16px',
+          border: stats.overdue > 0 ? '1px solid var(--danger)' : '1px solid var(--border-color)'
+        }}>
           <div style={{ fontSize: '0.8125rem', color: stats.overdue > 0 ? 'var(--danger)' : 'var(--text-secondary)', marginBottom: '4px' }}>Overdue</div>
           <div style={{ fontSize: '1.5rem', fontWeight: '700', color: stats.overdue > 0 ? 'var(--danger)' : 'var(--text-primary)' }}>{stats.overdue}</div>
         </div>
@@ -176,12 +221,21 @@ function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
         </div>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: 'var(--space-md)', flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* ================================================================== */}
+      {/* FILTERS                                                           */}
+      {/* ================================================================== */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: 'var(--space-lg)', flexWrap: 'wrap', alignItems: 'center' }}>
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          style={{ padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+          style={{
+            padding: '8px 12px',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--text-primary)',
+            fontSize: '0.8125rem'
+          }}
         >
           <option value="open">Open</option>
           <option value="overdue">Overdue</option>
@@ -192,111 +246,198 @@ function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
         <select
           value={filterProject}
           onChange={(e) => setFilterProject(e.target.value)}
-          style={{ padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+          style={{
+            padding: '8px 12px',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--text-primary)',
+            fontSize: '0.8125rem'
+          }}
         >
           <option value="all">All Projects</option>
           {projects.map(p => (
-            <option key={p.id} value={p.id}>{p.project_number}</option>
+            <option key={p.id} value={p.id}>{p.project_number} - {p.name}</option>
           ))}
         </select>
 
-        <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-          <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 12px',
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border-color)',
+          borderRadius: 'var(--radius-md)'
+        }}>
+          <Search size={16} style={{ color: 'var(--text-tertiary)' }} />
           <input
             type="text"
             placeholder="Search RFIs..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ width: '100%', padding: '8px 12px 8px 34px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', fontSize: '0.8125rem' }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-primary)',
+              fontSize: '0.8125rem',
+              outline: 'none',
+              width: '200px'
+            }}
           />
         </div>
       </div>
 
-      {/* RFIs List */}
-      <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+      {/* ================================================================== */}
+      {/* TABLE                                                             */}
+      {/* ================================================================== */}
+      <div style={{
+        background: 'var(--bg-secondary)',
+        borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--border-color)',
+        overflow: 'hidden'
+      }}>
         {filteredRFIs.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-            <FileText size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
-            <p>No RFIs match your filters</p>
+          <div style={{ padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+            <AlertCircle size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
+            <p>No RFIs found</p>
           </div>
         ) : (
-          <div>
-            {filteredRFIs.map((rfi, idx) => (
-              <div
-                key={rfi.id}
-                onClick={() => onNavigateToProject && onNavigateToProject(rfi.project_id, 'rfis')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '14px 16px',
-                  borderBottom: idx < filteredRFIs.length - 1 ? '1px solid var(--border-color)' : 'none',
-                  gap: '16px',
-                  cursor: 'pointer',
-                  transition: 'background 0.15s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-              >
-                {/* Status indicator */}
-                <div style={{
-                  width: '10px',
-                  height: '10px',
-                  borderRadius: '50%',
-                  background: getStatusColor(rfi.status),
-                  flexShrink: 0
-                }} />
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'var(--bg-tertiary)' }}>
+                  <th style={{
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    color: 'var(--text-secondary)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                  }}>RFI</th>
+                  <th style={{
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    color: 'var(--text-secondary)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    width: '180px'
+                  }}>Project</th>
+                  <th style={{
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    color: 'var(--text-secondary)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    width: '180px'
+                  }}>Sent To</th>
+                  <th style={{
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    color: 'var(--text-secondary)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    width: '100px'
+                  }}>Status</th>
+                  <th style={{
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    color: 'var(--text-secondary)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    width: '120px'
+                  }}>Due Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRFIs.map((rfi, idx) => {
+                  const overdue = isOverdue(rfi.due_date, rfi.status);
+                  return (
+                    <tr
+                      key={rfi.id}
+                      onClick={() => onNavigateToProject && onNavigateToProject(rfi.project_id, 'rfis')}
+                      style={{
+                        borderTop: idx > 0 ? '1px solid var(--border-color)' : 'none',
+                        cursor: 'pointer',
+                        background: overdue ? 'rgba(239, 68, 68, 0.05)' : 'transparent'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = overdue ? 'rgba(239, 68, 68, 0.05)' : 'transparent'}
+                    >
+                      {/* RFI Number + Subject */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
+                          <span style={{ color: 'var(--sunbelt-orange)', marginRight: '8px' }}>
+                            {rfi.rfi_number || `RFI-${String(rfi.number || '').padStart(3, '0')}`}
+                          </span>
+                          {rfi.subject}
+                        </div>
+                      </td>
 
-                {/* Main content */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.9375rem', marginBottom: '2px' }}>
-                    <span style={{ color: 'var(--sunbelt-orange)', marginRight: '8px' }}>
-                      {rfi.rfi_number || `RFI-${String(rfi.number || '').padStart(3, '0')}`}
-                    </span>
-                    {rfi.subject}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <FolderKanban size={12} />
-                      {rfi.project?.project_number}
-                    </span>
-                    {rfi.sent_to && (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <User size={12} />
-                        {rfi.sent_to}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                      {/* Project */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: rfi.project?.color || 'var(--sunbelt-orange)'
+                          }} />
+                          <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                            {rfi.project?.project_number}
+                          </span>
+                        </div>
+                      </td>
 
-                {/* Status */}
-                <span style={{
-                  padding: '3px 8px',
-                  borderRadius: '4px',
-                  fontSize: '0.6875rem',
-                  fontWeight: '600',
-                  background: `${getStatusColor(rfi.status)}20`,
-                  color: getStatusColor(rfi.status),
-                  minWidth: '70px',
-                  textAlign: 'center'
-                }}>
-                  {rfi.status}
-                </span>
+                      {/* Sent To */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                          {rfi.sent_to || '-'}
+                        </span>
+                      </td>
 
-                {/* Due date */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '0.8125rem',
-                  color: isOverdue(rfi.due_date, rfi.status) ? 'var(--danger)' : 'var(--text-secondary)',
-                  fontWeight: isOverdue(rfi.due_date, rfi.status) ? '600' : '400',
-                  minWidth: '70px'
-                }}>
-                  <Calendar size={14} />
-                  {formatDate(rfi.due_date)}
-                </div>
-              </div>
-            ))}
+                      {/* Status */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          fontSize: '0.75rem',
+                          fontWeight: '600',
+                          background: `${getStatusColor(rfi.status)}20`,
+                          color: getStatusColor(rfi.status)
+                        }}>
+                          {rfi.status}
+                        </span>
+                      </td>
+
+                      {/* Due Date */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <span style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          color: overdue ? 'var(--danger)' : 'var(--text-secondary)',
+                          fontWeight: overdue ? '600' : '400',
+                          fontSize: '0.8125rem'
+                        }}>
+                          <Calendar size={14} />
+                          {formatDate(rfi.due_date)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
