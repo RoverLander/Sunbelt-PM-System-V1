@@ -3,6 +3,11 @@
 // ============================================================================
 // Full-screen modal viewer for floor plans with marker support.
 // Features: zoom, pan, marker placement, filters, and item detail panel.
+// 
+// SUPPORTED MARKER TYPES:
+// - RFIs (rfi)
+// - Submittals (submittal)
+// - Tasks (task)
 // ============================================================================
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -18,6 +23,7 @@ import {
   MapPin,
   MessageSquare,
   ClipboardList,
+  CheckSquare,
   ExternalLink,
   Check,
   Maximize2,
@@ -45,6 +51,7 @@ function FloorPlanViewer({
   projectNumber,
   rfis,
   submittals,
+  tasks,
   isPM,
   onClose,
   onMarkerCreate,
@@ -52,7 +59,8 @@ function FloorPlanViewer({
   onMarkerDelete,
   onPageRename,
   showToast,
-  onRefresh
+  onRefresh,
+  onDataRefresh
 }) {
   // ==========================================================================
   // REFS
@@ -101,7 +109,7 @@ function FloorPlanViewer({
   const currentPageName = currentPageData?.name || `Page ${currentPage}`;
 
   // ==========================================================================
-  // LOAD FILE URL
+  // EFFECT - LOAD FILE URL
   // ==========================================================================
   useEffect(() => {
     const loadFile = async () => {
@@ -128,50 +136,77 @@ function FloorPlanViewer({
   }, [floorPlan.file_path]);
 
   // ==========================================================================
-  // FILTER MARKERS
+  // EFFECT - FILTER AND ENRICH MARKERS
+  // ==========================================================================
+  // This effect filters markers by page, type, and status, then enriches
+  // each marker with its associated item data (RFI, Submittal, or Task)
   // ==========================================================================
   useEffect(() => {
     let filtered = floorPlan.markers || [];
 
-    // Filter by current page
+    // ===== FILTER BY CURRENT PAGE =====
     filtered = filtered.filter(m => m.page_number === currentPage);
 
-    // Filter by type
+    // ===== FILTER BY TYPE =====
     if (filterType !== 'all') {
       filtered = filtered.filter(m => m.item_type === filterType);
     }
 
-    // Filter by status
+    // ===== FILTER BY STATUS =====
     if (filterStatus !== 'all') {
       filtered = filtered.filter(marker => {
-        const item = marker.item_type === 'rfi'
-          ? rfis?.find(r => r.id === marker.item_id)
-          : submittals?.find(s => s.id === marker.item_id);
+        // Find the associated item based on type
+        let item = null;
+        if (marker.item_type === 'rfi') {
+          item = rfis?.find(r => r.id === marker.item_id);
+        } else if (marker.item_type === 'submittal') {
+          item = submittals?.find(s => s.id === marker.item_id);
+        } else if (marker.item_type === 'task') {
+          item = tasks?.find(t => t.id === marker.item_id);
+        }
 
         if (!item) return false;
 
+        // ===== CHECK OPEN/PENDING STATUS =====
         if (filterStatus === 'open') {
-          return marker.item_type === 'rfi'
-            ? ['Open', 'Pending'].includes(item.status)
-            : ['Pending', 'Submitted', 'Under Review'].includes(item.status);
-        } else {
-          return marker.item_type === 'rfi'
-            ? ['Answered', 'Closed'].includes(item.status)
-            : ['Approved', 'Approved as Noted', 'Rejected', 'Revise & Resubmit'].includes(item.status);
+          if (marker.item_type === 'rfi') {
+            return ['Open', 'Pending'].includes(item.status);
+          } else if (marker.item_type === 'submittal') {
+            return ['Pending', 'Submitted', 'Under Review'].includes(item.status);
+          } else if (marker.item_type === 'task') {
+            return ['Not Started', 'In Progress', 'Blocked'].includes(item.status);
+          }
+        } 
+        // ===== CHECK CLOSED/COMPLETED STATUS =====
+        else {
+          if (marker.item_type === 'rfi') {
+            return ['Answered', 'Closed'].includes(item.status);
+          } else if (marker.item_type === 'submittal') {
+            return ['Approved', 'Approved as Noted', 'Rejected', 'Revise & Resubmit'].includes(item.status);
+          } else if (marker.item_type === 'task') {
+            return ['Completed', 'Cancelled'].includes(item.status);
+          }
         }
+        return false;
       });
     }
 
-    // Enrich markers with item data
+    // ===== ENRICH MARKERS WITH ITEM DATA =====
+    // Attach the full item object to each marker for display
     const enrichedMarkers = filtered.map(marker => {
-      const item = marker.item_type === 'rfi'
-        ? rfis?.find(r => r.id === marker.item_id)
-        : submittals?.find(s => s.id === marker.item_id);
+      let item = null;
+      if (marker.item_type === 'rfi') {
+        item = rfis?.find(r => r.id === marker.item_id);
+      } else if (marker.item_type === 'submittal') {
+        item = submittals?.find(s => s.id === marker.item_id);
+      } else if (marker.item_type === 'task') {
+        item = tasks?.find(t => t.id === marker.item_id);
+      }
       return { ...marker, item };
-    }).filter(m => m.item);
+    }).filter(m => m.item); // Remove markers without matching items
 
     setMarkers(enrichedMarkers);
-  }, [floorPlan.markers, currentPage, filterType, filterStatus, rfis, submittals]);
+  }, [floorPlan.markers, currentPage, filterType, filterStatus, rfis, submittals, tasks]);
 
   // ==========================================================================
   // HANDLERS - ZOOM
@@ -200,6 +235,7 @@ function FloorPlanViewer({
     setShowAddMarker(true);
   };
 
+  // ===== HANDLE MARKER CREATION =====
   const handleMarkerSelect = async (itemType, itemId) => {
     if (!pendingMarkerPosition) return;
 
@@ -223,6 +259,7 @@ function FloorPlanViewer({
     }
   };
 
+  // ===== HANDLE MARKER DELETION =====
   const handleMarkerDelete = async (markerId) => {
     if (!confirm('Remove this marker?')) return;
     
@@ -260,7 +297,9 @@ function FloorPlanViewer({
   };
 
   // ==========================================================================
-  // GET MARKER COLOR
+  // HELPER - GET MARKER COLOR
+  // ==========================================================================
+  // Returns color based on item type, status, and overdue state
   // ==========================================================================
   const getMarkerColor = (marker) => {
     if (!marker.item) return '#64748b';
@@ -268,16 +307,94 @@ function FloorPlanViewer({
     const status = marker.item.status;
     const isOverdue = marker.item.due_date && new Date(marker.item.due_date) < new Date();
     
-    if (isOverdue && !['Closed', 'Answered', 'Approved', 'Approved as Noted'].includes(status)) {
+    // ===== OVERDUE CHECK =====
+    // Show red for overdue items (except closed/completed statuses)
+    const closedStatuses = ['Closed', 'Answered', 'Approved', 'Approved as Noted', 'Completed', 'Cancelled'];
+    if (isOverdue && !closedStatuses.includes(status)) {
       return '#ef4444';
     }
 
+    // ===== RFI COLORS =====
     if (marker.item_type === 'rfi') {
-      const colors = { 'Open': '#3b82f6', 'Pending': '#f59e0b', 'Answered': '#22c55e', 'Closed': '#64748b' };
+      const colors = { 
+        'Open': '#3b82f6', 
+        'Pending': '#f59e0b', 
+        'Answered': '#22c55e', 
+        'Closed': '#64748b' 
+      };
       return colors[status] || '#64748b';
+    } 
+    // ===== SUBMITTAL COLORS =====
+    else if (marker.item_type === 'submittal') {
+      const colors = { 
+        'Pending': '#f59e0b', 
+        'Submitted': '#3b82f6', 
+        'Under Review': '#8b5cf6', 
+        'Approved': '#22c55e', 
+        'Approved as Noted': '#22c55e', 
+        'Revise & Resubmit': '#ef4444', 
+        'Rejected': '#ef4444' 
+      };
+      return colors[status] || '#64748b';
+    } 
+    // ===== TASK COLORS =====
+    else if (marker.item_type === 'task') {
+      const colors = { 
+        'Not Started': '#64748b', 
+        'In Progress': '#3b82f6', 
+        'Blocked': '#ef4444', 
+        'Completed': '#22c55e', 
+        'Cancelled': '#94a3b8' 
+      };
+      return colors[status] || '#64748b';
+    }
+    
+    return '#64748b';
+  };
+
+  // ==========================================================================
+  // HELPER - GET MARKER ICON
+  // ==========================================================================
+  const getMarkerIcon = (itemType, size) => {
+    if (itemType === 'rfi') {
+      return <MessageSquare size={size} color="white" />;
+    } else if (itemType === 'task') {
+      return <CheckSquare size={size} color="white" />;
     } else {
-      const colors = { 'Pending': '#f59e0b', 'Submitted': '#3b82f6', 'Under Review': '#8b5cf6', 'Approved': '#22c55e', 'Approved as Noted': '#22c55e', 'Revise & Resubmit': '#ef4444', 'Rejected': '#ef4444' };
-      return colors[status] || '#64748b';
+      return <ClipboardList size={size} color="white" />;
+    }
+  };
+
+  // ==========================================================================
+  // HELPER - GET ITEM DISPLAY INFO
+  // ==========================================================================
+  const getItemDisplayInfo = (marker) => {
+    if (!marker.item) return { number: '', title: '', label: '' };
+    
+    if (marker.item_type === 'rfi') {
+      return {
+        number: marker.item.rfi_number,
+        title: marker.item.subject,
+        label: 'RFI Number',
+        titleLabel: 'Subject',
+        detailsTitle: 'RFI Details'
+      };
+    } else if (marker.item_type === 'task') {
+      return {
+        number: marker.item.title,
+        title: marker.item.description || '',
+        label: 'Task',
+        titleLabel: 'Description',
+        detailsTitle: 'Task Details'
+      };
+    } else {
+      return {
+        number: marker.item.submittal_number,
+        title: marker.item.title,
+        label: 'Submittal Number',
+        titleLabel: 'Title',
+        detailsTitle: 'Submittal Details'
+      };
     }
   };
 
@@ -313,7 +430,7 @@ function FloorPlanViewer({
           flexWrap: 'wrap'
         }}
       >
-        {/* Left - Title & Page */}
+        {/* ===== LEFT - TITLE & PAGE ===== */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)' }}>
           <div>
             <h2 style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
@@ -360,7 +477,7 @@ function FloorPlanViewer({
             )}
           </div>
 
-          {/* Page Navigation */}
+          {/* ===== PAGE NAVIGATION ===== */}
           {pageCount > 1 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <button onClick={handlePrevPage} disabled={currentPage === 1} style={{ padding: '6px', background: 'none', border: 'none', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.3 : 1, color: 'var(--text-primary)' }}>
@@ -376,7 +493,7 @@ function FloorPlanViewer({
           )}
         </div>
 
-        {/* Center - Zoom & Mode */}
+        {/* ===== CENTER - ZOOM & MODE ===== */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
           {/* Zoom Controls */}
           {!isPdf && (
@@ -397,7 +514,7 @@ function FloorPlanViewer({
             </div>
           )}
 
-          {/* Mode Toggle (PM only) */}
+          {/* ===== MODE TOGGLE (PM ONLY) ===== */}
           {isPM && !isPdf && (
             <div style={{ display: 'flex', background: 'var(--bg-primary)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <button
@@ -442,7 +559,7 @@ function FloorPlanViewer({
           )}
         </div>
 
-        {/* Right - Filters & Close */}
+        {/* ===== RIGHT - FILTERS & CLOSE ===== */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
           {/* Marker Stats */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', marginRight: 'var(--space-md)', fontSize: '0.8125rem' }}>
@@ -452,7 +569,7 @@ function FloorPlanViewer({
             </span>
           </div>
 
-          {/* Filter Button */}
+          {/* ===== FILTER BUTTON & DROPDOWN ===== */}
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => setShowFilters(!showFilters)}
@@ -489,6 +606,7 @@ function FloorPlanViewer({
                   boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
                 }}
               >
+                {/* ===== TYPE FILTER ===== */}
                 <div style={{ marginBottom: 'var(--space-md)' }}>
                   <label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', display: 'block', marginBottom: '6px', fontWeight: '600', textTransform: 'uppercase' }}>Type</label>
                   <select
@@ -499,8 +617,10 @@ function FloorPlanViewer({
                     <option value="all">All Types</option>
                     <option value="rfi">RFIs Only</option>
                     <option value="submittal">Submittals Only</option>
+                    <option value="task">Tasks Only</option>
                   </select>
                 </div>
+                {/* ===== STATUS FILTER ===== */}
                 <div>
                   <label style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', display: 'block', marginBottom: '6px', fontWeight: '600', textTransform: 'uppercase' }}>Status</label>
                   <select
@@ -510,14 +630,14 @@ function FloorPlanViewer({
                   >
                     <option value="all">All Status</option>
                     <option value="open">Open/Pending</option>
-                    <option value="closed">Closed/Approved</option>
+                    <option value="closed">Closed/Completed</option>
                   </select>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Open PDF External */}
+          {/* ===== OPEN PDF EXTERNAL ===== */}
           {isPdf && fileUrl && (
             <a
               href={fileUrl}
@@ -542,7 +662,7 @@ function FloorPlanViewer({
             </a>
           )}
 
-          {/* Close Button */}
+          {/* ===== CLOSE BUTTON ===== */}
           <button
             onClick={onClose}
             style={{
@@ -565,7 +685,9 @@ function FloorPlanViewer({
         </div>
       </div>
 
-      {/* Mode Instruction Banner */}
+      {/* ================================================================== */}
+      {/* MODE INSTRUCTION BANNER                                           */}
+      {/* ================================================================== */}
       {mode === 'addMarker' && !isPdf && (
         <div style={{
           background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
@@ -595,12 +717,14 @@ function FloorPlanViewer({
           justifyContent: 'center'
         }}
       >
+        {/* ===== LOADING STATE ===== */}
         {loading ? (
           <div style={{ color: 'white', textAlign: 'center' }}>
             <div className="loading-spinner" style={{ marginBottom: 'var(--space-md)' }}></div>
             <p>Loading floor plan...</p>
           </div>
         ) : isPdf ? (
+          /* ===== PDF VIEWER ===== */
           <div style={{ width: '100%', height: '100%', padding: 'var(--space-lg)' }}>
             <iframe
               src={`${fileUrl}#page=${currentPage}`}
@@ -612,6 +736,7 @@ function FloorPlanViewer({
             </p>
           </div>
         ) : fileUrl ? (
+          /* ===== IMAGE VIEWER WITH MARKERS ===== */
           <div
             style={{
               position: 'relative',
@@ -635,11 +760,12 @@ function FloorPlanViewer({
               }}
             />
 
-            {/* Markers */}
+            {/* ===== RENDER MARKERS ===== */}
             {markers.map(marker => {
               const color = getMarkerColor(marker);
               const isHovered = hoveredMarker === marker.id;
               const isSelected = selectedMarker?.id === marker.id;
+              const displayInfo = getItemDisplayInfo(marker);
 
               return (
                 <div
@@ -659,7 +785,7 @@ function FloorPlanViewer({
                     setSelectedMarker(marker);
                   }}
                 >
-                  {/* Pin */}
+                  {/* ===== MARKER PIN ===== */}
                   <div style={{
                     width: isHovered || isSelected ? '32px' : '28px',
                     height: isHovered || isSelected ? '32px' : '28px',
@@ -674,15 +800,11 @@ function FloorPlanViewer({
                     transition: 'all 0.15s'
                   }}>
                     <div style={{ transform: 'rotate(45deg)' }}>
-                      {marker.item_type === 'rfi' ? (
-                        <MessageSquare size={isHovered || isSelected ? 14 : 12} color="white" />
-                      ) : (
-                        <ClipboardList size={isHovered || isSelected ? 14 : 12} color="white" />
-                      )}
+                      {getMarkerIcon(marker.item_type, isHovered || isSelected ? 14 : 12)}
                     </div>
                   </div>
 
-                  {/* Hover Card */}
+                  {/* ===== HOVER CARD ===== */}
                   {isHovered && !selectedMarker && (
                     <div
                       style={{
@@ -702,11 +824,13 @@ function FloorPlanViewer({
                       }}
                     >
                       <div style={{ fontWeight: '600', color: 'var(--text-primary)', marginBottom: '4px', fontSize: '0.875rem' }}>
-                        {marker.item_type === 'rfi' ? marker.item.rfi_number : marker.item.submittal_number}
+                        {displayInfo.number}
                       </div>
-                      <div style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem', marginBottom: '4px', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {marker.item_type === 'rfi' ? marker.item.subject : marker.item.title}
-                      </div>
+                      {displayInfo.title && (
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem', marginBottom: '4px', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {displayInfo.title}
+                        </div>
+                      )}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{
                           padding: '2px 8px',
@@ -728,7 +852,7 @@ function FloorPlanViewer({
               );
             })}
 
-            {/* Pending Marker */}
+            {/* ===== PENDING MARKER (DURING PLACEMENT) ===== */}
             {pendingMarkerPosition && (
               <div
                 style={{
@@ -756,6 +880,7 @@ function FloorPlanViewer({
             )}
           </div>
         ) : (
+          /* ===== ERROR STATE ===== */
           <div style={{ color: 'white', textAlign: 'center' }}>
             <p>Unable to load floor plan</p>
           </div>
@@ -781,7 +906,7 @@ function FloorPlanViewer({
             zIndex: 200
           }}
         >
-          {/* Panel Header */}
+          {/* ===== PANEL HEADER ===== */}
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
@@ -790,7 +915,7 @@ function FloorPlanViewer({
             borderBottom: '1px solid var(--border-color)'
           }}>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)' }}>
-              {selectedMarker.item_type === 'rfi' ? 'RFI Details' : 'Submittal Details'}
+              {getItemDisplayInfo(selectedMarker).detailsTitle}
             </h3>
             <button
               onClick={() => setSelectedMarker(null)}
@@ -800,28 +925,33 @@ function FloorPlanViewer({
             </button>
           </div>
 
-          {/* Panel Content */}
+          {/* ===== PANEL CONTENT ===== */}
           <div style={{ flex: 1, overflow: 'auto', padding: 'var(--space-lg)' }}>
             {selectedMarker.item && (
               <>
+                {/* ===== ITEM NUMBER / TITLE ===== */}
                 <div style={{ marginBottom: 'var(--space-lg)' }}>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>
-                    {selectedMarker.item_type === 'rfi' ? 'RFI Number' : 'Submittal Number'}
+                    {getItemDisplayInfo(selectedMarker).label}
                   </div>
                   <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--sunbelt-orange)' }}>
-                    {selectedMarker.item_type === 'rfi' ? selectedMarker.item.rfi_number : selectedMarker.item.submittal_number}
+                    {getItemDisplayInfo(selectedMarker).number}
                   </div>
                 </div>
 
-                <div style={{ marginBottom: 'var(--space-lg)' }}>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>
-                    {selectedMarker.item_type === 'rfi' ? 'Subject' : 'Title'}
+                {/* ===== SUBJECT / TITLE / DESCRIPTION ===== */}
+                {getItemDisplayInfo(selectedMarker).title && (
+                  <div style={{ marginBottom: 'var(--space-lg)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>
+                      {getItemDisplayInfo(selectedMarker).titleLabel}
+                    </div>
+                    <div style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '500' }}>
+                      {getItemDisplayInfo(selectedMarker).title}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '500' }}>
-                    {selectedMarker.item_type === 'rfi' ? selectedMarker.item.subject : selectedMarker.item.title}
-                  </div>
-                </div>
+                )}
 
+                {/* ===== STATUS & DUE DATE ===== */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
                   <div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>Status</div>
@@ -845,6 +975,15 @@ function FloorPlanViewer({
                   </div>
                 </div>
 
+                {/* ===== PRIORITY (FOR TASKS) ===== */}
+                {selectedMarker.item_type === 'task' && selectedMarker.item.priority && (
+                  <div style={{ marginBottom: 'var(--space-lg)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>Priority</div>
+                    <div style={{ fontSize: '0.9375rem', color: 'var(--text-primary)' }}>{selectedMarker.item.priority}</div>
+                  </div>
+                )}
+
+                {/* ===== SENT TO (FOR RFIs & SUBMITTALS) ===== */}
                 {selectedMarker.item.sent_to && (
                   <div style={{ marginBottom: 'var(--space-lg)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>Sent To</div>
@@ -852,6 +991,17 @@ function FloorPlanViewer({
                   </div>
                 )}
 
+                {/* ===== ASSIGNEE (FOR TASKS) ===== */}
+                {selectedMarker.item_type === 'task' && (selectedMarker.item.assignee?.name || selectedMarker.item.external_assignee_name) && (
+                  <div style={{ marginBottom: 'var(--space-lg)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>Assigned To</div>
+                    <div style={{ fontSize: '0.9375rem', color: 'var(--text-primary)' }}>
+                      {selectedMarker.item.external_assignee_name || selectedMarker.item.assignee?.name || 'Unassigned'}
+                    </div>
+                  </div>
+                )}
+
+                {/* ===== QUESTION (FOR RFIs) ===== */}
                 {selectedMarker.item_type === 'rfi' && selectedMarker.item.question && (
                   <div style={{ marginBottom: 'var(--space-lg)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>Question</div>
@@ -861,6 +1011,7 @@ function FloorPlanViewer({
                   </div>
                 )}
 
+                {/* ===== DESCRIPTION (FOR SUBMITTALS) ===== */}
                 {selectedMarker.item_type === 'submittal' && selectedMarker.item.description && (
                   <div style={{ marginBottom: 'var(--space-lg)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>Description</div>
@@ -873,7 +1024,7 @@ function FloorPlanViewer({
             )}
           </div>
 
-          {/* Panel Footer */}
+          {/* ===== PANEL FOOTER - DELETE BUTTON ===== */}
           {isPM && (
             <div style={{
               padding: 'var(--space-md) var(--space-lg)',
@@ -917,12 +1068,19 @@ function FloorPlanViewer({
           }}
           rfis={rfis}
           submittals={submittals}
+          tasks={tasks || []}
           existingMarkers={floorPlan.markers || []}
           onSelect={handleMarkerSelect}
+          projectId={projectId}
+          projectNumber={projectNumber}
+          showToast={showToast}
+          onDataRefresh={onDataRefresh}
         />
       )}
 
-      {/* Pulse Animation */}
+      {/* ================================================================== */}
+      {/* PULSE ANIMATION STYLES                                            */}
+      {/* ================================================================== */}
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; transform: translate(-50%, -100%) scale(1); }

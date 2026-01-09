@@ -19,6 +19,7 @@ import {
   MapPin,
   MessageSquare,
   ClipboardList,
+  CheckSquare,
   AlertCircle
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
@@ -30,7 +31,7 @@ import FloorPlanUploadModal from './FloorPlanUploadModal';
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], showToast }) {
+function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], tasks = [], showToast, onDataRefresh }) {
   const { user } = useAuth();
   
   // ==========================================================================
@@ -65,6 +66,27 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
       setIsPM(user.role === 'PM');
     }
   }, [user]);
+
+  // ==========================================================================
+  // SYNC SELECTED PLAN WITH FLOOR PLANS
+  // ==========================================================================
+  // This effect keeps selectedPlan in sync with floorPlans after data refreshes.
+  // Without this, the viewer wouldn't show newly created markers until closed/reopened.
+  // ==========================================================================
+  useEffect(() => {
+    if (selectedPlan) {
+      const updatedPlan = floorPlans.find(fp => fp.id === selectedPlan.id);
+      if (updatedPlan) {
+        // Only update if markers have changed to avoid unnecessary re-renders
+        const currentMarkerCount = selectedPlan.markers?.length || 0;
+        const newMarkerCount = updatedPlan.markers?.length || 0;
+        if (currentMarkerCount !== newMarkerCount || 
+            JSON.stringify(selectedPlan.markers) !== JSON.stringify(updatedPlan.markers)) {
+          setSelectedPlan(updatedPlan);
+        }
+      }
+    }
+  }, [floorPlans]);
 
   // ==========================================================================
   // LOAD THUMBNAILS
@@ -143,7 +165,8 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
     const markers = plan.markers || [];
     const rfiCount = markers.filter(m => m.item_type === 'rfi').length;
     const submittalCount = markers.filter(m => m.item_type === 'submittal').length;
-    return { total: markers.length, rfiCount, submittalCount };
+    const taskCount = markers.filter(m => m.item_type === 'task').length;
+    return { total: markers.length, rfiCount, submittalCount, taskCount };
   };
 
   // ==========================================================================
@@ -251,7 +274,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
             No Floor Plans Yet
           </h4>
           <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)', maxWidth: '400px', margin: '0 auto var(--space-lg)' }}>
-            Upload floor plans to mark RFI and Submittal locations directly on your drawings.
+            Upload floor plans to mark RFI, Submittal, and Task locations directly on your drawings.
           </p>
           {isPM && (
             <button
@@ -313,7 +336,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                {/* Preview Area */}
+                {/* ===== PREVIEW AREA ===== */}
                 <div style={{
                   height: '180px',
                   background: 'var(--bg-tertiary)',
@@ -340,7 +363,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                     <Image size={48} style={{ color: 'var(--info)', opacity: 0.5 }} />
                   )}
                   
-                  {/* Page count badge */}
+                  {/* ===== PAGE COUNT BADGE ===== */}
                   {plan.page_count > 1 && (
                     <div style={{
                       position: 'absolute',
@@ -357,7 +380,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                     </div>
                   )}
 
-                  {/* PDF Badge */}
+                  {/* ===== PDF BADGE ===== */}
                   {isPdf && (
                     <div style={{
                       position: 'absolute',
@@ -374,7 +397,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                     </div>
                   )}
 
-                  {/* View overlay */}
+                  {/* ===== VIEW OVERLAY ===== */}
                   <div style={{
                     position: 'absolute',
                     inset: 0,
@@ -407,7 +430,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                   </div>
                 </div>
 
-                {/* Info Area */}
+                {/* ===== INFO AREA ===== */}
                 <div style={{ padding: 'var(--space-md)' }}>
                   <div style={{
                     display: 'flex',
@@ -455,7 +478,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                       </h4>
                     )}
 
-                    {/* Action Menu */}
+                    {/* ===== ACTION MENU ===== */}
                     {isPM && (
                       <div style={{ position: 'relative' }}>
                         <button
@@ -542,7 +565,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                     )}
                   </div>
 
-                  {/* Marker Stats */}
+                  {/* ===== MARKER STATS ===== */}
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -564,6 +587,12 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#8b5cf6' }}>
                         <ClipboardList size={14} />
                         <span>{counts.submittalCount}</span>
+                      </div>
+                    )}
+                    {counts.taskCount > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#22c55e' }}>
+                        <CheckSquare size={14} />
+                        <span>{counts.taskCount}</span>
                       </div>
                     )}
                   </div>
@@ -598,6 +627,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
           projectNumber={projectNumber}
           rfis={rfis}
           submittals={submittals}
+          tasks={tasks}
           isPM={isPM}
           onClose={handleCloseViewer}
           onMarkerCreate={createMarker}
@@ -606,10 +636,11 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], s
           onPageRename={updatePageName}
           showToast={showToast}
           onRefresh={fetchFloorPlans}
+          onDataRefresh={onDataRefresh}
         />
       )}
 
-      {/* Hover styles */}
+      {/* ===== HOVER STYLES ===== */}
       <style>{`
         .view-overlay:hover {
           background: rgba(0,0,0,0.4) !important;

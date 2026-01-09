@@ -1,25 +1,314 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Plus, Upload, FileText, Image, File, Trash2, Paperclip, Mail } from 'lucide-react';
+// ============================================================================
+// AddTaskModal.jsx - Create New Task Modal (POLISHED VERSION)
+// ============================================================================
+// Modal form for creating new tasks within a project.
+// Supports internal and external assignment, file attachments, milestones.
+//
+// PROPS:
+// - isOpen: Boolean controlling modal visibility
+// - onClose: Callback to close modal
+// - projectId: UUID of parent project
+// - projectName: Project name for email drafts
+// - projectNumber: Project number for email drafts
+// - onSuccess: Callback after successful task creation
+//
+// FIXES:
+// - Proper form validation with field-level errors
+// - Loading state prevents double-submission
+// - File upload error handling
+// - Memory cleanup for file previews
+// - Proper date validation (due date after start date)
+// ============================================================================
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  X,
+  Plus,
+  Upload,
+  FileText,
+  Image,
+  File,
+  Trash2,
+  Paperclip,
+  Mail,
+  AlertCircle,
+  Loader
+} from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { draftTaskEmail } from '../../utils/emailUtils';
 
 // ============================================================================
-// ADD TASK MODAL COMPONENT
-// Creates new tasks with internal/external assignment, file attachments,
-// and optional email draft for external contacts
+// CONSTANTS
+// ============================================================================
+const STATUS_OPTIONS = [
+  { value: 'Not Started', label: 'Not Started' },
+  { value: 'In Progress', label: 'In Progress' },
+  { value: 'On Hold', label: 'On Hold' },
+  { value: 'Blocked', label: 'Blocked' },
+  { value: 'Completed', label: 'Completed' }
+];
+
+const PRIORITY_OPTIONS = [
+  { value: 'Low', label: 'Low' },
+  { value: 'Medium', label: 'Medium' },
+  { value: 'High', label: 'High' },
+  { value: 'Critical', label: 'Critical' }
+];
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_FILE_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain'
+];
+
+// ============================================================================
+// STYLES
+// ============================================================================
+const styles = {
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0, 0, 0, 0.7)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    padding: 'var(--space-lg)'
+  },
+  modal: {
+    background: 'var(--bg-secondary)',
+    borderRadius: 'var(--radius-xl)',
+    width: '100%',
+    maxWidth: '600px',
+    maxHeight: '90vh',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    boxShadow: 'var(--shadow-xl)'
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 'var(--space-lg)',
+    borderBottom: '1px solid var(--border-color)'
+  },
+  body: {
+    padding: 'var(--space-lg)',
+    overflowY: 'auto',
+    flex: 1
+  },
+  footer: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: 'var(--space-sm)',
+    padding: 'var(--space-lg)',
+    borderTop: '1px solid var(--border-color)',
+    background: 'var(--bg-primary)'
+  },
+  formGroup: {
+    marginBottom: 'var(--space-lg)'
+  },
+  label: {
+    display: 'block',
+    fontSize: '0.875rem',
+    fontWeight: '600',
+    color: 'var(--text-primary)',
+    marginBottom: 'var(--space-xs)'
+  },
+  required: {
+    color: 'var(--danger)',
+    marginLeft: '2px'
+  },
+  input: {
+    width: '100%',
+    padding: 'var(--space-sm) var(--space-md)',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--border-color)',
+    background: 'var(--bg-primary)',
+    color: 'var(--text-primary)',
+    fontSize: '0.9375rem'
+  },
+  inputError: {
+    borderColor: 'var(--danger)'
+  },
+  textarea: {
+    width: '100%',
+    padding: 'var(--space-sm) var(--space-md)',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--border-color)',
+    background: 'var(--bg-primary)',
+    color: 'var(--text-primary)',
+    fontSize: '0.9375rem',
+    minHeight: '100px',
+    resize: 'vertical',
+    fontFamily: 'inherit'
+  },
+  select: {
+    width: '100%',
+    padding: 'var(--space-sm) var(--space-md)',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--border-color)',
+    background: 'var(--bg-primary)',
+    color: 'var(--text-primary)',
+    fontSize: '0.9375rem',
+    cursor: 'pointer'
+  },
+  errorText: {
+    color: 'var(--danger)',
+    fontSize: '0.75rem',
+    marginTop: 'var(--space-xs)'
+  },
+  errorBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 'var(--space-sm)',
+    padding: 'var(--space-md)',
+    background: 'var(--danger-light)',
+    border: '1px solid var(--danger)',
+    borderRadius: 'var(--radius-md)',
+    color: 'var(--danger)',
+    fontSize: '0.875rem',
+    marginBottom: 'var(--space-lg)'
+  },
+  radioGroup: {
+    display: 'flex',
+    gap: 'var(--space-lg)',
+    marginBottom: 'var(--space-md)'
+  },
+  radioLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 'var(--space-xs)',
+    cursor: 'pointer',
+    fontSize: '0.9375rem',
+    color: 'var(--text-primary)'
+  },
+  row: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 'var(--space-md)'
+  },
+  fileDropZone: {
+    border: '2px dashed var(--border-color)',
+    borderRadius: 'var(--radius-md)',
+    padding: 'var(--space-lg)',
+    textAlign: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.2s'
+  },
+  fileDropZoneActive: {
+    borderColor: 'var(--sunbelt-orange)',
+    background: 'rgba(255, 107, 53, 0.05)'
+  },
+  fileList: {
+    marginTop: 'var(--space-md)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 'var(--space-sm)'
+  },
+  fileItem: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 'var(--space-sm) var(--space-md)',
+    background: 'var(--bg-primary)',
+    borderRadius: 'var(--radius-md)',
+    border: '1px solid var(--border-color)'
+  },
+  primaryButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 'var(--space-xs)',
+    padding: 'var(--space-sm) var(--space-lg)',
+    background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+    color: 'white',
+    border: 'none',
+    borderRadius: 'var(--radius-md)',
+    fontWeight: '600',
+    fontSize: '0.9375rem',
+    cursor: 'pointer',
+    minWidth: '120px'
+  },
+  secondaryButton: {
+    padding: 'var(--space-sm) var(--space-lg)',
+    background: 'var(--bg-primary)',
+    color: 'var(--text-secondary)',
+    border: '1px solid var(--border-color)',
+    borderRadius: 'var(--radius-md)',
+    fontWeight: '600',
+    fontSize: '0.9375rem',
+    cursor: 'pointer'
+  },
+  disabledButton: {
+    opacity: 0.6,
+    cursor: 'not-allowed'
+  }
+};
+
+// ============================================================================
+// HELPER FUNCTIONS
 // ============================================================================
 
-function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNumber = '', onSuccess }) {
+/**
+ * Get file icon based on type
+ */
+const getFileIcon = (fileType) => {
+  if (fileType?.startsWith('image/')) return <Image size={18} style={{ color: 'var(--info)' }} />;
+  if (fileType?.includes('pdf')) return <FileText size={18} style={{ color: '#ef4444' }} />;
+  return <File size={18} style={{ color: 'var(--text-secondary)' }} />;
+};
+
+/**
+ * Format file size
+ */
+const formatFileSize = (bytes) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+/**
+ * Validate email format
+ */
+const isValidEmail = (email) => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+function AddTaskModal({
+  isOpen,
+  onClose,
+  projectId,
+  projectName = '',
+  projectNumber = '',
+  onSuccess
+}) {
   const { user } = useAuth();
+  const fileInputRef = useRef(null);
+
+  // ==========================================================================
+  // STATE
+  // ==========================================================================
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [users, setUsers] = useState([]);
   const [milestones, setMilestones] = useState([]);
   const [pendingFiles, setPendingFiles] = useState([]);
-  const fileInputRef = useRef(null);
-  
-  // ===== FORM STATE =====
+  const [isDragOver, setIsDragOver] = useState(false);
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -35,18 +324,47 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
     start_date: ''
   });
 
-  // ===== EFFECTS =====
+  // ==========================================================================
+  // EFFECTS
+  // ==========================================================================
+
+  // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
-      fetchUsers();
-      fetchMilestones();
-      setFormData(prev => ({ ...prev, internal_owner_id: user?.id || '' }));
+      setFormData({
+        title: '',
+        description: '',
+        assignment_type: 'internal',
+        assignee_id: '',
+        external_assignee_name: '',
+        external_assignee_email: '',
+        internal_owner_id: user?.id || '',
+        milestone_id: '',
+        status: 'Not Started',
+        priority: 'Medium',
+        due_date: '',
+        start_date: ''
+      });
       setPendingFiles([]);
       setError('');
+      setFieldErrors({});
+      fetchUsers();
+      fetchMilestones();
     }
   }, [isOpen, user]);
 
-  // ===== DATA FETCHING =====
+  // Cleanup file object URLs on unmount
+  useEffect(() => {
+    return () => {
+      pendingFiles.forEach(file => {
+        if (file.preview) URL.revokeObjectURL(file.preview);
+      });
+    };
+  }, [pendingFiles]);
+
+  // ==========================================================================
+  // DATA FETCHING
+  // ==========================================================================
   const fetchUsers = async () => {
     try {
       const { data, error } = await supabase
@@ -54,11 +372,11 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
         .select('*')
         .eq('is_active', true)
         .order('name');
-      
+
       if (error) throw error;
       setUsers(data || []);
-    } catch (error) {
-      console.error('Error fetching users:', error);
+    } catch (err) {
+      console.error('Error fetching users:', err);
     }
   };
 
@@ -68,491 +386,478 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
         .from('milestones')
         .select('*')
         .eq('project_id', projectId)
-        .order('due_date', { ascending: true });
-      
+        .order('due_date');
+
       if (error) throw error;
       setMilestones(data || []);
-    } catch (error) {
-      console.error('Error fetching milestones:', error);
+    } catch (err) {
+      console.error('Error fetching milestones:', err);
     }
   };
 
-  // ===== FORM HANDLERS =====
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  // ==========================================================================
+  // VALIDATION
+  // ==========================================================================
+  const validateForm = useCallback(() => {
+    const errors = {};
 
-  // ===== FILE HANDLING =====
-  const getFileIcon = (fileType) => {
-    if (fileType?.startsWith('image/')) return <Image size={16} style={{ color: 'var(--info)' }} />;
-    if (fileType?.includes('pdf')) return <FileText size={16} style={{ color: '#ef4444' }} />;
-    if (fileType?.includes('word') || fileType?.includes('document')) return <FileText size={16} style={{ color: '#3b82f6' }} />;
-    if (fileType?.includes('sheet') || fileType?.includes('excel')) return <FileText size={16} style={{ color: '#22c55e' }} />;
-    return <File size={16} />;
-  };
+    // Title is required
+    if (!formData.title.trim()) {
+      errors.title = 'Title is required';
+    }
 
-  const formatFileSize = (bytes) => {
-    if (!bytes) return '';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  };
-
-  const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
-
-    const newFiles = files.map(file => ({
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      file: file,
-      name: file.name,
-      size: file.size,
-      type: file.type
-    }));
-
-    setPendingFiles(prev => [...prev, ...newFiles]);
-    
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const handleRemovePendingFile = (fileId) => {
-    setPendingFiles(prev => prev.filter(f => f.id !== fileId));
-  };
-
-  const uploadPendingFiles = async (taskId) => {
-    const uploadedAttachments = [];
-
-    for (const pendingFile of pendingFiles) {
-      try {
-        const timestamp = Date.now();
-        const safeName = pendingFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const storagePath = `${projectId}/tasks/${taskId}/${timestamp}_${safeName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('project-files')
-          .upload(storagePath, pendingFile.file);
-
-        if (uploadError) {
-          console.error('Error uploading file:', uploadError);
-          continue;
-        }
-
-        const { data: urlData } = supabase.storage
-          .from('project-files')
-          .getPublicUrl(storagePath);
-
-        const attachmentData = {
-          project_id: projectId,
-          task_id: taskId,
-          file_name: pendingFile.name,
-          file_size: pendingFile.size,
-          file_type: pendingFile.type,
-          storage_path: storagePath,
-          public_url: urlData.publicUrl,
-          uploaded_by: user.id
-        };
-
-        const { data: newAttachment, error: insertError } = await supabase
-          .from('file_attachments')
-          .insert([attachmentData])
-          .select()
-          .single();
-
-        if (!insertError && newAttachment) {
-          uploadedAttachments.push(newAttachment);
-        }
-      } catch (error) {
-        console.error('Error processing file:', error);
+    // External assignment validation
+    if (formData.assignment_type === 'external') {
+      if (!formData.external_assignee_name.trim()) {
+        errors.external_assignee_name = 'Name is required for external assignment';
+      }
+      if (!formData.external_assignee_email.trim()) {
+        errors.external_assignee_email = 'Email is required for external assignment';
+      } else if (!isValidEmail(formData.external_assignee_email)) {
+        errors.external_assignee_email = 'Please enter a valid email address';
       }
     }
 
-    return uploadedAttachments;
-  };
-
-  // ===== CREATE TASK =====
-  const createTask = async () => {
-    const taskData = {
-      project_id: projectId,
-      title: formData.title.trim(),
-      description: formData.description.trim() || null,
-      assignee_id: formData.assignment_type === 'internal' ? (formData.assignee_id || null) : null,
-      external_assignee_name: formData.assignment_type === 'external' ? formData.external_assignee_name.trim() : null,
-      external_assignee_email: formData.assignment_type === 'external' ? formData.external_assignee_email.trim() : null,
-      internal_owner_id: formData.assignment_type === 'external' ? (formData.internal_owner_id || null) : null,
-      milestone_id: formData.milestone_id || null,
-      status: formData.status,
-      priority: formData.priority,
-      due_date: formData.due_date || null,
-      start_date: formData.start_date || null,
-      created_by: user.id
-    };
-
-    const { data, error: insertError } = await supabase
-      .from('tasks')
-      .insert([taskData])
-      .select()
-      .single();
-
-    if (insertError) throw insertError;
-
-    if (pendingFiles.length > 0) {
-      await uploadPendingFiles(data.id);
+    // Date validation
+    if (formData.start_date && formData.due_date) {
+      if (new Date(formData.due_date) < new Date(formData.start_date)) {
+        errors.due_date = 'Due date must be after start date';
+      }
     }
 
-    return data;
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [formData]);
+
+  // ==========================================================================
+  // HANDLERS
+  // ==========================================================================
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+
+    // Clear field error when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({ ...prev, [name]: null }));
+    }
   };
 
-  // ===== SUBMIT HANDLERS =====
-  const handleSubmit = async (e) => {
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    addFiles(files);
+  };
+
+  const handleDragOver = (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      const data = await createTask();
-      onSuccess(data);
-      handleClose();
-    } catch (error) {
-      console.error('Error creating task:', error);
-      setError(error.message || 'Failed to create task');
-    } finally {
-      setLoading(false);
-    }
+    setIsDragOver(true);
   };
 
-  const handleCreateAndEmail = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const data = await createTask();
-      
-      // Draft the email
-      const taskForEmail = {
-        ...data,
-        external_assignee_email: formData.external_assignee_email
-      };
-      draftTaskEmail(taskForEmail, projectName, projectNumber);
-      
-      onSuccess(data);
-      handleClose();
-    } catch (error) {
-      console.error('Error creating task:', error);
-      setError(error.message || 'Failed to create task');
-    } finally {
-      setLoading(false);
-    }
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
   };
 
-  // ===== CLOSE HANDLER =====
-  const handleClose = () => {
-    setFormData({
-      title: '',
-      description: '',
-      assignment_type: 'internal',
-      assignee_id: '',
-      external_assignee_name: '',
-      external_assignee_email: '',
-      internal_owner_id: user?.id || '',
-      milestone_id: '',
-      status: 'Not Started',
-      priority: 'Medium',
-      due_date: '',
-      start_date: ''
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    addFiles(files);
+  };
+
+  const addFiles = (files) => {
+    const validFiles = [];
+
+    files.forEach(file => {
+      // Check file size
+      if (file.size > MAX_FILE_SIZE) {
+        setError(`File "${file.name}" is too large. Maximum size is 10MB.`);
+        return;
+      }
+
+      // Check file type (optional - allow all if not in list)
+      // if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+      //   setError(`File type "${file.type}" is not allowed.`);
+      //   return;
+      // }
+
+      validFiles.push({
+        file,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+      });
     });
-    setPendingFiles([]);
-    setError('');
-    onClose();
+
+    setPendingFiles(prev => [...prev, ...validFiles]);
   };
 
+  const removeFile = (index) => {
+    setPendingFiles(prev => {
+      const file = prev[index];
+      if (file.preview) URL.revokeObjectURL(file.preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const handleSubmit = async (e, shouldEmail = false) => {
+    e.preventDefault();
+
+    if (!validateForm()) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // Prepare task data
+      const taskData = {
+        project_id: projectId,
+        title: formData.title.trim(),
+        description: formData.description.trim() || null,
+        status: formData.status,
+        priority: formData.priority,
+        start_date: formData.start_date || null,
+        due_date: formData.due_date || null,
+        milestone_id: formData.milestone_id || null,
+        internal_owner_id: formData.internal_owner_id || user?.id,
+        created_by: user?.id
+      };
+
+      // Handle assignment
+      if (formData.assignment_type === 'internal') {
+        taskData.assignee_id = formData.assignee_id || null;
+        taskData.external_assignee_name = null;
+        taskData.external_assignee_email = null;
+      } else {
+        taskData.assignee_id = null;
+        taskData.external_assignee_name = formData.external_assignee_name.trim();
+        taskData.external_assignee_email = formData.external_assignee_email.trim().toLowerCase();
+      }
+
+      // Create task
+      const { data: task, error: taskError } = await supabase
+        .from('tasks')
+        .insert([taskData])
+        .select()
+        .single();
+
+      if (taskError) throw taskError;
+
+      // Upload files if any
+      if (pendingFiles.length > 0) {
+        for (const fileItem of pendingFiles) {
+          const timestamp = Date.now();
+          const safeName = fileItem.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const storagePath = `${projectId}/tasks/${task.id}/${timestamp}_${safeName}`;
+
+          // Upload to storage
+          const { error: uploadError } = await supabase.storage
+            .from('project-files')
+            .upload(storagePath, fileItem.file);
+
+          if (uploadError) {
+            console.error('File upload error:', uploadError);
+            continue; // Continue with other files
+          }
+
+          // Get public URL
+          const { data: urlData } = supabase.storage
+            .from('project-files')
+            .getPublicUrl(storagePath);
+
+          // Create attachment record
+          await supabase.from('attachments').insert([{
+            project_id: projectId,
+            task_id: task.id,
+            file_name: fileItem.name,
+            file_size: fileItem.size,
+            file_type: fileItem.type,
+            storage_path: storagePath,
+            public_url: urlData?.publicUrl,
+            uploaded_by: user?.id
+          }]);
+        }
+      }
+
+      // Draft email if requested
+      if (shouldEmail && formData.assignment_type === 'external') {
+        draftTaskEmail(
+          { ...task, external_assignee_email: formData.external_assignee_email },
+          projectName,
+          projectNumber
+        );
+      }
+
+      onSuccess(task);
+    } catch (err) {
+      console.error('Error creating task:', err);
+      setError(err.message || 'Failed to create task. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==========================================================================
+  // RENDER
+  // ==========================================================================
   if (!isOpen) return null;
 
-  // ===== RENDER =====
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.7)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      padding: '20px'
-    }}>
-      <div style={{
-        background: 'var(--bg-primary)',
-        borderRadius: 'var(--radius-lg)',
-        width: '100%',
-        maxWidth: '700px',
-        maxHeight: '90vh',
-        overflow: 'auto',
-        boxShadow: 'var(--shadow-xl)'
-      }}>
-        {/* ================================================================== */}
-        {/* MODAL HEADER                                                       */}
-        {/* ================================================================== */}
-        <div style={{
-          padding: 'var(--space-xl)',
-          borderBottom: '1px solid var(--border-color)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          position: 'sticky',
-          top: 0,
-          background: 'var(--bg-primary)',
-          zIndex: 1
-        }}>
-          <div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
-              Add Task
-            </h2>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-              Create a new task for this project
-            </p>
-          </div>
+    <div style={styles.overlay} onClick={onClose}>
+      <div style={styles.modal} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={styles.header}>
+          <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+            Add New Task
+          </h2>
           <button
-            onClick={handleClose}
+            onClick={onClose}
             style={{
               background: 'none',
               border: 'none',
               color: 'var(--text-secondary)',
               cursor: 'pointer',
-              padding: '8px',
-              display: 'flex',
-              borderRadius: '6px'
+              padding: '4px'
             }}
           >
             <X size={24} />
           </button>
         </div>
 
-        {/* ================================================================== */}
-        {/* MODAL FORM                                                         */}
-        {/* ================================================================== */}
-        <form onSubmit={handleSubmit} style={{ padding: 'var(--space-xl)' }}>
-          {/* Error Display */}
+        {/* Body */}
+        <form onSubmit={handleSubmit} style={styles.body}>
+          {/* Error Banner */}
           {error && (
-            <div style={{
-              padding: 'var(--space-md)',
-              background: 'var(--danger-light)',
-              border: '1px solid var(--danger)',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: 'var(--space-lg)',
-              color: 'var(--danger)',
-              fontSize: '0.875rem'
-            }}>
+            <div style={styles.errorBanner}>
+              <AlertCircle size={18} />
               {error}
             </div>
           )}
 
-          {/* Task Title */}
-          <div className="form-group">
-            <label className="form-label">Task Title *</label>
+          {/* Title */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              Title <span style={styles.required}>*</span>
+            </label>
             <input
               type="text"
               name="title"
               value={formData.title}
               onChange={handleChange}
-              required
-              className="form-input"
-              placeholder="e.g., Review floor plans"
+              placeholder="Enter task title"
+              style={{
+                ...styles.input,
+                ...(fieldErrors.title ? styles.inputError : {})
+              }}
+              autoFocus
             />
+            {fieldErrors.title && (
+              <div style={styles.errorText}>{fieldErrors.title}</div>
+            )}
           </div>
 
           {/* Description */}
-          <div className="form-group">
-            <label className="form-label">Description</label>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Description</label>
             <textarea
               name="description"
               value={formData.description}
               onChange={handleChange}
-              className="form-input"
-              rows="3"
-              placeholder="Additional details about this task..."
-              style={{ resize: 'vertical', minHeight: '80px' }}
+              placeholder="Enter task description (optional)"
+              style={styles.textarea}
             />
           </div>
 
-          {/* ================================================================== */}
-          {/* ASSIGNMENT TYPE TOGGLE                                            */}
-          {/* ================================================================== */}
-          <div className="form-group">
-            <label className="form-label">Assign To</label>
-            <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
-              <label style={{
-                flex: 1,
-                padding: 'var(--space-md)',
-                border: `2px solid ${formData.assignment_type === 'internal' ? 'var(--sunbelt-orange)' : 'var(--border-color)'}`,
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-                textAlign: 'center',
-                background: formData.assignment_type === 'internal' ? 'rgba(255, 107, 53, 0.1)' : 'var(--bg-secondary)',
-                transition: 'all 0.15s'
-              }}>
+          {/* Assignment Type */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Assignment Type</label>
+            <div style={styles.radioGroup}>
+              <label style={styles.radioLabel}>
                 <input
                   type="radio"
                   name="assignment_type"
                   value="internal"
                   checked={formData.assignment_type === 'internal'}
                   onChange={handleChange}
-                  style={{ marginRight: '8px' }}
                 />
-                <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>Internal Team</span>
+                Internal Team Member
               </label>
-              
-              <label style={{
-                flex: 1,
-                padding: 'var(--space-md)',
-                border: `2px solid ${formData.assignment_type === 'external' ? 'var(--sunbelt-orange)' : 'var(--border-color)'}`,
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-                textAlign: 'center',
-                background: formData.assignment_type === 'external' ? 'rgba(255, 107, 53, 0.1)' : 'var(--bg-secondary)',
-                transition: 'all 0.15s'
-              }}>
+              <label style={styles.radioLabel}>
                 <input
                   type="radio"
                   name="assignment_type"
                   value="external"
                   checked={formData.assignment_type === 'external'}
                   onChange={handleChange}
-                  style={{ marginRight: '8px' }}
                 />
-                <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>External Contact</span>
+                External Contact
               </label>
             </div>
           </div>
 
-          {/* Internal Assignment Dropdown */}
+          {/* Internal Assignment */}
           {formData.assignment_type === 'internal' && (
-            <div className="form-group">
-              <label className="form-label">Assign To</label>
-              <select
-                name="assignee_id"
-                value={formData.assignee_id}
-                onChange={handleChange}
-                className="form-input"
-              >
-                <option value="">Select team member</option>
-                {users.map(u => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.role})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* External Assignment Fields */}
-          {formData.assignment_type === 'external' && (
-            <div style={{ 
-              padding: 'var(--space-lg)', 
-              background: 'rgba(255, 107, 53, 0.05)', 
-              border: '1px solid rgba(255, 107, 53, 0.2)',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: 'var(--space-lg)'
-            }}>
-              <h4 style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: 'var(--space-md)' }}>
-                External Contact Details
-              </h4>
-              
-              <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
-                <label className="form-label">External Contact Name *</label>
-                <input
-                  type="text"
-                  name="external_assignee_name"
-                  value={formData.external_assignee_name}
+            <div style={styles.row}>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Assignee</label>
+                <select
+                  name="assignee_id"
+                  value={formData.assignee_id}
                   onChange={handleChange}
-                  required
-                  className="form-input"
-                  placeholder="e.g., John Smith (Architect)"
-                />
+                  style={styles.select}
+                >
+                  <option value="">Unassigned</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
               </div>
-              
-              <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
-                <label className="form-label">External Contact Email *</label>
-                <input
-                  type="email"
-                  name="external_assignee_email"
-                  value={formData.external_assignee_email}
-                  onChange={handleChange}
-                  required
-                  className="form-input"
-                  placeholder="john@architectfirm.com"
-                />
-              </div>
-
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Internal Owner (Responsible for Tracking) *</label>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Internal Owner</label>
                 <select
                   name="internal_owner_id"
                   value={formData.internal_owner_id}
                   onChange={handleChange}
-                  required
-                  className="form-input"
+                  style={styles.select}
                 >
-                  <option value="">Select team member</option>
+                  <option value="">Select owner</option>
                   {users.map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.role})
-                    </option>
+                    <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                  This person is responsible for following up and updating the task status.
-                </p>
               </div>
             </div>
           )}
 
-          {/* ================================================================== */}
-          {/* STATUS, PRIORITY, MILESTONE, DATES                                */}
-          {/* ================================================================== */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)' }}>
-            {/* Status Dropdown - NEW! */}
-            <div className="form-group">
-              <label className="form-label">Status</label>
+          {/* External Assignment */}
+          {formData.assignment_type === 'external' && (
+            <>
+              <div style={styles.row}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>
+                    External Name <span style={styles.required}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="external_assignee_name"
+                    value={formData.external_assignee_name}
+                    onChange={handleChange}
+                    placeholder="Contact name"
+                    style={{
+                      ...styles.input,
+                      ...(fieldErrors.external_assignee_name ? styles.inputError : {})
+                    }}
+                  />
+                  {fieldErrors.external_assignee_name && (
+                    <div style={styles.errorText}>{fieldErrors.external_assignee_name}</div>
+                  )}
+                </div>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>
+                    External Email <span style={styles.required}>*</span>
+                  </label>
+                  <input
+                    type="email"
+                    name="external_assignee_email"
+                    value={formData.external_assignee_email}
+                    onChange={handleChange}
+                    placeholder="contact@example.com"
+                    style={{
+                      ...styles.input,
+                      ...(fieldErrors.external_assignee_email ? styles.inputError : {})
+                    }}
+                  />
+                  {fieldErrors.external_assignee_email && (
+                    <div style={styles.errorText}>{fieldErrors.external_assignee_email}</div>
+                  )}
+                </div>
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Internal Owner</label>
+                <select
+                  name="internal_owner_id"
+                  value={formData.internal_owner_id}
+                  onChange={handleChange}
+                  style={styles.select}
+                >
+                  <option value="">Select owner</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
+          {/* Status and Priority */}
+          <div style={styles.row}>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Status</label>
               <select
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
-                className="form-input"
+                style={styles.select}
               >
-                <option value="Not Started">Not Started</option>
-                <option value="In Progress">In Progress</option>
-                <option value="On Hold">On Hold</option>
-                <option value="Completed">Completed</option>
+                {STATUS_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
-
-            {/* Priority Dropdown */}
-            <div className="form-group">
-              <label className="form-label">Priority</label>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Priority</label>
               <select
                 name="priority"
                 value={formData.priority}
                 onChange={handleChange}
-                className="form-input"
+                style={styles.select}
               >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-                <option value="Critical">Critical</option>
+                {PRIORITY_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
+          </div>
 
-            {/* Milestone Dropdown */}
-            <div className="form-group">
-              <label className="form-label">Milestone</label>
+          {/* Dates */}
+          <div style={styles.row}>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Start Date</label>
+              <input
+                type="date"
+                name="start_date"
+                value={formData.start_date}
+                onChange={handleChange}
+                style={styles.input}
+              />
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Due Date</label>
+              <input
+                type="date"
+                name="due_date"
+                value={formData.due_date}
+                onChange={handleChange}
+                style={{
+                  ...styles.input,
+                  ...(fieldErrors.due_date ? styles.inputError : {})
+                }}
+              />
+              {fieldErrors.due_date && (
+                <div style={styles.errorText}>{fieldErrors.due_date}</div>
+              )}
+            </div>
+          </div>
+
+          {/* Milestone */}
+          {milestones.length > 0 && (
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Milestone</label>
               <select
                 name="milestone_id"
                 value={formData.milestone_id}
                 onChange={handleChange}
-                className="form-input"
+                style={styles.select}
               >
                 <option value="">No milestone</option>
                 {milestones.map(m => (
@@ -560,130 +865,66 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
                 ))}
               </select>
             </div>
+          )}
 
-            {/* Empty cell for grid alignment */}
-            <div></div>
-
-            {/* Start Date */}
-            <div className="form-group">
-              <label className="form-label">Start Date</label>
-              <input
-                type="date"
-                name="start_date"
-                value={formData.start_date}
-                onChange={handleChange}
-                className="form-input"
-              />
-            </div>
-
-            {/* Due Date */}
-            <div className="form-group">
-              <label className="form-label">Due Date</label>
-              <input
-                type="date"
-                name="due_date"
-                value={formData.due_date}
-                onChange={handleChange}
-                className="form-input"
-              />
-            </div>
-          </div>
-
-          {/* ================================================================== */}
-          {/* FILE ATTACHMENTS                                                  */}
-          {/* ================================================================== */}
-          <div style={{ 
-            padding: 'var(--space-lg)', 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            marginTop: 'var(--space-lg)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)' }}>
-              <h4 style={{ 
-                fontSize: '0.875rem', 
-                fontWeight: '700', 
-                color: 'var(--text-primary)', 
-                margin: 0,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-sm)'
-              }}>
-                <Paperclip size={16} />
-                Attachments ({pendingFiles.length})
-              </h4>
-              
-              <label style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-xs)',
-                padding: '6px 12px',
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-secondary)',
-                fontSize: '0.8125rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.15s'
-              }}>
-                <Upload size={14} />
-                Add Files
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  onChange={handleFileSelect}
-                  style={{ display: 'none' }}
-                />
-              </label>
-            </div>
-
-            {pendingFiles.length === 0 ? (
-              <p style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem', margin: 'var(--space-md) 0' }}>
-                No files attached. Click "Add Files" to attach documents.
+          {/* File Attachments */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              <Paperclip size={16} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+              Attachments
+            </label>
+            <div
+              style={{
+                ...styles.fileDropZone,
+                ...(isDragOver ? styles.fileDropZoneActive : {})
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <Upload size={24} style={{ color: 'var(--text-tertiary)', marginBottom: 'var(--space-sm)' }} />
+              <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                Drag files here or click to upload
               </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                {pendingFiles.map(file => (
-                  <div key={file.id} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-sm)',
-                    padding: 'var(--space-sm) var(--space-md)',
-                    background: 'var(--bg-primary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-sm)'
-                  }}>
-                    {getFileIcon(file.type)}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ 
-                        fontSize: '0.875rem', 
-                        fontWeight: '500', 
-                        color: 'var(--text-primary)',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}>
-                        {file.name}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                        {formatFileSize(file.size)}
+              <p style={{ margin: '4px 0 0 0', color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>
+                Max 10MB per file
+              </p>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
+
+            {/* File List */}
+            {pendingFiles.length > 0 && (
+              <div style={styles.fileList}>
+                {pendingFiles.map((file, index) => (
+                  <div key={index} style={styles.fileItem}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                      {getFileIcon(file.type)}
+                      <div>
+                        <div style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>
+                          {file.name}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                          {formatFileSize(file.size)}
+                        </div>
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleRemovePendingFile(file.id)}
+                      onClick={() => removeFile(index)}
                       style={{
                         background: 'none',
                         border: 'none',
                         color: 'var(--danger)',
                         cursor: 'pointer',
-                        padding: '4px',
-                        display: 'flex',
-                        borderRadius: '4px'
+                        padding: '4px'
                       }}
-                      title="Remove"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -692,59 +933,59 @@ function AddTaskModal({ isOpen, onClose, projectId, projectName = '', projectNum
               </div>
             )}
           </div>
-
-          {/* ================================================================== */}
-          {/* FORM ACTIONS                                                      */}
-          {/* ================================================================== */}
-          <div style={{
-            display: 'flex',
-            gap: 'var(--space-md)',
-            justifyContent: 'flex-end',
-            paddingTop: 'var(--space-lg)',
-            borderTop: '1px solid var(--border-color)',
-            marginTop: 'var(--space-lg)',
-            flexWrap: 'wrap'
-          }}>
-            <button type="button" onClick={handleClose} className="btn btn-secondary" disabled={loading}>
-              Cancel
-            </button>
-            
-            {/* Create & Email button for external tasks */}
-            {formData.assignment_type === 'external' && formData.external_assignee_email && (
-              <button 
-                type="button" 
-                onClick={handleCreateAndEmail}
-                disabled={loading}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-xs)',
-                  padding: '10px 20px',
-                  background: 'var(--bg-secondary)',
-                  border: '1px solid var(--success)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--success)',
-                  fontWeight: '600',
-                  fontSize: '0.9375rem',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  opacity: loading ? 0.7 : 1
-                }}
-                title="Create task and open email draft"
-              >
-                <Mail size={18} />
-                Create & Email
-              </button>
-            )}
-            
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? (
-                pendingFiles.length > 0 ? 'Creating & Uploading...' : 'Creating...'
-              ) : (
-                <><Plus size={18} /> Create Task</>
-              )}
-            </button>
-          </div>
         </form>
+
+        {/* Footer */}
+        <div style={styles.footer}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={styles.secondaryButton}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+
+          {formData.assignment_type === 'external' && (
+            <button
+              type="button"
+              onClick={(e) => handleSubmit(e, true)}
+              disabled={loading}
+              style={{
+                ...styles.secondaryButton,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-xs)',
+                ...(loading ? styles.disabledButton : {})
+              }}
+            >
+              <Mail size={16} />
+              Create & Email
+            </button>
+          )}
+
+          <button
+            type="submit"
+            onClick={handleSubmit}
+            disabled={loading}
+            style={{
+              ...styles.primaryButton,
+              ...(loading ? styles.disabledButton : {})
+            }}
+          >
+            {loading ? (
+              <>
+                <Loader size={16} className="spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Plus size={16} />
+                Create Task
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
