@@ -1,8 +1,13 @@
 // ============================================================================
-// App.jsx - Main Application with PM/Director/VP Routing
+// App.jsx - Main Application with PM/Director/VP/IT Routing
 // ============================================================================
 // Routes all sidebar navigation to appropriate pages based on view mode.
 // Includes deep navigation from Tasks/RFIs/Submittals pages to ProjectDetails.
+//
+// FIXES (Jan 9, 2026):
+// - ✅ FIXED: VP now has 'reports' route
+// - ✅ FIXED: IT now has 'users' route for User Management
+// - ✅ FIXED: Main content margin-left matches 260px sidebar width
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -175,39 +180,40 @@ function AppContent() {
   // Navigate to a specific project (optionally with a specific tab)
   // Tab names: 'Overview', 'Tasks', 'RFIs', 'Submittals', 'Calendar', 'Files'
   const handleNavigateToProject = (projectId, tab = 'Overview') => {
-    // Map lowercase tab names to proper case
+    // Map lowercase tab names to proper case for ProjectDetails
     const tabMap = {
-      'overview': 'Overview',
-      'tasks': 'Tasks',
-      'rfis': 'RFIs',
-      'submittals': 'Submittals',
-      'calendar': 'Calendar',
-      'files': 'Files'
+      'overview': 'overview',
+      'tasks': 'tasks',
+      'rfis': 'rfis',
+      'submittals': 'submittals',
+      'calendar': 'calendar',
+      'files': 'files',
+      'floorplan': 'floorplan'
     };
     
     setSelectedProjectId(projectId);
-    setSelectedProjectTab(tabMap[tab?.toLowerCase()] || 'Overview');
+    setSelectedProjectTab(tabMap[tab.toLowerCase()] || 'overview');
     setCurrentView('project-detail');
   };
 
-  // Go back from project detail to the previous view
+  // Go back to the appropriate projects view
   const handleBackToProjects = () => {
     setSelectedProjectId(null);
     setSelectedProject(null);
-    setSelectedProjectTab('Overview');
+    setSelectedProjectTab('overview');
     setCurrentView('projects');
   };
 
-  // Handle project update from ProjectDetails
+  // Update project in state after edit
   const handleProjectUpdate = (updatedProject) => {
     setSelectedProject(updatedProject);
   };
 
-  // Custom setCurrentView that clears project selection when navigating away
+  // Handle view changes from sidebar - reset project selection
   const handleSetCurrentView = (view) => {
     if (view !== 'project-detail') {
       setSelectedProjectId(null);
-      setSelectedProjectTab('overview');
+      setSelectedProject(null);
     }
     setCurrentView(view);
   };
@@ -219,26 +225,18 @@ function AppContent() {
     return (
       <div style={{
         display: 'flex',
-        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         height: '100vh',
         background: 'var(--bg-primary)'
       }}>
         <div className="loading-spinner"></div>
-        <div style={{ 
-          marginTop: 'var(--space-md)', 
-          color: 'var(--text-secondary)',
-          fontSize: '0.9375rem'
-        }}>
-          Loading Sunbelt PM...
-        </div>
       </div>
     );
   }
 
   // ==========================================================================
-  // LOGIN STATE
+  // LOGIN SCREEN
   // ==========================================================================
   if (!user) {
     return <Login />;
@@ -275,7 +273,9 @@ function AppContent() {
       return <CalendarPage onNavigateToProject={handleNavigateToProject} />;
     }
 
+    // ========================================================================
     // VP-specific views
+    // ========================================================================
     if (dashboardType === 'vp') {
       switch (currentView) {
         case 'dashboard':
@@ -286,6 +286,8 @@ function AppContent() {
           return <ClientsPage onNavigateToProject={handleNavigateToProject} />;
         case 'team':
           return <TeamPage onNavigateToProject={handleNavigateToProject} />;
+        case 'reports':
+          return <ReportsPage />;
         case 'projects':
           return <ProjectsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
         case 'tasks':
@@ -299,23 +301,25 @@ function AppContent() {
       }
     }
 
+    // ========================================================================
     // Director-specific views
+    // ========================================================================
     if (dashboardType === 'director') {
       switch (currentView) {
         case 'dashboard':
           return <DirectorDashboard onNavigateToProject={handleNavigateToProject} />;
-        case 'projects':
-          return <ProjectsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
         case 'team':
           return <TeamPage onNavigateToProject={handleNavigateToProject} />;
+        case 'reports':
+          return <ReportsPage />;
+        case 'projects':
+          return <ProjectsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
         case 'tasks':
           return <TasksPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
         case 'rfis':
           return <RFIsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
         case 'submittals':
           return <SubmittalsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
-        case 'reports':
-          return <ReportsPage />;
         default:
           return <DirectorDashboard onNavigateToProject={handleNavigateToProject} />;
       }
@@ -328,6 +332,9 @@ function AppContent() {
       switch (currentView) {
         case 'dashboard':
           return <ITDashboard />;
+        case 'users':
+          // Render IT Dashboard with User Management tab active
+          return <ITDashboard initialTab="users" />;
         case 'projects':
           return <ProjectsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
         case 'tasks':
@@ -342,9 +349,8 @@ function AppContent() {
     }
 
     // ========================================================================
-    // PM-specific views
+    // PM-specific views (default)
     // ========================================================================
-
     switch (currentView) {
       case 'dashboard':
         return <PMDashboard onNavigateToProject={handleNavigateToProject} />;
@@ -378,7 +384,7 @@ function AppContent() {
       />
       <main style={{
         flex: 1,
-        marginLeft: '280px',
+        marginLeft: '260px', // ✅ FIXED: Match 260px sidebar width
         minHeight: '100vh',
         background: 'var(--bg-primary)',
         overflow: 'auto'
