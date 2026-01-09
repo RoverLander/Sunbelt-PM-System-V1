@@ -767,7 +767,8 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       { id: 'projects', label: 'Projects', icon: FolderKanban },
       { id: 'tasks', label: 'Tasks', icon: CheckSquare },
       { id: 'rfis', label: 'RFIs', icon: FileText },
-      { id: 'submittals', label: 'Submittals', icon: ClipboardList }
+      { id: 'submittals', label: 'Submittals', icon: ClipboardList },
+    { id: 'calendar', label: 'Calendar', icon: Calendar }
     ];
 
     // VP gets additional nav items

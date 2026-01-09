@@ -44,6 +44,7 @@ import AddSubmittalModal from './AddSubmittalModal';
 import EditSubmittalModal from './EditSubmittalModal';
 import AddMilestoneModal from './AddMilestoneModal';
 import { FloorPlansTab } from '../floorplans';
+import ProjectCalendarMonth from './ProjectCalendarMonth';
 
 // ============================================================================
 // CONSTANTS
@@ -53,6 +54,7 @@ const TABS = [
   { id: 'tasks', label: 'Tasks', icon: CheckSquare },
   { id: 'rfis', label: 'RFIs', icon: MessageSquare },
   { id: 'submittals', label: 'Submittals', icon: ClipboardList },
+    { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'files', label: 'Files', icon: FolderOpen },
   { id: 'floorplan', label: 'Floorplan', icon: Map },
   { id: 'calendar', label: 'Calendar', icon: Calendar }
@@ -524,7 +526,18 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
 
               {/* CALENDAR TAB */}
               {activeTab === 'calendar' && (
-                <PlaceholderTab icon={Calendar} message="Calendar view coming soon" />
+                <<ProjectCalendarMonth
+  project={project}
+  tasks={tasks}
+  rfis={rfis}
+  submittals={submittals}
+  milestones={milestones}
+  onItemClick={(item) => {
+    if (item.type === 'task') setEditTask(item.data);
+    else if (item.type === 'rfi') setEditRFI(item.data);
+    else if (item.type === 'submittal') setEditSubmittal(item.data);
+  }}
+/> message="Calendar view coming soon" />
               )}
             </>
           )}
