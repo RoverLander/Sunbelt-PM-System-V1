@@ -36,7 +36,8 @@ import {
   AlertTriangle,
   Flag,
   Map,
-  GripVertical
+  GripVertical,
+  GitGraph
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -56,12 +57,17 @@ import { FloorPlansTab } from '../floorplans';
 import ProjectCalendarMonth from './ProjectCalendarMonth';
 import ProjectCalendarWeek from './ProjectCalendarWeek';
 
+// ✅ ADDED: Workflow imports
+import WorkflowTracker from './WorkflowTracker';
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 // ✅ FIXED: Only ONE Calendar tab
+// ✅ ADDED: Workflow tab for project lifecycle tracking
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
+  { id: 'workflow', label: 'Workflow', icon: GitGraph },
   { id: 'tasks', label: 'Tasks', icon: CheckSquare },
   { id: 'rfis', label: 'RFIs', icon: MessageSquare },
   { id: 'submittals', label: 'Submittals', icon: ClipboardList },
@@ -139,6 +145,8 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
   const [rfis, setRFIs] = useState([]);
   const [submittals, setSubmittals] = useState([]);
   const [milestones, setMilestones] = useState([]);
+  const [workflowStations, setWorkflowStations] = useState([]);
+  const [projectWorkflowStatus, setProjectWorkflowStatus] = useState({});
 
   // Filters
   const [taskSearch, setTaskSearch] = useState('');
@@ -181,7 +189,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
   const fetchProjectData = useCallback(async () => {
     if (!project?.id) return;
     setLoading(true);
-    
+
     try {
       const [tasksRes, rfisRes, submittalsRes, milestonesRes] = await Promise.all([
         supabase.from('tasks').select('*, assignee:assignee_id(id, name, email)').eq('project_id', project.id).order('due_date'),
@@ -194,6 +202,29 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
       setRFIs(rfisRes.data || []);
       setSubmittals(submittalsRes.data || []);
       setMilestones(milestonesRes.data || []);
+
+      // Fetch workflow stations (reference data)
+      const { data: stations } = await supabase
+        .from('workflow_stations')
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order');
+
+      setWorkflowStations(stations || []);
+
+      // Fetch project-specific workflow status
+      const { data: statusData } = await supabase
+        .from('project_workflow_status')
+        .select('*')
+        .eq('project_id', project.id);
+
+      // Convert to object keyed by station_key
+      const statusMap = {};
+      (statusData || []).forEach(s => {
+        statusMap[s.station_key] = s.status;
+      });
+      setProjectWorkflowStatus(statusMap);
+
     } catch (error) {
       console.error('Error fetching project data:', error);
       showToast('Error loading project data', 'error');
@@ -375,9 +406,9 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
             <>
               {/* OVERVIEW TAB - ✅ UPDATED with calendar */}
               {activeTab === 'overview' && (
-                <OverviewTab 
-                  project={project} 
-                  stats={stats} 
+                <OverviewTab
+                  project={project}
+                  stats={stats}
                   milestones={milestones}
                   tasks={tasks}
                   rfis={rfis}
@@ -385,6 +416,20 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                   setEditTask={setEditTask}
                   setEditRFI={setEditRFI}
                   setEditSubmittal={setEditSubmittal}
+                />
+              )}
+
+              {/* WORKFLOW TAB - ✅ NEW: Visual workflow progress tracker */}
+              {activeTab === 'workflow' && (
+                <WorkflowTracker
+                  projectId={project.id}
+                  stations={workflowStations}
+                  tasks={tasks}
+                  projectStatuses={projectWorkflowStatus}
+                  onStationClick={(station, status, deadline) => {
+                    console.log('Station clicked:', station, status, deadline);
+                    // TODO: Open StationDetailModal when implemented
+                  }}
                 />
               )}
 
