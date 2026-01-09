@@ -1,4 +1,25 @@
-import React, { useState, useEffect } from 'react';
+// ============================================================================
+// CalendarWeekView.jsx
+// ============================================================================
+// Week view calendar component with fixed-width day cells.
+//
+// FEATURES:
+// - Fixed width columns that don't shift based on content
+// - Text truncation for long item names
+// - Export Week to Outlook button
+// - Item popover on click
+// - Weekend columns slightly narrower
+//
+// FIXES (Jan 9, 2026):
+// - ✅ FIXED: Day cells now have fixed width (won't grow/shrink with content)
+// - ✅ FIXED: Text items truncate with ellipsis
+// - ✅ ADDED: Export Week to Outlook button
+//
+// DEPENDENCIES:
+// - calendarUtils: Date formatting and grouping utilities
+// ============================================================================
+
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -12,7 +33,8 @@ import {
   Truck,
   X,
   Edit,
-  ExternalLink
+  ExternalLink,
+  Download
 } from 'lucide-react';
 import {
   getWeekDates,
@@ -26,7 +48,9 @@ import {
   ITEM_TYPE_CONFIG
 } from '../../utils/calendarUtils';
 
-// Icon mapping
+// ============================================================================
+// ICON MAPPING
+// ============================================================================
 const ICON_MAP = {
   CheckSquare,
   MessageSquare,
@@ -37,6 +61,78 @@ const ICON_MAP = {
   Truck
 };
 
+// ============================================================================
+// ICS EXPORT HELPER FUNCTIONS
+// ============================================================================
+
+const escapeICS = (str) => {
+  if (!str) return '';
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '');
+};
+
+const formatICSDate = (dateStr) => {
+  const date = new Date(dateStr + 'T00:00:00');
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}${month}${day}`;
+};
+
+const getExclusiveEndDate = (dateStr) => {
+  const date = new Date(dateStr + 'T00:00:00');
+  date.setDate(date.getDate() + 1);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}${month}${day}`;
+};
+
+const generateUID = () => {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}@sunbeltpm`;
+};
+
+const createICSEvent = ({ title, description, startDate, category }) => {
+  const uid = generateUID();
+  const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const start = formatICSDate(startDate);
+  const end = getExclusiveEndDate(startDate);
+
+  return [
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${now}`,
+    'SEQUENCE:0',
+    `DTSTART;VALUE=DATE:${start}`,
+    `DTEND;VALUE=DATE:${end}`,
+    'TRANSP:TRANSPARENT',
+    'STATUS:CONFIRMED',
+    `SUMMARY:${escapeICS(title)}`,
+    description ? `DESCRIPTION:${escapeICS(description)}` : '',
+    category ? `CATEGORIES:${escapeICS(category)}` : '',
+    'END:VEVENT'
+  ].filter(Boolean).join('\r\n');
+};
+
+const downloadICS = (icsContent, filename) => {
+  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename.endsWith('.ics') ? filename : `${filename}.ics`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 function CalendarWeekView({ 
   items = [], 
   projects = [],
@@ -45,12 +141,18 @@ function CalendarWeekView({
   onViewChange,
   compact = false 
 }) {
+  // ==========================================================================
+  // STATE
+  // ==========================================================================
   const [currentDate, setCurrentDate] = useState(new Date());
   const [weekDates, setWeekDates] = useState([]);
   const [groupedItems, setGroupedItems] = useState({});
   const [selectedItem, setSelectedItem] = useState(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
 
+  // ==========================================================================
+  // EFFECTS
+  // ==========================================================================
   useEffect(() => {
     const dates = getWeekDates(currentDate);
     setWeekDates(dates);
@@ -60,6 +162,24 @@ function CalendarWeekView({
     setGroupedItems(groupItemsByDate(items));
   }, [items]);
 
+  // ==========================================================================
+  // COMPUTED: Items for current week (for export)
+  // ==========================================================================
+  const weekItems = useMemo(() => {
+    if (weekDates.length === 0) return [];
+    
+    const weekItemsList = [];
+    weekDates.forEach(date => {
+      const dateKey = formatDateKey(date);
+      const dayItems = groupedItems[dateKey] || [];
+      weekItemsList.push(...dayItems);
+    });
+    return weekItemsList;
+  }, [weekDates, groupedItems]);
+
+  // ==========================================================================
+  // NAVIGATION
+  // ==========================================================================
   const navigateWeek = (direction) => {
     const newDate = new Date(currentDate);
     newDate.setDate(newDate.getDate() + (direction * 7));
@@ -70,20 +190,65 @@ function CalendarWeekView({
     setCurrentDate(new Date());
   };
 
+  // ==========================================================================
+  // EXPORT TO OUTLOOK
+  // ==========================================================================
+  const handleExportWeek = () => {
+    if (weekItems.length === 0) {
+      alert('No items to export for this week.');
+      return;
+    }
+
+    const events = weekItems.map(item => {
+      const typeLabel = item.type?.charAt(0).toUpperCase() + item.type?.slice(1) || 'Item';
+      return createICSEvent({
+        title: `[${typeLabel}] ${item.title}`,
+        description: `Status: ${item.status || 'N/A'}\\nProject: ${item.projectName || 'N/A'}`,
+        startDate: item.date,
+        category: typeLabel
+      });
+    });
+
+    const weekRange = getWeekRangeText(weekDates);
+    const calendar = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Sunbelt Modular//PM System//EN',
+      `X-WR-CALNAME:Week of ${weekRange}`,
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      ...events,
+      'END:VCALENDAR'
+    ].join('\r\n');
+
+    const filename = `Week_${formatDateKey(weekDates[0])}_to_${formatDateKey(weekDates[6])}.ics`;
+    downloadICS(calendar, filename);
+  };
+
+  // ==========================================================================
+  // ITEM CLICK HANDLER
+  // ==========================================================================
   const handleItemClick = (item, event) => {
     event.stopPropagation();
     
     const rect = event.currentTarget.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
     const popoverWidth = 320;
+    const popoverHeight = 250;
     
     let left = rect.left;
+    let top = rect.bottom + 8;
+    
     if (left + popoverWidth > viewportWidth - 20) {
       left = viewportWidth - popoverWidth - 20;
     }
+    if (top + popoverHeight > viewportHeight - 20) {
+      top = rect.top - popoverHeight - 8;
+    }
     
     setPopoverPosition({
-      top: rect.bottom + 8,
+      top: Math.max(20, top),
       left: Math.max(20, left)
     });
     setSelectedItem(item);
@@ -93,6 +258,9 @@ function CalendarWeekView({
     setSelectedItem(null);
   };
 
+  // ==========================================================================
+  // HELPERS
+  // ==========================================================================
   const getItemIcon = (type) => {
     const config = ITEM_TYPE_CONFIG[type];
     if (!config) return CheckSquare;
@@ -119,12 +287,15 @@ function CalendarWeekView({
     return colors[status] || 'var(--text-secondary)';
   };
 
+  // ==========================================================================
+  // RENDER: Day Cell
+  // ==========================================================================
   const renderDayCell = (date, index) => {
     const dateKey = formatDateKey(date);
     const dayItems = groupedItems[dateKey] || [];
     const today = isToday(date);
     const weekend = isWeekend(date);
-    const maxVisible = compact ? 2 : weekend ? 3 : 6;
+    const maxVisible = compact ? 2 : weekend ? 3 : 5;
     const hasMore = dayItems.length > maxVisible;
 
     return (
@@ -132,8 +303,12 @@ function CalendarWeekView({
         key={dateKey}
         onClick={() => onDateClick && onDateClick(date)}
         style={{
-          flex: weekend ? '0.5 0 0' : '1 0 0',
-          minWidth: 120,
+          // ✅ FIXED: Use flex-basis 0 to ensure equal distribution
+          flex: weekend ? '0.5 1 0' : '1 1 0',
+          // ✅ FIXED: Set minimum width so cells don't collapse
+          minWidth: weekend ? '80px' : '120px',
+          // ✅ FIXED: Overflow hidden to contain content
+          overflow: 'hidden',
           padding: weekend ? 'var(--space-xs)' : 'var(--space-sm)',
           background: today 
             ? 'rgba(255, 107, 53, 0.08)' 
@@ -155,7 +330,8 @@ function CalendarWeekView({
           alignItems: 'center',
           marginBottom: 'var(--space-sm)',
           paddingBottom: 'var(--space-xs)',
-          borderBottom: '1px solid var(--border-color)'
+          borderBottom: '1px solid var(--border-color)',
+          flexShrink: 0
         }}>
           <span style={{ 
             fontSize: weekend ? '0.65rem' : '0.75rem', 
@@ -169,21 +345,20 @@ function CalendarWeekView({
           <span style={{ 
             fontSize: weekend ? '1rem' : '1.5rem', 
             fontWeight: '700',
-            color: today ? 'var(--sunbelt-orange)' : 'var(--text-primary)',
+            color: today ? 'white' : 'var(--text-primary)',
             width: weekend ? '28px' : '36px',
             height: weekend ? '28px' : '36px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             borderRadius: '50%',
-            background: today ? 'var(--sunbelt-orange)' : 'transparent',
-            ...(today && { color: 'white' })
+            background: today ? 'var(--sunbelt-orange)' : 'transparent'
           }}>
             {formatDisplayDate(date, 'dayNum')}
           </span>
         </div>
 
-        {/* Items */}
+        {/* Items Container - ✅ FIXED: overflow hidden */}
         <div style={{ 
           flex: 1, 
           overflow: 'hidden',
@@ -205,15 +380,14 @@ function CalendarWeekView({
                   alignItems: 'center',
                   gap: '4px',
                   padding: weekend ? '3px 4px' : '5px 8px',
-                  background: `${item.color}20`,
-                  borderLeft: `3px solid ${item.color}`,
+                  background: isOverdue ? 'var(--danger-light)' : `${item.color}20`,
+                  borderLeft: `3px solid ${isOverdue ? 'var(--danger)' : item.color}`,
                   borderRadius: '4px',
                   cursor: 'pointer',
                   transition: 'all 0.15s',
-                  ...(isOverdue && {
-                    borderColor: 'var(--danger)',
-                    background: 'var(--danger-light)'
-                  })
+                  // ✅ FIXED: Ensure item doesn't overflow cell
+                  overflow: 'hidden',
+                  flexShrink: 0
                 }}
                 onMouseOver={(e) => {
                   e.currentTarget.style.transform = 'translateX(2px)';
@@ -231,13 +405,16 @@ function CalendarWeekView({
                     flexShrink: 0
                   }} 
                 />
+                {/* ✅ FIXED: Text truncates with ellipsis */}
                 <span style={{
                   fontSize: weekend ? '0.65rem' : '0.75rem',
                   fontWeight: '500',
                   color: isOverdue ? 'var(--danger)' : 'var(--text-primary)',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  flex: 1,
+                  minWidth: 0
                 }}>
                   {item.title}
                 </span>
@@ -246,18 +423,20 @@ function CalendarWeekView({
           })}
 
           {hasMore && (
-            <div style={{
-              fontSize: weekend ? '0.6rem' : '0.7rem',
-              color: 'var(--text-tertiary)',
-              textAlign: 'center',
-              padding: '2px',
-              cursor: 'pointer',
-              fontWeight: '600'
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onDateClick && onDateClick(date);
-            }}
+            <div 
+              style={{
+                fontSize: weekend ? '0.6rem' : '0.7rem',
+                color: 'var(--text-tertiary)',
+                textAlign: 'center',
+                padding: '2px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                flexShrink: 0
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDateClick && onDateClick(date);
+              }}
             >
               +{dayItems.length - maxVisible} more
             </div>
@@ -267,21 +446,30 @@ function CalendarWeekView({
     );
   };
 
+  // ==========================================================================
+  // MAIN RENDER
+  // ==========================================================================
   return (
     <div style={{
       background: 'var(--bg-secondary)',
       borderRadius: 'var(--radius-lg)',
       border: '1px solid var(--border-color)',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      // ✅ FIXED: Ensure container takes full width
+      width: '100%'
     }}>
-      {/* Header */}
+      {/* ================================================================== */}
+      {/* HEADER                                                            */}
+      {/* ================================================================== */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 'var(--space-md) var(--space-lg)',
         borderBottom: '1px solid var(--border-color)',
-        background: 'var(--bg-secondary)'
+        background: 'var(--bg-secondary)',
+        flexWrap: 'wrap',
+        gap: 'var(--space-md)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
           <Calendar size={20} style={{ color: 'var(--sunbelt-orange)' }} />
@@ -296,19 +484,51 @@ function CalendarWeekView({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-          {/* Today Button */}
+          {/* ✅ ADDED: Export to Outlook Button */}
           <button
-            onClick={goToToday}
+            onClick={handleExportWeek}
+            title="Export week to Outlook"
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
               padding: '6px 12px',
               background: 'var(--bg-primary)',
               border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius-sm)',
               color: 'var(--text-secondary)',
+              cursor: 'pointer',
               fontSize: '0.8125rem',
               fontWeight: '600',
-              cursor: 'pointer',
               transition: 'all 0.15s'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = 'var(--bg-tertiary)';
+              e.currentTarget.style.borderColor = 'var(--sunbelt-orange)';
+              e.currentTarget.style.color = 'var(--sunbelt-orange)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = 'var(--bg-primary)';
+              e.currentTarget.style.borderColor = 'var(--border-color)';
+              e.currentTarget.style.color = 'var(--text-secondary)';
+            }}
+          >
+            <Download size={14} />
+            Export Week
+          </button>
+
+          {/* Today Button */}
+          <button
+            onClick={goToToday}
+            style={{
+              padding: '6px 12px',
+              background: 'var(--sunbelt-orange)',
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '0.8125rem',
+              fontWeight: '600'
             }}
           >
             Today
@@ -372,15 +592,20 @@ function CalendarWeekView({
         </div>
       </div>
 
-      {/* Calendar Grid */}
+      {/* ================================================================== */}
+      {/* CALENDAR GRID - ✅ FIXED: width 100%                              */}
+      {/* ================================================================== */}
       <div style={{
         display: 'flex',
-        borderBottom: '1px solid var(--border-color)'
+        borderBottom: '1px solid var(--border-color)',
+        width: '100%'
       }}>
         {weekDates.map((date, index) => renderDayCell(date, index))}
       </div>
 
-      {/* Legend */}
+      {/* ================================================================== */}
+      {/* LEGEND                                                            */}
+      {/* ================================================================== */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -419,50 +644,52 @@ function CalendarWeekView({
         )}
       </div>
 
-      {/* Item Popover */}
+      {/* ================================================================== */}
+      {/* ITEM POPOVER                                                      */}
+      {/* ================================================================== */}
       {selectedItem && (
         <>
           {/* Backdrop */}
-          <div
-            onClick={closePopover}
+          <div 
             style={{
               position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
+              inset: 0,
               zIndex: 999
             }}
+            onClick={closePopover}
           />
           
           {/* Popover */}
-          <div
-            style={{
-              position: 'fixed',
-              top: popoverPosition.top,
-              left: popoverPosition.left,
-              width: '320px',
-              background: 'var(--bg-primary)',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid var(--border-color)',
-              boxShadow: 'var(--shadow-xl)',
-              zIndex: 1000,
-              overflow: 'hidden'
-            }}
-          >
+          <div style={{
+            position: 'fixed',
+            top: popoverPosition.top,
+            left: popoverPosition.left,
+            width: '320px',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-xl)',
+            zIndex: 1000,
+            overflow: 'hidden'
+          }}>
             {/* Popover Header */}
             <div style={{
-              padding: 'var(--space-md)',
-              borderBottom: '1px solid var(--border-color)',
-              background: `${selectedItem.color}15`,
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'flex-start'
+              alignItems: 'flex-start',
+              padding: 'var(--space-md)',
+              borderBottom: '1px solid var(--border-color)',
+              background: `${selectedItem.color}15`
             }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: '4px' }}>
-                  {React.createElement(getItemIcon(selectedItem.type), {
-                    size: 16,
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 'var(--space-xs)',
+                  marginBottom: '4px'
+                }}>
+                  {React.createElement(getItemIcon(selectedItem.type), { 
+                    size: 16, 
                     style: { color: selectedItem.color }
                   })}
                   <span style={{
@@ -471,12 +698,12 @@ function CalendarWeekView({
                     color: selectedItem.color,
                     textTransform: 'uppercase'
                   }}>
-                    {ITEM_TYPE_CONFIG[selectedItem.type]?.label || selectedItem.type}
+                    {selectedItem.type}
                   </span>
                 </div>
-                <h4 style={{ 
-                  fontSize: '0.9375rem', 
-                  fontWeight: '600', 
+                <h4 style={{
+                  fontSize: '1rem',
+                  fontWeight: '700',
                   color: 'var(--text-primary)',
                   margin: 0,
                   lineHeight: 1.3
@@ -492,7 +719,9 @@ function CalendarWeekView({
                   color: 'var(--text-tertiary)',
                   cursor: 'pointer',
                   padding: '4px',
-                  display: 'flex'
+                  display: 'flex',
+                  borderRadius: 'var(--radius-sm)',
+                  flexShrink: 0
                 }}
               >
                 <X size={18} />
@@ -502,16 +731,10 @@ function CalendarWeekView({
             {/* Popover Content */}
             <div style={{ padding: 'var(--space-md)' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>Project</span>
-                  <span style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', fontWeight: '500' }}>
-                    {selectedItem.projectName}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>Due Date</span>
-                  <span style={{ 
-                    fontSize: '0.8125rem', 
+                  <span style={{
+                    fontSize: '0.875rem',
                     color: isPast(selectedItem.date) && 
                       !['Completed', 'Cancelled', 'Closed', 'Approved'].includes(selectedItem.status)
                         ? 'var(--danger)' 
@@ -533,6 +756,18 @@ function CalendarWeekView({
                       color: getStatusColor(selectedItem.status)
                     }}>
                       {selectedItem.status}
+                    </span>
+                  </div>
+                )}
+                {selectedItem.projectName && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>Project</span>
+                    <span style={{
+                      fontSize: '0.8125rem',
+                      color: 'var(--text-primary)',
+                      fontWeight: '500'
+                    }}>
+                      {selectedItem.projectName}
                     </span>
                   </div>
                 )}
@@ -571,9 +806,7 @@ function CalendarWeekView({
                 Edit
               </button>
               <button
-                onClick={() => {
-                  closePopover();
-                }}
+                onClick={closePopover}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -586,7 +819,7 @@ function CalendarWeekView({
                   cursor: 'pointer'
                 }}
               >
-                <ExternalLink size={14} />
+                <X size={14} />
               </button>
             </div>
           </div>

@@ -205,7 +205,7 @@ const styles = {
     fontWeight: '600',
     fontSize: '0.9375rem',
     cursor: 'pointer',
-    minWidth: '120px',
+    overflow: 'hidden',
     transition: 'opacity 0.15s, transform 0.15s'
   },
   // FIXED: Cancel button is now gray/subtle
