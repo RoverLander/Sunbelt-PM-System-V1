@@ -172,7 +172,7 @@ function CalendarMonthView({
         onClick={() => onDateClick && onDateClick(date)}
         style={{
           flex: weekend ? '0.6' : '1',
-          minWidth: 0,
+          minWidth: 120,
           minHeight: '140px',
           padding: 'var(--space-xs) var(--space-sm)',
           background: today 

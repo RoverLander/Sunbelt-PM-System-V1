@@ -230,8 +230,8 @@ function ProjectCalendarWeek({
       <div
         key={dateKey}
         style={{
-          flex: weekend ? '0.5' : '1',
-          minWidth: 0,
+          flex: weekend ? '0.5 0 0' : '1 0 0',
+          minWidth: 120,
           padding: weekend ? 'var(--space-xs)' : 'var(--space-sm)',
           background: today 
             ? `${projectColor}15`

@@ -233,7 +233,7 @@ function ProjectCalendarMonth({
         key={dateKey}
         style={{
           flex: weekend ? '0.6' : '1',
-          minWidth: 0,
+          minWidth: 120,
           minHeight: '120px',
           padding: 'var(--space-xs) var(--space-sm)',
           background: today ? `${projectColor}15` : weekend ? 'rgba(0,0,0,0.02)' : 'transparent',
