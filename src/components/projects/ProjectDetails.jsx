@@ -792,7 +792,7 @@ function SearchInput({ value, onChange, placeholder }) {
 // TASKS TAB
 // ============================================================================
 function TasksTab({ tasks, allTasks, search, setSearch, statusFilter, setStatusFilter, view, setView, onAdd, onEdit, onDragStart, onDragOver, onDrop, draggedTask }) {
-  const kanbanStatuses = ['Not Started', 'In Progress', 'On Hold', 'Blocked', 'Completed'];
+  kanbanStatuses = ['Not Started', 'In Progress', 'Awaiting Response', 'Completed'];
 
   return (
     <div>
