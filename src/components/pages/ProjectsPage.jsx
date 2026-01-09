@@ -239,7 +239,7 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
   // RENDER - MAIN VIEW
   // ==========================================================================
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
       
       {/* ================================================================== */}
       {/* HEADER                                                            */}

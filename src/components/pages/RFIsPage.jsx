@@ -148,7 +148,7 @@ function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
   }
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: 'var(--space-lg)' }}>
         <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
