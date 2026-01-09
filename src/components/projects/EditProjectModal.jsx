@@ -214,6 +214,7 @@ function EditProjectModal({ isOpen, onClose, project, onSuccess }) {
         project_number: formData.project_number.trim(),
         status: formData.status,
         owner_id: formData.owner_id || null,           // ✅ ADDED
+        primary_pm_id: formData.owner_id || null,      // ✅ SYNC: Keep primary_pm_id in sync with owner_id
         backup_pm_id: formData.backup_pm_id || null,   // ✅ ADDED
         factory: formData.factory,
         client_name: formData.client_name.trim() || null,
