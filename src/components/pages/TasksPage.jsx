@@ -49,13 +49,12 @@ import { useAuth } from '../../context/AuthContext';
 // CONSTANTS
 // ============================================================================
 
-const KANBAN_STATUSES = ['Not Started', 'In Progress', 'On Hold', 'Completed'];
+const KANBAN_STATUSES = ['Not Started', 'In Progress', 'Awaiting Response', 'Completed'];
 
 const STATUS_COLORS = {
   'Not Started': 'var(--text-tertiary)',
   'In Progress': 'var(--sunbelt-orange)',
-  'On Hold': 'var(--warning)',
-  'Blocked': 'var(--danger)',
+  'Awaiting Response': 'var(--warning)',
   'Completed': 'var(--success)',
   'Cancelled': 'var(--text-tertiary)'
 };
@@ -68,7 +67,7 @@ const PRIORITY_COLORS = {
   'Critical': 'var(--danger)'
 };
 
-const ALL_STATUSES = ['Not Started', 'In Progress', 'On Hold', 'Blocked', 'Completed', 'Cancelled'];
+const ALL_STATUSES = ['Not Started', 'In Progress', 'Awaiting Response', 'Completed', 'Cancelled'];
 const PRIORITIES = ['Low', 'Normal', 'Medium', 'High', 'Critical'];
 
 // ============================================================================

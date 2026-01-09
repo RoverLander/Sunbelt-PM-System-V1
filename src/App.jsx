@@ -1,5 +1,5 @@
 // ============================================================================
-// App.jsx - Main Application with PM/Director/VP/IT Routing
+// App.jsx - Main Application with PM/Director/VP/IT/PC Routing
 // ============================================================================
 // Routes all sidebar navigation to appropriate pages based on view mode.
 // Includes deep navigation from Tasks/RFIs/Submittals pages to ProjectDetails.
@@ -8,6 +8,8 @@
 // - ✅ FIXED: VP now has 'reports' route
 // - ✅ FIXED: IT now has 'users' route for User Management
 // - ✅ FIXED: Main content margin-left matches 260px sidebar width
+// - ✅ ADDED: PC (Project Coordinator) dashboard routing
+// - ✅ ADDED: Workflow tab navigation support
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -19,6 +21,7 @@ import Sidebar from './components/layout/Sidebar';
 import PMDashboard from './components/dashboards/PMDashboard';
 import DirectorDashboard from './components/dashboards/DirectorDashboard';
 import VPDashboard from './components/dashboards/VPDashboard';
+import PCDashboard from './components/dashboards/PCDashboard';
 import { ITDashboard } from './components/it';
 
 // Pages
@@ -188,7 +191,8 @@ function AppContent() {
       'submittals': 'submittals',
       'calendar': 'calendar',
       'files': 'files',
-      'floorplan': 'floorplan'
+      'floorplan': 'floorplan',
+      'workflow': 'workflow'
     };
     
     setSelectedProjectId(projectId);
@@ -345,6 +349,22 @@ function AppContent() {
           return <SubmittalsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
         default:
           return <ITDashboard />;
+      }
+    }
+
+    // ========================================================================
+    // PC-specific views (Project Coordinator)
+    // ========================================================================
+    if (dashboardType === 'pc') {
+      switch (currentView) {
+        case 'dashboard':
+          return <PCDashboard onNavigateToProject={handleNavigateToProject} />;
+        case 'projects':
+          return <ProjectsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
+        case 'tasks':
+          return <TasksPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
+        default:
+          return <PCDashboard onNavigateToProject={handleNavigateToProject} />;
       }
     }
 

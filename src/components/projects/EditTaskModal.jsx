@@ -39,11 +39,13 @@ import FileAttachments from '../common/FileAttachments';
 import { exportTaskToICS } from '../../utils/icsUtils';
 import { exportTaskToPDF } from '../../utils/pdfUtils';
 import { draftTaskEmail } from '../../utils/emailUtils';
+import { COURT_OPTIONS } from '../../utils/workflowUtils';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-const TASK_STATUSES = ['Not Started', 'In Progress', 'On Hold', 'Completed', 'Cancelled'];
+// Updated Jan 9, 2026: 'On Hold' changed to 'Awaiting Response'
+const TASK_STATUSES = ['Not Started', 'In Progress', 'Awaiting Response', 'Completed', 'Cancelled'];
 const TASK_PRIORITIES = ['Low', 'Medium', 'High'];
 
 // ============================================================================
@@ -65,6 +67,7 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
   const [error, setError] = useState('');
   const [milestones, setMilestones] = useState([]);
   const [attachments, setAttachments] = useState([]);
+  const [workflowStations, setWorkflowStations] = useState([]);
   
   // Form fields
   const [formData, setFormData] = useState({
@@ -79,7 +82,9 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
     status: 'Not Started',
     priority: 'Medium',
     due_date: '',
-    start_date: ''
+    start_date: '',
+    workflow_station_key: '',
+    assigned_court: ''
   });
 
   // ==========================================================================
@@ -90,7 +95,7 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
     if (isOpen && task) {
       // Determine assignment type based on existing data
       const isExternal = !!task.external_assignee_email || !!task.external_assignee_name;
-      
+
       setFormData({
         title: task.title || '',
         description: task.description || '',
@@ -103,10 +108,13 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
         status: task.status || 'Not Started',
         priority: task.priority || 'Medium',
         due_date: task.due_date || '',
-        start_date: task.start_date || ''
+        start_date: task.start_date || '',
+        workflow_station_key: task.workflow_station_key || '',
+        assigned_court: task.assigned_court || ''
       });
       fetchMilestones();
       fetchAttachments();
+      fetchWorkflowStations();
     }
   }, [isOpen, task]);
 
@@ -136,11 +144,26 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
         .select('*')
         .eq('task_id', task.id)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       setAttachments(data || []);
     } catch (error) {
       console.error('Error fetching attachments:', error);
+    }
+  };
+
+  const fetchWorkflowStations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('workflow_stations')
+        .select('*')
+        .order('phase', { ascending: true })
+        .order('display_order', { ascending: true });
+
+      if (error) throw error;
+      setWorkflowStations(data || []);
+    } catch (error) {
+      console.error('Error fetching workflow stations:', error);
     }
   };
 
@@ -178,6 +201,8 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
         priority: formData.priority,
         due_date: formData.due_date || null,
         start_date: formData.start_date || null,
+        workflow_station_key: formData.workflow_station_key || null,
+        assigned_court: formData.assigned_court || null,
         // Auto-set completed date
         completed_date: formData.status === 'Completed' && task.status !== 'Completed'
           ? new Date().toISOString().split('T')[0]
@@ -651,6 +676,45 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
+          </div>
+
+          {/* ============================================================ */}
+          {/* WORKFLOW FIELDS                                              */}
+          {/* ============================================================ */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)' }}>
+            <div className="form-group">
+              <label className="form-label">Workflow Station</label>
+              <select
+                name="workflow_station_key"
+                value={formData.workflow_station_key}
+                onChange={handleChange}
+                className="form-input"
+              >
+                <option value="">No station</option>
+                {workflowStations.map(station => (
+                  <option key={station.station_key} value={station.station_key}>
+                    Phase {station.phase}: {station.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Ball In Court</label>
+              <select
+                name="assigned_court"
+                value={formData.assigned_court}
+                onChange={handleChange}
+                className="form-input"
+              >
+                <option value="">Not assigned</option>
+                {COURT_OPTIONS.map(court => (
+                  <option key={court.value} value={court.value}>
+                    {court.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* ============================================================ */}

@@ -767,33 +767,465 @@ export const draftBatchNotificationEmail = (options = {}) => {
   openEmailDraft({ to, subject, body, cc: options.cc });
 };
 
+// ===== WARNING EMAIL FUNCTIONS =====
+
+/**
+ * Warning email types for workflow tracking
+ */
+export const WARNING_EMAIL_TYPES = {
+  DEALER_DELAY: 'dealer_delay',
+  INTERNAL_DELAY: 'internal_delay',
+  FACTORY_DELAY: 'factory_delay',
+  DRAWING_APPROVAL: 'drawing_approval',
+  CHANGE_ORDER: 'change_order',
+  LONG_LEAD_DELAY: 'long_lead_delay',
+  COLOR_SELECTION: 'color_selection',
+};
+
+/**
+ * Draft warning email for dealer response delay
+ * @param {Object} options - Warning email options
+ * @param {string} options.to - Dealer email address
+ * @param {Object} options.project - Project object with name, number
+ * @param {string} options.stationName - Workflow station name
+ * @param {number} options.daysOverdue - Number of days overdue
+ * @param {string} [options.itemDescription] - Description of pending item
+ * @param {Array} [options.pendingItems] - List of pending items
+ * @param {string} [options.originalDueDate] - Original due date
+ */
+export const draftDealerWarningEmail = (options = {}) => {
+  const {
+    to = '',
+    project = {},
+    stationName = '',
+    daysOverdue = 0,
+    itemDescription = '',
+    pendingItems = [],
+    originalDueDate = '',
+  } = options;
+
+  const projectRef = buildProjectReference(project.name, project.project_number);
+  const urgencyPrefix = daysOverdue > 7 ? '[CRITICAL] ' : daysOverdue > 3 ? '[URGENT] ' : '[REMINDER] ';
+
+  const subject = `${urgencyPrefix}[${project.project_number || 'PROJECT'}] Response Required: ${stationName || itemDescription}`;
+
+  const pendingList = pendingItems.length > 0
+    ? '\nPENDING ITEMS:\n' + pendingItems.map(item => `  • ${item}`).join('\n') + '\n'
+    : '';
+
+  const body = [
+    `DEALER RESPONSE REQUIRED`,
+    EMAIL_CONFIG.dividers.heavy,
+    '',
+    `Project: ${projectRef}`,
+    `Item: ${stationName || itemDescription}`,
+    originalDueDate ? `Original Due Date: ${formatEmailDate(originalDueDate)}` : '',
+    `Status: ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} overdue`,
+    '',
+    EMAIL_CONFIG.dividers.light,
+    '',
+    `We are awaiting your response on the following:`,
+    '',
+    itemDescription || stationName,
+    pendingList,
+    '',
+    EMAIL_CONFIG.dividers.light,
+    '',
+    `IMPACT NOTICE`,
+    '',
+    'Delays in dealer approvals directly impact the project timeline.',
+    'This may affect:',
+    '  • Production scheduling',
+    '  • Delivery dates',
+    '  • Installation timeline',
+    '',
+    'Please provide your response at your earliest convenience.',
+    'If you need additional time or have questions, please contact us immediately.',
+    '',
+    buildSignature(options),
+  ].filter(line => line !== undefined && line !== '').join('\n');
+
+  openEmailDraft({ to, subject, body, cc: options.cc });
+};
+
+/**
+ * Draft warning email for internal processing delay
+ * @param {Object} options - Warning email options
+ * @param {string} options.to - Internal team member email
+ * @param {Object} options.project - Project object
+ * @param {string} options.stationName - Workflow station name
+ * @param {number} options.daysOverdue - Number of days overdue
+ * @param {Array} [options.blockedTasks] - List of blocked downstream tasks
+ */
+export const draftInternalWarningEmail = (options = {}) => {
+  const {
+    to = '',
+    project = {},
+    stationName = '',
+    daysOverdue = 0,
+    blockedTasks = [],
+  } = options;
+
+  const projectRef = buildProjectReference(project.name, project.project_number);
+  const urgencyPrefix = daysOverdue > 5 ? '[CRITICAL] ' : '[ACTION REQUIRED] ';
+
+  const subject = `${urgencyPrefix}[${project.project_number || 'PROJECT'}] Internal Action Needed: ${stationName}`;
+
+  const blockedList = blockedTasks.length > 0
+    ? '\nBLOCKED DOWNSTREAM TASKS:\n' + blockedTasks.map(task => `  • ${task}`).join('\n') + '\n'
+    : '';
+
+  const body = [
+    `INTERNAL ACTION REQUIRED`,
+    EMAIL_CONFIG.dividers.heavy,
+    '',
+    `Project: ${projectRef}`,
+    `Station: ${stationName}`,
+    `Status: ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} overdue`,
+    '',
+    EMAIL_CONFIG.dividers.light,
+    '',
+    `This workflow station requires attention.`,
+    '',
+    `The following tasks are pending completion:`,
+    blockedList,
+    '',
+    EMAIL_CONFIG.dividers.light,
+    '',
+    `Please update the status or complete the required actions.`,
+    'If blocked by external factors, please update the task status accordingly.',
+    '',
+    buildSignature(options),
+  ].filter(line => line !== undefined && line !== '').join('\n');
+
+  openEmailDraft({ to, subject, body, cc: options.cc });
+};
+
+/**
+ * Draft warning email for factory milestone delay
+ * @param {Object} options - Warning email options
+ * @param {string} options.to - Factory contact email
+ * @param {Object} options.project - Project object
+ * @param {string} options.milestoneName - Milestone name
+ * @param {number} options.daysOverdue - Number of days overdue
+ * @param {string} [options.originalDate] - Original milestone date
+ * @param {string} [options.impact] - Impact description
+ */
+export const draftFactoryWarningEmail = (options = {}) => {
+  const {
+    to = '',
+    project = {},
+    milestoneName = '',
+    daysOverdue = 0,
+    originalDate = '',
+    impact = '',
+  } = options;
+
+  const projectRef = buildProjectReference(project.name, project.project_number);
+  const urgencyPrefix = daysOverdue > 7 ? '[CRITICAL] ' : '[URGENT] ';
+
+  const subject = `${urgencyPrefix}[${project.project_number || 'PROJECT'}] Factory Milestone Delay: ${milestoneName}`;
+
+  const body = [
+    `FACTORY MILESTONE DELAY NOTICE`,
+    EMAIL_CONFIG.dividers.heavy,
+    '',
+    `Project: ${projectRef}`,
+    `Milestone: ${milestoneName}`,
+    originalDate ? `Original Date: ${formatEmailDate(originalDate)}` : '',
+    `Status: ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} overdue`,
+    '',
+    EMAIL_CONFIG.dividers.light,
+    '',
+    `This factory milestone is past its scheduled date.`,
+    '',
+    impact ? `IMPACT:\n${impact}\n\n${EMAIL_CONFIG.dividers.light}\n` : '',
+    `ACTION REQUIRED`,
+    '',
+    'Please provide:',
+    '  1. Updated completion date',
+    '  2. Reason for delay',
+    '  3. Recovery plan if applicable',
+    '',
+    'Timely updates are essential for project coordination.',
+    '',
+    buildSignature(options),
+  ].filter(line => line !== undefined && line !== '').join('\n');
+
+  openEmailDraft({ to, subject, body, cc: options.cc });
+};
+
+/**
+ * Draft email for drawing approval request
+ * @param {Object} options - Drawing approval options
+ * @param {string} options.to - Dealer email address
+ * @param {Object} options.project - Project object
+ * @param {string} options.drawingType - Type of drawing (20%, 65%, 95%, 100%)
+ * @param {number} [options.version] - Drawing version number
+ * @param {string} [options.dueDate] - Response due date
+ */
+export const draftDrawingApprovalEmail = (options = {}) => {
+  const {
+    to = '',
+    project = {},
+    drawingType = '',
+    version = 1,
+    dueDate = '',
+  } = options;
+
+  const projectRef = buildProjectReference(project.name, project.project_number);
+  const versionNote = version > 1 ? ` (Version ${version})` : '';
+
+  const subject = `[${project.project_number || 'PROJECT'}] ${drawingType} Drawing Review Required${versionNote}`;
+
+  const body = [
+    `DRAWING REVIEW REQUEST`,
+    EMAIL_CONFIG.dividers.heavy,
+    '',
+    `Project: ${projectRef}`,
+    `Drawing Set: ${drawingType}${versionNote}`,
+    `Submitted: ${formatShortDate(new Date().toISOString())}`,
+    dueDate ? `Response Due: ${formatDueDateWithContext(dueDate)}` : '',
+    '',
+    EMAIL_CONFIG.dividers.light,
+    '',
+    `Please review the attached ${drawingType} drawings and provide your response.`,
+    '',
+    `RESPONSE OPTIONS`,
+    '',
+    '  [ ] APPROVE - Drawings accepted as submitted',
+    '  [ ] APPROVE WITH REDLINES - Drawings accepted with noted changes',
+    '  [ ] REJECT WITH REDLINES - Revisions required, specific changes noted',
+    '  [ ] REJECT - Drawings not acceptable, major revisions needed',
+    '',
+    EMAIL_CONFIG.dividers.light,
+    '',
+    'If providing redlines, please mark up the drawings and return.',
+    '',
+    'Your timely review helps maintain the project schedule.',
+    '',
+    buildSignature(options),
+  ].filter(line => line !== undefined && line !== '').join('\n');
+
+  openEmailDraft({ to, subject, body, cc: options.cc });
+};
+
+/**
+ * Draft email for change order notification
+ * @param {Object} options - Change order options
+ * @param {string} options.to - Recipient email
+ * @param {Object} options.project - Project object
+ * @param {Object} options.changeOrder - Change order object
+ * @param {string} [options.type] - Email type ('initial', 'reminder', 'signed')
+ */
+export const draftChangeOrderEmail = (options = {}) => {
+  const {
+    to = '',
+    project = {},
+    changeOrder = {},
+    type = 'initial',
+  } = options;
+
+  const projectRef = buildProjectReference(project.name, project.project_number);
+  const coNumber = changeOrder.change_order_number || 'CO-XXX';
+  const coType = changeOrder.change_type || 'General';
+
+  let subject, heading, actionText;
+
+  switch (type) {
+    case 'reminder':
+      subject = `[REMINDER] [${project.project_number || 'PROJECT'}] Change Order ${coNumber} - Signature Required`;
+      heading = 'CHANGE ORDER REMINDER';
+      actionText = 'This change order is awaiting your signature. Please review and sign at your earliest convenience.';
+      break;
+    case 'signed':
+      subject = `[${project.project_number || 'PROJECT'}] Change Order ${coNumber} - Executed`;
+      heading = 'CHANGE ORDER EXECUTED';
+      actionText = 'This change order has been fully executed. Please retain for your records.';
+      break;
+    default:
+      subject = `[${project.project_number || 'PROJECT'}] Change Order ${coNumber} - ${coType}`;
+      heading = 'CHANGE ORDER NOTIFICATION';
+      actionText = 'Please review the attached change order and provide your signature.';
+  }
+
+  const body = [
+    heading,
+    EMAIL_CONFIG.dividers.heavy,
+    '',
+    `Project: ${projectRef}`,
+    `Change Order: ${coNumber}`,
+    `Type: ${coType}`,
+    changeOrder.amount ? `Amount: $${changeOrder.amount.toLocaleString()}` : '',
+    `Status: ${changeOrder.status || 'Draft'}`,
+    '',
+    EMAIL_CONFIG.dividers.light,
+    '',
+    changeOrder.description ? `DESCRIPTION:\n\n${changeOrder.description}\n\n${EMAIL_CONFIG.dividers.light}\n` : '',
+    actionText,
+    '',
+    type !== 'signed' ? 'If you have questions or concerns, please contact us before signing.\n' : '',
+    buildSignature(options),
+  ].filter(line => line !== undefined && line !== '').join('\n');
+
+  openEmailDraft({ to, subject, body, cc: options.cc });
+};
+
+/**
+ * Draft email for long lead item status
+ * @param {Object} options - Long lead options
+ * @param {string} options.to - Recipient email
+ * @param {Object} options.project - Project object
+ * @param {Object} options.item - Long lead item object
+ * @param {string} [options.type] - Email type ('order', 'delay', 'delivery')
+ */
+export const draftLongLeadEmail = (options = {}) => {
+  const {
+    to = '',
+    project = {},
+    item = {},
+    type = 'order',
+  } = options;
+
+  const projectRef = buildProjectReference(project.name, project.project_number);
+
+  let subject, heading, actionText;
+
+  switch (type) {
+    case 'delay':
+      subject = `[URGENT] [${project.project_number || 'PROJECT'}] Long Lead Item Delay: ${item.item_name || 'Item'}`;
+      heading = 'LONG LEAD ITEM DELAY NOTICE';
+      actionText = 'This long lead item has been delayed. Please review the updated timeline.';
+      break;
+    case 'delivery':
+      subject = `[${project.project_number || 'PROJECT'}] Long Lead Item Delivery: ${item.item_name || 'Item'}`;
+      heading = 'LONG LEAD ITEM DELIVERY NOTICE';
+      actionText = 'This long lead item is scheduled for delivery. Please confirm receipt.';
+      break;
+    default:
+      subject = `[${project.project_number || 'PROJECT'}] Long Lead Item Order: ${item.item_name || 'Item'}`;
+      heading = 'LONG LEAD ITEM ORDER';
+      actionText = 'The following long lead item has been ordered for your project.';
+  }
+
+  const body = [
+    heading,
+    EMAIL_CONFIG.dividers.heavy,
+    '',
+    `Project: ${projectRef}`,
+    `Item: ${item.item_name || 'N/A'}`,
+    item.manufacturer ? `Manufacturer: ${item.manufacturer}` : '',
+    item.model_number ? `Model: ${item.model_number}` : '',
+    '',
+    item.order_date ? `Order Date: ${formatShortDate(item.order_date)}` : '',
+    item.expected_delivery ? `Expected Delivery: ${formatShortDate(item.expected_delivery)}` : '',
+    item.lead_time_weeks ? `Lead Time: ${item.lead_time_weeks} weeks` : '',
+    '',
+    EMAIL_CONFIG.dividers.light,
+    '',
+    actionText,
+    '',
+    item.notes ? `NOTES:\n${item.notes}\n` : '',
+    buildSignature(options),
+  ].filter(line => line !== undefined && line !== '').join('\n');
+
+  openEmailDraft({ to, subject, body, cc: options.cc });
+};
+
+/**
+ * Draft email for color selection request
+ * @param {Object} options - Color selection options
+ * @param {string} options.to - Dealer email address
+ * @param {Object} options.project - Project object
+ * @param {Array} [options.categories] - Categories needing selection
+ * @param {string} [options.dueDate] - Response due date
+ */
+export const draftColorSelectionEmail = (options = {}) => {
+  const {
+    to = '',
+    project = {},
+    categories = [],
+    dueDate = '',
+  } = options;
+
+  const projectRef = buildProjectReference(project.name, project.project_number);
+
+  const categoryList = categories.length > 0
+    ? '\n' + categories.map(cat => `  • ${cat}`).join('\n') + '\n'
+    : '';
+
+  const subject = `[${project.project_number || 'PROJECT'}] Color Selections Required`;
+
+  const body = [
+    `COLOR SELECTION REQUEST`,
+    EMAIL_CONFIG.dividers.heavy,
+    '',
+    `Project: ${projectRef}`,
+    dueDate ? `Selections Due: ${formatDueDateWithContext(dueDate)}` : '',
+    '',
+    EMAIL_CONFIG.dividers.light,
+    '',
+    `Please provide color selections for the following categories:`,
+    categoryList,
+    '',
+    EMAIL_CONFIG.dividers.light,
+    '',
+    `INSTRUCTIONS`,
+    '',
+    '1. Review the attached color options for each category',
+    '2. Complete the color selection form',
+    '3. Return signed selections by the due date',
+    '',
+    'If you need physical samples or have questions about',
+    'available options, please contact us.',
+    '',
+    'Timely color selections help maintain the production schedule.',
+    '',
+    buildSignature(options),
+  ].filter(line => line !== undefined && line !== '').join('\n');
+
+  openEmailDraft({ to, subject, body, cc: options.cc });
+};
+
 // ===== DEFAULT EXPORT =====
 
 export default {
   // Core
   openEmailDraft,
-  
+
   // Task emails
   draftTaskEmail,
   draftTaskReminderEmail,
-  
+
   // RFI emails
   draftRFIEmail,
   draftRFIReminderEmail,
   draftRFIResponseEmail,
-  
+
   // Submittal emails
   draftSubmittalEmail,
   draftSubmittalReminderEmail,
   draftSubmittalResponseEmail,
-  
+
+  // Warning emails (workflow)
+  draftDealerWarningEmail,
+  draftInternalWarningEmail,
+  draftFactoryWarningEmail,
+  draftDrawingApprovalEmail,
+  draftChangeOrderEmail,
+  draftLongLeadEmail,
+  draftColorSelectionEmail,
+
   // General
   draftProjectEmail,
   draftBatchNotificationEmail,
-  
+
   // Utilities (exported for potential external use)
   formatEmailDate,
   formatShortDate,
   calculateDaysFromNow,
   getUrgencyIndicator,
+
+  // Constants
+  WARNING_EMAIL_TYPES,
 };

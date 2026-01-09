@@ -37,16 +37,18 @@ import {
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { draftTaskEmail } from '../../utils/emailUtils';
+import { COURT_OPTIONS } from '../../utils/workflowUtils';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
+// Updated Jan 9, 2026: 'On Hold' and 'Blocked' merged into 'Awaiting Response'
 const STATUS_OPTIONS = [
   { value: 'Not Started', label: 'Not Started' },
   { value: 'In Progress', label: 'In Progress' },
-  { value: 'On Hold', label: 'On Hold' },
-  { value: 'Blocked', label: 'Blocked' },
-  { value: 'Completed', label: 'Completed' }
+  { value: 'Awaiting Response', label: 'Awaiting Response' },
+  { value: 'Completed', label: 'Completed' },
+  { value: 'Cancelled', label: 'Cancelled' }
 ];
 
 const PRIORITY_OPTIONS = [
@@ -321,8 +323,13 @@ function AddTaskModal({
     status: 'Not Started',
     priority: 'Medium',
     due_date: '',
-    start_date: ''
+    start_date: '',
+    workflow_station_key: '',
+    assigned_court: ''
   });
+
+  // Workflow stations
+  const [workflowStations, setWorkflowStations] = useState([]);
 
   // ==========================================================================
   // EFFECTS
@@ -343,13 +350,16 @@ function AddTaskModal({
         status: 'Not Started',
         priority: 'Medium',
         due_date: '',
-        start_date: ''
+        start_date: '',
+        workflow_station_key: '',
+        assigned_court: ''
       });
       setPendingFiles([]);
       setError('');
       setFieldErrors({});
       fetchUsers();
       fetchMilestones();
+      fetchWorkflowStations();
     }
   }, [isOpen, user]);
 
@@ -392,6 +402,22 @@ function AddTaskModal({
       setMilestones(data || []);
     } catch (err) {
       console.error('Error fetching milestones:', err);
+    }
+  };
+
+  const fetchWorkflowStations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('workflow_stations')
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order');
+
+      if (error) throw error;
+      setWorkflowStations(data || []);
+    } catch (err) {
+      console.error('Error fetching workflow stations:', err);
+      // Non-critical - table may not exist yet
     }
   };
 
@@ -520,7 +546,9 @@ function AddTaskModal({
         due_date: formData.due_date || null,
         milestone_id: formData.milestone_id || null,
         internal_owner_id: formData.internal_owner_id || user?.id,
-        created_by: user?.id
+        created_by: user?.id,
+        workflow_station_key: formData.workflow_station_key || null,
+        assigned_court: formData.assigned_court || null
       };
 
       // Handle assignment
@@ -866,6 +894,45 @@ function AddTaskModal({
               </select>
             </div>
           )}
+
+          {/* Workflow Station & Court Row */}
+          <div style={styles.row}>
+            {/* Workflow Station */}
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Workflow Station</label>
+              <select
+                name="workflow_station_key"
+                value={formData.workflow_station_key}
+                onChange={handleChange}
+                style={styles.select}
+              >
+                <option value="">No station</option>
+                {workflowStations
+                  .filter(s => !s.parent_station_key)
+                  .map(s => (
+                    <option key={s.station_key} value={s.station_key}>
+                      {s.station_name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Assigned Court */}
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Ball In Court</label>
+              <select
+                name="assigned_court"
+                value={formData.assigned_court}
+                onChange={handleChange}
+                style={styles.select}
+              >
+                <option value="">Not specified</option>
+                {COURT_OPTIONS.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           {/* File Attachments */}
           <div style={styles.formGroup}>

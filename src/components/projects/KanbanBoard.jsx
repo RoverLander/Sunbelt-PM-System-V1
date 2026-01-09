@@ -26,11 +26,12 @@ import {
 
 // ============================================================================
 // CONSTANTS - Status columns with CORRECT Title Case values
+// Updated Jan 9, 2026: 'On Hold' changed to 'Awaiting Response'
 // ============================================================================
 const STATUS_COLUMNS = [
   {
     id: 'Not Started',  // Must match database value exactly
-    label: 'Not Started',
+    label: 'To Do',
     color: 'var(--text-tertiary)',
     icon: Circle
   },
@@ -41,26 +42,18 @@ const STATUS_COLUMNS = [
     icon: Clock
   },
   {
-    id: 'On Hold',      // Must match database value exactly
-    label: 'On Hold',
+    id: 'Awaiting Response',  // Must match database value exactly
+    label: 'Waiting',
     color: 'var(--warning)',
     icon: AlertCircle
   },
   {
     id: 'Completed',    // Must match database value exactly
-    label: 'Completed',
+    label: 'Done',
     color: 'var(--success)',
     icon: CheckCircle2
   }
 ];
-
-// Optional: Add Blocked column if your system uses it
-// {
-//   id: 'Blocked',
-//   label: 'Blocked',
-//   color: 'var(--danger)',
-//   icon: Ban
-// }
 
 // ============================================================================
 // HELPER FUNCTIONS
