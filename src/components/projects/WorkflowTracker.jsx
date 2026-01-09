@@ -188,7 +188,7 @@ function WorkflowNode({
               textDecoration: status === 'skipped' ? 'line-through' : 'none'
             }}
           >
-            {station.station_name}
+            {station.name}
           </span>
 
           {isParallel && (
