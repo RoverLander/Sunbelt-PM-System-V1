@@ -7,16 +7,11 @@
  * - Two random login animations: Convergence and Launch
  * - Smooth transitions to dashboard
  *
- * Animation Details:
- * - Idle: Ring rotates slowly clockwise (~40s per revolution)
- * - Convergence: Logos spiral inward and merge at center
- * - Launch: Logos streak outward, Sunbelt zooms toward camera
- *
  * @author Claude Code
  * @updated January 9, 2026
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { LogIn, AlertCircle } from 'lucide-react';
 
@@ -57,9 +52,8 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [animating, setAnimating] = useState(false);
-  const [animationType, setAnimationType] = useState(null); // 'convergence' or 'launch'
+  const [animationType, setAnimationType] = useState(null);
   const { signIn } = useAuth();
-  const containerRef = useRef(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -75,10 +69,10 @@ function Login() {
       // Start authentication in parallel with animation
       const authPromise = signIn(email, password);
 
-      // Wait for animation to complete (1.2s) before showing dashboard
+      // Wait for animation to complete before showing dashboard
       await Promise.all([
         authPromise,
-        new Promise(resolve => setTimeout(resolve, 1200))
+        new Promise(resolve => setTimeout(resolve, 1500))
       ]);
 
     } catch (error) {
@@ -91,543 +85,538 @@ function Login() {
 
   // Calculate position for each factory logo in the ring
   const getLogoPosition = (index, total, radius) => {
-    const angle = (index / total) * 2 * Math.PI - Math.PI / 2; // Start from top
+    const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
     const x = Math.cos(angle) * radius;
     const y = Math.sin(angle) * radius;
-    return { x, y, angle };
+    return { x, y };
   };
 
+  // Ring radius - responsive
+  const ringRadius = 180;
+  const logoSize = 55;
+  const centerLogoSize = 120;
+
   return (
-    <div
-      ref={containerRef}
-      className={`login-container ${animating ? `animating-${animationType}` : ''}`}
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #0a1628 0%, #1a2c47 50%, #0f172a 100%)',
-        padding: 'var(--space-xl)',
-        overflow: 'hidden',
-        position: 'relative',
-      }}
-    >
-      {/* Animated background particles */}
-      <div className="login-particles" style={{
-        position: 'absolute',
-        inset: 0,
-        overflow: 'hidden',
-        pointerEvents: 'none',
-        opacity: animating ? 0 : 0.3,
-        transition: 'opacity 0.5s ease',
-      }}>
-        {[...Array(20)].map((_, i) => (
-          <div
-            key={i}
-            className="particle"
-            style={{
-              position: 'absolute',
-              width: '2px',
-              height: '2px',
-              background: 'var(--sunbelt-orange)',
-              borderRadius: '50%',
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animation: `float ${5 + Math.random() * 10}s ease-in-out infinite`,
-              animationDelay: `${Math.random() * 5}s`,
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Logo Ring Container */}
-      <div
-        className={`logo-ring-container ${animating ? 'animating' : ''}`}
-        style={{
-          position: 'absolute',
-          width: '600px',
-          height: '600px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {/* Rotating Ring of Factory Logos */}
-        <div
-          className={`factory-ring ${animating ? `ring-${animationType}` : ''}`}
-          style={{
-            position: 'absolute',
-            width: '100%',
-            height: '100%',
-            animation: animating ? 'none' : 'rotateRing 40s linear infinite',
-          }}
-        >
-          {FACTORIES.map((factory, index) => {
-            const { x, y, angle } = getLogoPosition(index, FACTORIES.length, 250);
-            return (
-              <div
-                key={factory.id}
-                className={`factory-logo ${animating ? `logo-${animationType}` : ''}`}
-                style={{
-                  position: 'absolute',
-                  left: '50%',
-                  top: '50%',
-                  transform: `translate(-50%, -50%) translate(${x}px, ${y}px)`,
-                  width: '60px',
-                  height: '60px',
-                  borderRadius: '50%',
-                  background: 'rgba(255, 255, 255, 0.95)',
-                  padding: '8px',
-                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3), 0 0 30px rgba(255, 107, 53, 0.2)',
-                  opacity: animating ? 0 : 0.75,
-                  transition: 'opacity 0.3s ease, transform 0.3s ease',
-                  animation: animating
-                    ? `${animationType === 'convergence' ? 'convergeSpiral' : 'launchStreak'} 1s ease-in-out forwards`
-                    : 'counterRotate 40s linear infinite',
-                  animationDelay: animating ? `${index * 0.05}s` : '0s',
-                  '--x': `${x}px`,
-                  '--y': `${y}px`,
-                  '--angle': `${angle}rad`,
-                  '--index': index,
-                }}
-              >
-                <img
-                  src={factory.logo}
-                  alt={factory.name}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                    borderRadius: '50%',
-                  }}
-                />
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Center Sunbelt Logo */}
-        <div
-          className={`sunbelt-logo-container ${animating ? `sunbelt-${animationType}` : ''}`}
-          style={{
-            position: 'relative',
-            zIndex: 10,
-            width: '140px',
-            height: '140px',
-            borderRadius: '50%',
-            background: 'white',
-            padding: '10px',
-            boxShadow: `
-              0 0 40px rgba(255, 107, 53, 0.5),
-              0 0 80px rgba(255, 107, 53, 0.3),
-              0 8px 32px rgba(0, 0, 0, 0.3)
-            `,
-            animation: animating
-              ? (animationType === 'launch' ? 'sunbeltZoom 1s ease-in-out forwards' : 'sunbeltConverge 1s ease-in-out forwards')
-              : 'pulse 3s ease-in-out infinite',
-          }}
-        >
-          <img
-            src={SunbeltLogo}
-            alt="Sunbelt Modular"
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-              borderRadius: '50%',
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Fade overlay during animation */}
-      <div
-        className="animation-overlay"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: animationType === 'convergence'
-            ? 'radial-gradient(circle, rgba(255,107,53,0.8) 0%, rgba(255,255,255,1) 70%)'
-            : 'linear-gradient(to top, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 100%)',
-          opacity: animating ? 1 : 0,
-          pointerEvents: animating ? 'all' : 'none',
-          transition: 'opacity 0.4s ease',
-          transitionDelay: '0.8s',
-          zIndex: 100,
-        }}
-      />
-
-      {/* Login Form */}
-      <div
-        className={`login-form-wrapper ${animating ? 'form-animating' : ''}`}
-        style={{
-          width: '100%',
-          maxWidth: '400px',
-          position: 'relative',
-          zIndex: 20,
-          marginTop: '320px',
-          opacity: animating ? 0 : 1,
-          transform: animating ? 'translateY(20px)' : 'translateY(0)',
-          transition: 'opacity 0.3s ease, transform 0.3s ease',
-        }}
-      >
-        {/* Branding Text */}
-        <div style={{ textAlign: 'center', marginBottom: 'var(--space-xl)' }}>
-          <h1 style={{
-            fontFamily: 'var(--font-primary)',
-            fontSize: '2rem',
-            fontWeight: 700,
-            color: 'white',
-            marginBottom: 'var(--space-xs)',
-            textShadow: '0 2px 20px rgba(0, 0, 0, 0.3)',
-          }}>Sunbelt Modular</h1>
-          <p style={{
-            fontSize: '0.875rem',
-            color: 'rgba(255, 255, 255, 0.7)',
-            fontWeight: 500,
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-          }}>Project Management System</p>
-        </div>
-
-        {/* Login Card */}
-        <div
-          className="card"
-          style={{
-            padding: 'var(--space-2xl)',
-            background: 'rgba(26, 44, 71, 0.95)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)',
-          }}
-        >
-          <h2 style={{
-            fontFamily: 'var(--font-primary)',
-            fontSize: '1.5rem',
-            fontWeight: 700,
-            color: 'var(--text-primary)',
-            marginBottom: 'var(--space-sm)'
-          }}>Sign In</h2>
-          <p style={{
-            color: 'var(--text-secondary)',
-            marginBottom: 'var(--space-xl)',
-            fontSize: '0.9375rem'
-          }}>
-            Enter your credentials to access your account
-          </p>
-
-          {error && (
-            <div style={{
-              padding: 'var(--space-md)',
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid var(--danger)',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: 'var(--space-xl)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-sm)',
-              color: 'var(--danger)',
-              fontSize: '0.875rem'
-            }}>
-              <AlertCircle size={18} />
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="you@sunbeltmodular.com"
-                className="form-input"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="••••••••"
-                className="form-input"
-                disabled={loading}
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading}
-              style={{
-                width: '100%',
-                justifyContent: 'center',
-                padding: 'var(--space-lg)',
-                fontSize: '1rem',
-                opacity: loading ? 0.8 : 1,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-gold))',
-                border: 'none',
-                boxShadow: '0 4px 20px rgba(255, 107, 53, 0.4)',
-              }}
-            >
-              {loading ? (
-                <>
-                  <div className="loading-spinner" style={{ width: '20px', height: '20px', margin: 0 }}></div>
-                  Signing in...
-                </>
-              ) : (
-                <>
-                  <LogIn size={20} />
-                  Sign In
-                </>
-              )}
-            </button>
-          </form>
-
-          <div style={{
-            marginTop: 'var(--space-xl)',
-            paddingTop: 'var(--space-xl)',
-            borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-            textAlign: 'center',
-            fontSize: '0.875rem',
-            color: 'var(--text-secondary)'
-          }}>
-            <p>Need access? Contact your system administrator</p>
-          </div>
-        </div>
-
-        <div style={{
-          marginTop: 'var(--space-xl)',
-          textAlign: 'center',
-          fontSize: '0.875rem',
-          color: 'rgba(255, 255, 255, 0.5)'
-        }}>
-          <p>&copy; 2026 Sunbelt Modular. All rights reserved.</p>
-        </div>
-      </div>
-
-      {/* CSS Keyframes */}
+    <>
       <style>{`
+        .login-page {
+          min-height: 100vh;
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #0a1628 0%, #1a2c47 50%, #0f172a 100%);
+          padding: 20px;
+          box-sizing: border-box;
+          overflow: hidden;
+        }
+
+        .login-content {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          max-width: 500px;
+        }
+
+        .logo-assembly {
+          position: relative;
+          width: ${ringRadius * 2 + logoSize}px;
+          height: ${ringRadius * 2 + logoSize}px;
+          margin-bottom: 30px;
+          flex-shrink: 0;
+        }
+
+        .factory-ring {
+          position: absolute;
+          inset: 0;
+          animation: rotateRing 40s linear infinite;
+        }
+
+        .factory-ring.animating {
+          animation: none;
+        }
+
+        .factory-ring.ring-convergence {
+          animation: ringAccelerate 1s ease-in forwards;
+        }
+
+        .factory-ring.ring-launch {
+          animation: ringTilt 0.8s ease-out forwards;
+        }
+
+        .factory-logo {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: ${logoSize}px;
+          height: ${logoSize}px;
+          border-radius: 50%;
+          background: white;
+          padding: 6px;
+          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 20px rgba(255, 107, 53, 0.15);
+          opacity: 0.8;
+          transition: opacity 0.3s ease, box-shadow 0.3s ease;
+          animation: counterRotate 40s linear infinite;
+        }
+
+        .factory-logo:hover {
+          opacity: 1;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 30px rgba(255, 107, 53, 0.3);
+        }
+
+        .factory-logo img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          border-radius: 50%;
+        }
+
+        .factory-logo.logo-convergence {
+          animation: convergeSpiral 1.2s ease-in forwards;
+        }
+
+        .factory-logo.logo-launch {
+          animation: launchStreak 1.2s ease-out forwards;
+        }
+
+        .center-logo {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          width: ${centerLogoSize}px;
+          height: ${centerLogoSize}px;
+          border-radius: 50%;
+          background: white;
+          padding: 8px;
+          box-shadow:
+            0 0 30px rgba(255, 107, 53, 0.5),
+            0 0 60px rgba(255, 107, 53, 0.3),
+            0 8px 25px rgba(0, 0, 0, 0.3);
+          animation: pulse 3s ease-in-out infinite;
+          z-index: 10;
+        }
+
+        .center-logo.sunbelt-convergence {
+          animation: sunbeltConverge 1.2s ease-in-out forwards;
+        }
+
+        .center-logo.sunbelt-launch {
+          animation: sunbeltZoom 1.2s ease-in forwards;
+        }
+
+        .center-logo img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          border-radius: 50%;
+        }
+
+        .login-form-container {
+          width: 100%;
+          max-width: 380px;
+          opacity: 1;
+          transform: translateY(0);
+          transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+
+        .login-form-container.form-animating {
+          opacity: 0;
+          transform: translateY(30px);
+        }
+
+        .brand-text {
+          text-align: center;
+          margin-bottom: 24px;
+        }
+
+        .brand-text h1 {
+          font-size: 1.75rem;
+          font-weight: 700;
+          color: white;
+          margin: 0 0 4px 0;
+          text-shadow: 0 2px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .brand-text p {
+          font-size: 0.8rem;
+          color: rgba(255, 255, 255, 0.6);
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 0.15em;
+          margin: 0;
+        }
+
+        .login-card {
+          background: rgba(26, 44, 71, 0.95);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
+          padding: 28px;
+          box-shadow: 0 15px 50px rgba(0, 0, 0, 0.4);
+        }
+
+        .login-card h2 {
+          font-size: 1.35rem;
+          font-weight: 700;
+          color: #e8f0f8;
+          margin: 0 0 6px 0;
+        }
+
+        .login-card .subtitle {
+          color: #94a3b8;
+          font-size: 0.875rem;
+          margin: 0 0 20px 0;
+        }
+
+        .form-group {
+          margin-bottom: 16px;
+        }
+
+        .form-group label {
+          display: block;
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: #94a3b8;
+          margin-bottom: 6px;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+
+        .form-group input {
+          width: 100%;
+          padding: 12px 14px;
+          background: rgba(15, 23, 42, 0.8);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          color: #e8f0f8;
+          font-size: 0.95rem;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
+          box-sizing: border-box;
+        }
+
+        .form-group input:focus {
+          outline: none;
+          border-color: #FF6B35;
+          box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15);
+        }
+
+        .form-group input::placeholder {
+          color: #64748b;
+        }
+
+        .submit-btn {
+          width: 100%;
+          padding: 14px;
+          background: linear-gradient(135deg, #FF6B35, #F2A541);
+          border: none;
+          border-radius: 8px;
+          color: white;
+          font-size: 1rem;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .submit-btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(255, 107, 53, 0.5);
+        }
+
+        .submit-btn:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+
+        .error-message {
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid #ef4444;
+          border-radius: 8px;
+          padding: 12px;
+          margin-bottom: 16px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #ef4444;
+          font-size: 0.85rem;
+        }
+
+        .help-text {
+          margin-top: 20px;
+          padding-top: 20px;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+          text-align: center;
+          color: #64748b;
+          font-size: 0.85rem;
+        }
+
+        .copyright {
+          margin-top: 20px;
+          text-align: center;
+          color: rgba(255, 255, 255, 0.4);
+          font-size: 0.8rem;
+        }
+
+        .animation-overlay {
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.5s ease;
+          z-index: 1000;
+        }
+
+        .animation-overlay.active {
+          opacity: 1;
+          pointer-events: all;
+        }
+
+        .animation-overlay.convergence {
+          background: radial-gradient(circle at center, rgba(255,107,53,0.9) 0%, rgba(255,255,255,1) 70%);
+        }
+
+        .animation-overlay.launch {
+          background: linear-gradient(to top, transparent 0%, rgba(255,255,255,1) 100%);
+        }
+
+        /* Animations */
         @keyframes rotateRing {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
 
         @keyframes counterRotate {
-          from { transform: translate(-50%, -50%) translate(var(--tx, 0), var(--ty, 0)) rotate(0deg); }
-          to { transform: translate(-50%, -50%) translate(var(--tx, 0), var(--ty, 0)) rotate(-360deg); }
+          from { transform: translate(-50%, -50%) translate(var(--x), var(--y)) rotate(0deg); }
+          to { transform: translate(-50%, -50%) translate(var(--x), var(--y)) rotate(-360deg); }
         }
 
         @keyframes pulse {
           0%, 100% {
             box-shadow:
-              0 0 40px rgba(255, 107, 53, 0.5),
-              0 0 80px rgba(255, 107, 53, 0.3),
-              0 8px 32px rgba(0, 0, 0, 0.3);
+              0 0 30px rgba(255, 107, 53, 0.5),
+              0 0 60px rgba(255, 107, 53, 0.3),
+              0 8px 25px rgba(0, 0, 0, 0.3);
           }
           50% {
             box-shadow:
-              0 0 60px rgba(255, 107, 53, 0.7),
-              0 0 120px rgba(255, 107, 53, 0.4),
-              0 8px 32px rgba(0, 0, 0, 0.3);
+              0 0 50px rgba(255, 107, 53, 0.7),
+              0 0 100px rgba(255, 107, 53, 0.4),
+              0 8px 25px rgba(0, 0, 0, 0.3);
           }
-        }
-
-        @keyframes float {
-          0%, 100% { transform: translateY(0) translateX(0); opacity: 0.3; }
-          25% { transform: translateY(-20px) translateX(10px); opacity: 0.6; }
-          50% { transform: translateY(-10px) translateX(-10px); opacity: 0.3; }
-          75% { transform: translateY(-30px) translateX(5px); opacity: 0.5; }
-        }
-
-        /* Convergence Animation - Logos spiral inward */
-        @keyframes converge {
-          0% {
-            opacity: 0.75;
-            transform: translate(-50%, -50%) translate(var(--tx, 0), var(--ty, 0)) scale(1);
-          }
-          30% {
-            opacity: 1;
-            transform: translate(-50%, -50%) translate(var(--tx, 0), var(--ty, 0)) scale(1.2) rotate(180deg);
-          }
-          100% {
-            opacity: 0;
-            transform: translate(-50%, -50%) translate(0, 0) scale(0) rotate(720deg);
-          }
-        }
-
-        .ring-convergence {
-          animation: ringAccelerate 0.8s ease-in forwards !important;
         }
 
         @keyframes ringAccelerate {
           0% { transform: rotate(0deg); }
-          100% { transform: rotate(720deg); }
+          100% { transform: rotate(1080deg); }
         }
 
-        .logo-convergence {
-          animation: convergeSpiral 1s ease-in forwards !important;
+        @keyframes ringTilt {
+          0% { transform: rotate(0deg) perspective(800px) rotateX(0deg); }
+          100% { transform: rotate(360deg) perspective(800px) rotateX(70deg); }
         }
 
         @keyframes convergeSpiral {
           0% {
-            opacity: 0.75;
-            transform: translate(-50%, -50%) translateX(var(--x)) translateY(var(--y)) scale(1);
+            opacity: 0.8;
+            transform: translate(-50%, -50%) translate(var(--x), var(--y)) scale(1) rotate(0deg);
           }
-          40% {
+          50% {
             opacity: 1;
-            transform: translate(-50%, -50%) translateX(calc(var(--x) * 0.5)) translateY(calc(var(--y) * 0.5)) scale(1.1) rotate(360deg);
+            transform: translate(-50%, -50%) translate(calc(var(--x) * 0.4), calc(var(--y) * 0.4)) scale(0.8) rotate(540deg);
           }
           100% {
             opacity: 0;
-            transform: translate(-50%, -50%) translateX(0) translateY(0) scale(0) rotate(720deg);
+            transform: translate(-50%, -50%) translate(0px, 0px) scale(0) rotate(1080deg);
+          }
+        }
+
+        @keyframes launchStreak {
+          0% {
+            opacity: 0.8;
+            transform: translate(-50%, -50%) translate(var(--x), var(--y)) scale(1);
+            filter: blur(0);
+          }
+          40% {
+            opacity: 1;
+            transform: translate(-50%, -50%) translate(var(--x), var(--y)) scale(0.9);
+          }
+          100% {
+            opacity: 0;
+            transform: translate(-50%, -50%) translate(calc(var(--x) * 5), calc(var(--y) * 5 - 200px)) scale(0.2);
+            filter: blur(6px);
           }
         }
 
         @keyframes sunbeltConverge {
           0% {
-            transform: scale(1);
-            box-shadow: 0 0 40px rgba(255, 107, 53, 0.5), 0 0 80px rgba(255, 107, 53, 0.3);
+            transform: translate(-50%, -50%) scale(1);
           }
-          50% {
-            transform: scale(1.4);
-            box-shadow: 0 0 100px rgba(255, 107, 53, 1), 0 0 200px rgba(255, 107, 53, 0.8);
-          }
-          80% {
-            transform: scale(1.8);
-            box-shadow: 0 0 200px rgba(255, 255, 255, 1), 0 0 400px rgba(255, 107, 53, 1);
+          60% {
+            transform: translate(-50%, -50%) scale(1.5);
+            box-shadow: 0 0 80px rgba(255, 107, 53, 1), 0 0 150px rgba(255, 107, 53, 0.7);
           }
           100% {
-            transform: scale(3);
-            box-shadow: 0 0 300px rgba(255, 255, 255, 1), 0 0 500px rgba(255, 107, 53, 1);
+            transform: translate(-50%, -50%) scale(4);
             opacity: 0;
-          }
-        }
-
-        /* Launch Animation - Logos streak outward */
-        @keyframes launch {
-          0% {
-            opacity: 0.75;
-            transform: translate(-50%, -50%) translate(var(--tx, 0), var(--ty, 0)) scale(1);
-          }
-          30% {
-            opacity: 1;
-            transform: translate(-50%, -50%) translate(var(--tx, 0), var(--ty, 0)) scale(0.8);
-          }
-          100% {
-            opacity: 0;
-            transform: translate(-50%, -50%) translate(calc(var(--tx, 0) * 3), calc(var(--ty, 0) * 3 - 200px)) scale(0.3);
-            filter: blur(4px);
-          }
-        }
-
-        .ring-launch {
-          animation: ringTilt 0.6s ease-out forwards !important;
-        }
-
-        @keyframes ringTilt {
-          0% { transform: rotate(0deg) perspective(1000px) rotateX(0deg); }
-          100% { transform: rotate(180deg) perspective(1000px) rotateX(60deg); }
-        }
-
-        .logo-launch {
-          animation: launchStreak 1s ease-in forwards !important;
-        }
-
-        @keyframes launchStreak {
-          0% {
-            opacity: 0.75;
-            transform: translate(-50%, -50%) translateX(var(--x)) translateY(var(--y)) scale(1);
-            filter: blur(0);
-          }
-          30% {
-            opacity: 1;
-            transform: translate(-50%, -50%) translateX(var(--x)) translateY(var(--y)) scale(0.9);
-          }
-          100% {
-            opacity: 0;
-            transform: translate(-50%, -50%) translateX(calc(var(--x) * 4)) translateY(calc(var(--y) * 4 - 300px)) scale(0.2);
-            filter: blur(8px);
           }
         }
 
         @keyframes sunbeltZoom {
           0% {
-            transform: scale(1);
+            transform: translate(-50%, -50%) scale(1);
             opacity: 1;
           }
           50% {
-            transform: scale(2);
+            transform: translate(-50%, -50%) scale(2.5);
             opacity: 1;
           }
           100% {
-            transform: scale(6);
+            transform: translate(-50%, -50%) scale(8);
             opacity: 0;
           }
         }
 
-        .sunbelt-launch {
-          animation: sunbeltZoom 1s ease-in forwards !important;
+        .loading-spinner {
+          width: 20px;
+          height: 20px;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          border-top-color: white;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
         }
 
-        /* Hover effects for factory logos */
-        .factory-logo:hover {
-          opacity: 1 !important;
-          transform: translate(-50%, -50%) translate(var(--x), var(--y)) scale(1.15) !important;
-          z-index: 5;
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
 
-        /* Responsive adjustments */
-        @media (max-width: 768px) {
-          .logo-ring-container {
-            width: 400px !important;
-            height: 400px !important;
-          }
-
-          .factory-logo {
-            width: 45px !important;
-            height: 45px !important;
-          }
-
-          .sunbelt-logo-container {
-            width: 100px !important;
-            height: 100px !important;
-          }
-
-          .login-form-wrapper {
-            margin-top: 240px !important;
+        /* Responsive */
+        @media (max-height: 800px) {
+          .logo-assembly {
+            width: ${ringRadius * 1.6 + logoSize * 0.8}px;
+            height: ${ringRadius * 1.6 + logoSize * 0.8}px;
+            margin-bottom: 20px;
           }
         }
 
-        @media (max-width: 480px) {
-          .logo-ring-container {
-            width: 300px !important;
-            height: 300px !important;
+        @media (max-width: 500px) {
+          .logo-assembly {
+            width: 300px;
+            height: 300px;
           }
-
-          .factory-logo {
-            width: 35px !important;
-            height: 35px !important;
-          }
-
-          .sunbelt-logo-container {
-            width: 80px !important;
-            height: 80px !important;
-          }
-
-          .login-form-wrapper {
-            margin-top: 180px !important;
+          .login-card {
+            padding: 20px;
           }
         }
       `}</style>
-    </div>
+
+      <div className="login-page">
+        {/* Animation Overlay */}
+        <div className={`animation-overlay ${animating ? 'active' : ''} ${animationType || ''}`} />
+
+        <div className="login-content">
+          {/* Logo Assembly - Ring + Center Logo */}
+          <div className="logo-assembly">
+            {/* Rotating Ring */}
+            <div className={`factory-ring ${animating ? `animating ring-${animationType}` : ''}`}>
+              {FACTORIES.map((factory, index) => {
+                const { x, y } = getLogoPosition(index, FACTORIES.length, ringRadius);
+                return (
+                  <div
+                    key={factory.id}
+                    className={`factory-logo ${animating ? `logo-${animationType}` : ''}`}
+                    style={{
+                      transform: `translate(-50%, -50%) translate(${x}px, ${y}px)`,
+                      '--x': `${x}px`,
+                      '--y': `${y}px`,
+                      animationDelay: animating ? `${index * 0.04}s` : '0s',
+                    }}
+                  >
+                    <img src={factory.logo} alt={factory.name} />
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Center Sunbelt Logo */}
+            <div className={`center-logo ${animating ? `sunbelt-${animationType}` : ''}`}>
+              <img src={SunbeltLogo} alt="Sunbelt Modular" />
+            </div>
+          </div>
+
+          {/* Login Form */}
+          <div className={`login-form-container ${animating ? 'form-animating' : ''}`}>
+            <div className="brand-text">
+              <h1>Sunbelt Modular</h1>
+              <p>Project Management System</p>
+            </div>
+
+            <div className="login-card">
+              <h2>Sign In</h2>
+              <p className="subtitle">Enter your credentials to access your account</p>
+
+              {error && (
+                <div className="error-message">
+                  <AlertCircle size={18} />
+                  {error}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit}>
+                <div className="form-group">
+                  <label>Email Address</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="you@sunbeltmodular.com"
+                    disabled={loading}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Password</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="••••••••"
+                    disabled={loading}
+                  />
+                </div>
+
+                <button type="submit" className="submit-btn" disabled={loading}>
+                  {loading ? (
+                    <>
+                      <div className="loading-spinner" />
+                      Signing in...
+                    </>
+                  ) : (
+                    <>
+                      <LogIn size={20} />
+                      Sign In
+                    </>
+                  )}
+                </button>
+              </form>
+
+              <p className="help-text">Need access? Contact your system administrator</p>
+            </div>
+
+            <p className="copyright">&copy; 2026 Sunbelt Modular. All rights reserved.</p>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
