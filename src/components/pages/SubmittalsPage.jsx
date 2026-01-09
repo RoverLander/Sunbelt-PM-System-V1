@@ -7,6 +7,7 @@
 //
 // FEATURES:
 // - Table layout for proper width handling
+// - Stats and filters on same row
 // - Filters: status, project, search
 // - Stats cards: Pending, Overdue, Approved
 // - Click row to navigate to project Submittals tab
@@ -15,6 +16,8 @@
 // FIXES (Jan 9, 2026):
 // - ✅ FIXED: Converted to table layout for full-width display
 // - ✅ FIXED: maxWidth increased to 1600px
+// - ✅ FIXED: Stats and filters on same row
+// - ✅ FIXED: Default filter to 'all'
 //
 // DEPENDENCIES:
 // - supabaseClient: Database operations
@@ -61,9 +64,9 @@ function SubmittalsPage({ isDirectorView = false, onNavigateToProject }) {
   const [currentUser, setCurrentUser] = useState(null);
 
   // ==========================================================================
-  // STATE - FILTERS
+  // STATE - FILTERS (Default to 'all')
   // ==========================================================================
-  const [filterStatus, setFilterStatus] = useState('pending');
+  const [filterStatus, setFilterStatus] = useState('all');
   const [filterProject, setFilterProject] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -211,93 +214,114 @@ function SubmittalsPage({ isDirectorView = false, onNavigateToProject }) {
       </div>
 
       {/* ================================================================== */}
-      {/* STATS                                                             */}
+      {/* STATS + FILTERS ROW                                               */}
       {/* ================================================================== */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: 'var(--space-lg)', maxWidth: '600px' }}>
-        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Pending</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.pending}</div>
-        </div>
-        <div style={{
-          background: stats.overdue > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '16px',
-          border: stats.overdue > 0 ? '1px solid var(--danger)' : '1px solid var(--border-color)'
-        }}>
-          <div style={{ fontSize: '0.8125rem', color: stats.overdue > 0 ? 'var(--danger)' : 'var(--text-secondary)', marginBottom: '4px' }}>Overdue</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: stats.overdue > 0 ? 'var(--danger)' : 'var(--text-primary)' }}>{stats.overdue}</div>
-        </div>
-        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: '16px', border: '1px solid var(--border-color)' }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Approved</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#22c55e' }}>{stats.approved}</div>
-        </div>
-      </div>
-
-      {/* ================================================================== */}
-      {/* FILTERS                                                           */}
-      {/* ================================================================== */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: 'var(--space-lg)', flexWrap: 'wrap', alignItems: 'center' }}>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          style={{
-            padding: '8px 12px',
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 'var(--space-lg)',
+        marginBottom: 'var(--space-lg)',
+        flexWrap: 'wrap'
+      }}>
+        {/* Stats Cards */}
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <div style={{
             background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '12px 20px',
             border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-primary)',
-            fontSize: '0.8125rem'
-          }}
-        >
-          <option value="pending">Pending</option>
-          <option value="overdue">Overdue</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected/Revise</option>
-          <option value="all">All Submittals</option>
-        </select>
-
-        <select
-          value={filterProject}
-          onChange={(e) => setFilterProject(e.target.value)}
-          style={{
-            padding: '8px 12px',
+            minWidth: '120px'
+          }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Pending</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.pending}</div>
+          </div>
+          <div style={{
+            background: stats.overdue > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '12px 20px',
+            border: stats.overdue > 0 ? '1px solid var(--danger)' : '1px solid var(--border-color)',
+            minWidth: '120px'
+          }}>
+            <div style={{ fontSize: '0.75rem', color: stats.overdue > 0 ? 'var(--danger)' : 'var(--text-secondary)', marginBottom: '2px' }}>Overdue</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: '700', color: stats.overdue > 0 ? 'var(--danger)' : 'var(--text-primary)' }}>{stats.overdue}</div>
+          </div>
+          <div style={{
             background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '12px 20px',
             border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-primary)',
-            fontSize: '0.8125rem'
-          }}
-        >
-          <option value="all">All Projects</option>
-          {projects.map(p => (
-            <option key={p.id} value={p.id}>{p.project_number} - {p.name}</option>
-          ))}
-        </select>
+            minWidth: '120px'
+          }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Approved</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#22c55e' }}>{stats.approved}</div>
+          </div>
+        </div>
 
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '8px 12px',
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-color)',
-          borderRadius: 'var(--radius-md)'
-        }}>
-          <Search size={16} style={{ color: 'var(--text-tertiary)' }} />
-          <input
-            type="text"
-            placeholder="Search submittals..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+        {/* Filters */}
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
             style={{
-              background: 'none',
-              border: 'none',
+              padding: '8px 12px',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
               color: 'var(--text-primary)',
-              fontSize: '0.8125rem',
-              outline: 'none',
-              width: '200px'
+              fontSize: '0.8125rem'
             }}
-          />
+          >
+            <option value="all">All Submittals</option>
+            <option value="pending">Pending</option>
+            <option value="overdue">Overdue</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected/Revise</option>
+          </select>
+
+          <select
+            value={filterProject}
+            onChange={(e) => setFilterProject(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-primary)',
+              fontSize: '0.8125rem'
+            }}
+          >
+            <option value="all">All Projects</option>
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>{p.project_number} - {p.name}</option>
+            ))}
+          </select>
+
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 12px',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-md)'
+          }}>
+            <Search size={16} style={{ color: 'var(--text-tertiary)' }} />
+            <input
+              type="text"
+              placeholder="Search submittals..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-primary)',
+                fontSize: '0.8125rem',
+                outline: 'none',
+                width: '150px'
+              }}
+            />
+          </div>
         </div>
       </div>
 
