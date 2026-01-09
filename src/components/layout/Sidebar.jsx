@@ -5,7 +5,11 @@
 // - PM View: My Projects, My Tasks, Overdue counts
 // - Director View: Portfolio Health, At-Risk, Team stats
 // - VP View: Executive KPIs, Portfolio Value
-// - IT View: User management, System health, Audit stats              ← IT ADDED
+// - IT View: User management, System health, Audit stats
+//
+// FIXES (Jan 9, 2026):
+// - ✅ FIXED: fetchPMStats now checks owner_id, primary_pm_id, AND backup_pm_id
+// - ✅ FIXED: Proper deduplication of projects from multiple queries
 //
 // UPDATES (Jan 8, 2026):
 // - Added IT Dashboard support for IT role
@@ -38,9 +42,9 @@ import {
   DollarSign,
   Briefcase,
   PieChart,
-  Shield,        // ← IT ADDED
-  Server,        // ← IT ADDED
-  Database       // ← IT ADDED
+  Shield,
+  Server,
+  Database
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -86,7 +90,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     totalClients: 0
   });
 
-  // ← IT ADDED: IT View Stats
+  // IT View Stats
   const [itStats, setITStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -117,9 +121,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         if (userRole === 'vp') {
           setDashboardType('vp');
           localStorage.setItem('dashboardType', 'vp');
-        } else if (userRole === 'it') {                              // ← IT ADDED
-          setDashboardType('it');                                    // ← IT ADDED
-          localStorage.setItem('dashboardType', 'it');               // ← IT ADDED
+        } else if (userRole === 'it') {
+          setDashboardType('it');
+          localStorage.setItem('dashboardType', 'it');
         } else if (userRole === 'director' || userRole === 'admin') {
           setDashboardType('director');
           localStorage.setItem('dashboardType', 'director');
@@ -134,7 +138,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
           setDashboardType('director');
           localStorage.setItem('dashboardType', 'director');
         }
-        // PMs cannot access IT/VP/Director dashboards                // ← IT ADDED
+        // PMs cannot access IT/VP/Director dashboards
         if (userRole === 'pm' && ['vp', 'it', 'director'].includes(savedDashboard)) {
           setDashboardType('pm');
           localStorage.setItem('dashboardType', 'pm');
@@ -186,7 +190,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   };
 
   // ==========================================================================
-  // FETCH PM STATS - Uses owner_id for primary PM
+  // FETCH PM STATS - ✅ FIXED: Now checks owner_id, primary_pm_id, AND backup_pm_id
   // ==========================================================================
   const fetchPMStats = async () => {
     if (!currentUser) return;
@@ -196,25 +200,31 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       let projectsData = [];
       
       if (includeSecondary) {
-        // Include both primary and backup PM projects
-        const [primaryRes, secondaryRes] = await Promise.all([
+        // ✅ FIXED: Include owner_id, primary_pm_id, AND backup_pm_id
+        const [ownerRes, primaryPmRes, backupRes] = await Promise.all([
           supabase.from('projects').select('id').eq('owner_id', currentUser.id).in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']),
+          supabase.from('projects').select('id').eq('primary_pm_id', currentUser.id).in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']),
           supabase.from('projects').select('id').eq('backup_pm_id', currentUser.id).in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'])
         ]);
         
-        const allProjects = [...(primaryRes.data || []), ...(secondaryRes.data || [])];
+        const allProjects = [...(ownerRes.data || []), ...(primaryPmRes.data || []), ...(backupRes.data || [])];
         const uniqueProjects = allProjects.filter((project, index, self) =>
           index === self.findIndex(p => p.id === project.id)
         );
         projectsData = uniqueProjects;
       } else {
-        // Only primary PM projects
-        const { data } = await supabase
-          .from('projects')
-          .select('id')
-          .eq('owner_id', currentUser.id)
-          .in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']);
-        projectsData = data || [];
+        // ✅ FIXED: Only primary PM projects (check both owner_id AND primary_pm_id)
+        const [ownerRes, primaryPmRes] = await Promise.all([
+          supabase.from('projects').select('id').eq('owner_id', currentUser.id).in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress']),
+          supabase.from('projects').select('id').eq('primary_pm_id', currentUser.id).in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'])
+        ]);
+        
+        // Combine and deduplicate
+        const allProjects = [...(ownerRes.data || []), ...(primaryPmRes.data || [])];
+        const uniqueProjects = allProjects.filter((project, index, self) =>
+          index === self.findIndex(p => p.id === project.id)
+        );
+        projectsData = uniqueProjects;
       }
 
       const projectIds = projectsData.map(p => p.id);
@@ -270,60 +280,44 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         projectIds.length > 0
           ? supabase.from('submittals').select('id, project_id, due_date, status').in('project_id', projectIds)
           : { data: [] },
-        supabase.from('users').select('id').in('role', ['PM', 'Project Manager', 'Director', 'Admin']).eq('is_active', true)
+        supabase.from('users').select('id').eq('is_active', true)
       ]);
 
       const tasks = tasksResult.data || [];
       const rfis = rfisResult.data || [];
-      const submittals = submittalsResult.data || [];
+      
+      // Count overdue items
+      const overdueTasks = tasks.filter(t => 
+        t.due_date && t.due_date < today && !['Completed', 'Cancelled'].includes(t.status)
+      ).length;
+      
+      const overdueRFIs = rfis.filter(r => 
+        r.due_date && r.due_date < today && !['Closed', 'Answered'].includes(r.status)
+      ).length;
 
-      let onTrack = 0;
-      let atRisk = 0;
-      let critical = 0;
-      let totalOverdue = 0;
-
-      (projects || []).forEach(project => {
-        const projectTasks = tasks.filter(t => t.project_id === project.id);
-        const projectRFIs = rfis.filter(r => r.project_id === project.id);
-        const projectSubmittals = submittals.filter(s => s.project_id === project.id);
-
-        const overdueTasks = projectTasks.filter(t => 
+      // Calculate project health
+      const projectHealth = (projects || []).map(p => {
+        const projectTasks = tasks.filter(t => t.project_id === p.id);
+        const projectOverdue = projectTasks.filter(t => 
           t.due_date && t.due_date < today && !['Completed', 'Cancelled'].includes(t.status)
         ).length;
-        const overdueRFIs = projectRFIs.filter(r => 
-          r.due_date && r.due_date < today && !['Answered', 'Closed'].includes(r.status)
-        ).length;
-        const overdueSubmittals = projectSubmittals.filter(s => 
-          s.due_date && s.due_date < today && ['Pending', 'Submitted', 'Under Review'].includes(s.status)
-        ).length;
-
-        const projectOverdue = overdueTasks + overdueRFIs + overdueSubmittals;
-        totalOverdue += projectOverdue;
-
-        const daysToDelivery = project.delivery_date 
-          ? Math.ceil((new Date(project.delivery_date) - new Date()) / (1000 * 60 * 60 * 24))
-          : 999;
-
-        if (projectOverdue >= 3 || daysToDelivery <= 3) {
-          critical++;
-        } else if (projectOverdue > 0 || daysToDelivery <= 7) {
-          atRisk++;
-        } else {
-          onTrack++;
-        }
+        
+        if (projectOverdue > 3) return 'critical';
+        if (projectOverdue > 0) return 'at-risk';
+        return 'on-track';
       });
 
       setDirectorStats({
-        totalProjects: (projects || []).length,
-        onTrack,
-        atRisk,
-        critical,
-        totalOverdue,
-        teamMembers: (usersResult.data || []).length
+        totalProjects: projects?.length || 0,
+        onTrack: projectHealth.filter(h => h === 'on-track').length,
+        atRisk: projectHealth.filter(h => h === 'at-risk').length,
+        critical: projectHealth.filter(h => h === 'critical').length,
+        totalOverdue: overdueTasks + overdueRFIs,
+        teamMembers: usersResult.data?.length || 0
       });
 
     } catch (error) {
-      console.error('Error fetching director stats:', error);
+      console.error('Error fetching Director stats:', error);
     }
   };
 
@@ -332,23 +326,32 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   // ==========================================================================
   const fetchVPStats = async () => {
     try {
-      const { data: projects, error } = await supabase
+      const { data: projects } = await supabase
         .from('projects')
-        .select('id, status, contract_value, client_name, delivery_date');
+        .select('id, status, contract_value, client_name, target_online_date, actual_completion_date')
+        .in('status', ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress', 'Completed']);
 
-      if (error) {
-        console.error('Error fetching VP stats:', error);
-        return;
+      const activeProjects = (projects || []).filter(p => 
+        !['Completed', 'Cancelled', 'On Hold'].includes(p.status)
+      );
+
+      const completedProjects = (projects || []).filter(p => p.status === 'Completed');
+
+      // Calculate portfolio value
+      const portfolioValue = activeProjects.reduce((sum, p) => sum + (p.contract_value || 0), 0);
+
+      // Calculate on-time rate
+      let onTimeRate = 100;
+      if (completedProjects.length > 0) {
+        const onTime = completedProjects.filter(p => {
+          if (!p.target_online_date || !p.actual_completion_date) return true;
+          return new Date(p.actual_completion_date) <= new Date(p.target_online_date);
+        }).length;
+        onTimeRate = Math.round((onTime / completedProjects.length) * 100);
       }
 
-      const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
-      const activeProjects = (projects || []).filter(p => activeStatuses.includes(p.status));
-
-      const portfolioValue = (projects || []).reduce((sum, p) => sum + (p.contract_value || 0), 0);
+      // Count unique clients
       const clients = [...new Set((projects || []).map(p => p.client_name).filter(Boolean))];
-
-      // On-time rate - default to 100% (would need actual_completion_date column to calculate)
-      const onTimeRate = 100;
 
       setVPStats({
         portfolioValue,
@@ -362,15 +365,15 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     }
   };
 
-    // ==========================================================================
-    // ← IT ADDED: FETCH IT STATS
-    // ==========================================================================
-    const fetchITStats = async () => {
-      try {
-        const [usersResult, projectsResult] = await Promise.all([
-          supabase.from('users').select('id, is_active'),
-          supabase.from('projects').select('id', { count: 'exact', head: true })
-        ]);
+  // ==========================================================================
+  // FETCH IT STATS
+  // ==========================================================================
+  const fetchITStats = async () => {
+    try {
+      const [usersResult, projectsResult] = await Promise.all([
+        supabase.from('users').select('id, is_active'),
+        supabase.from('projects').select('id', { count: 'exact', head: true })
+      ]);
 
       const users = usersResult.data || [];
       const activeUsers = users.filter(u => u.is_active !== false).length;
@@ -406,513 +409,57 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     localStorage.setItem('includeSecondaryInCounts', JSON.stringify(newValue));
   };
 
-  const handleDashboardSwitch = (type) => {
-    if (setDashboardType) {
-      setDashboardType(type);
-      localStorage.setItem('dashboardType', type);
-    }
-    setShowDashboardMenu(false);
-    if (setCurrentView) setCurrentView('dashboard');
+  // ==========================================================================
+  // DASHBOARD ACCESS - Who can access what
+  // ==========================================================================
+  const canAccessDashboard = (type) => {
+    if (!currentUser) return false;
+    const role = (currentUser.role || '').toLowerCase();
+    
+    // Dashboard access matrix
+    const access = {
+      pm: ['pm', 'director', 'vp', 'it', 'admin'],
+      director: ['director', 'vp', 'admin'],
+      vp: ['vp', 'admin'],
+      it: ['it', 'admin']
+    };
+    
+    return access[type]?.includes(role) || false;
   };
 
   // ==========================================================================
-  // DERIVED VALUES - ROLE PERMISSIONS
+  // FORMAT CURRENCY
   // ==========================================================================
-  const displayUser = currentUser || user;
-  const userRole = (currentUser?.role || '').toLowerCase();
-  
-  // Role checks
-  const isVP = userRole === 'vp';
-  const isDirector = userRole === 'director';
-  const isAdmin = userRole === 'admin';
-  const isIT = userRole === 'it';                                    // ← IT ADDED
-  
-  // Who can switch dashboards
-  const canSwitchDashboard = isVP || isDirector || isAdmin || isIT;  // ← IT ADDED: isIT
-  
-  // Access permissions
-  const canAccessVP = isVP || isAdmin;                               // ← UPDATED: Admin can access VP
-  const canAccessIT = isIT || isAdmin;                               // ← IT ADDED
-
   const formatCurrency = (amount) => {
     if (!amount) return '$0';
     if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
     if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
-    return `$${amount.toLocaleString()}`;
+    return `$${amount}`;
   };
 
   // ==========================================================================
-  // NAV ITEMS FOR EACH VIEW
+  // GET DASHBOARD ICON & LABEL
   // ==========================================================================
-  const pmNavItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'projects', label: 'Projects', icon: FolderKanban },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-    { id: 'rfis', label: 'RFIs', icon: FileText },
-    { id: 'submittals', label: 'Submittals', icon: ClipboardList },
-  ];
+  const getDashboardConfig = (type) => {
+    const configs = {
+      pm: { icon: LayoutDashboard, label: 'PM Dashboard', color: 'var(--sunbelt-orange)' },
+      director: { icon: BarChart3, label: 'Director Dashboard', color: 'var(--info)' },
+      vp: { icon: TrendingUp, label: 'VP Dashboard', color: '#8b5cf6' },
+      it: { icon: Shield, label: 'IT Dashboard', color: '#06b6d4' }
+    };
+    return configs[type] || configs.pm;
+  };
 
-  const directorNavItems = [
-    { id: 'dashboard', label: 'Portfolio', icon: BarChart3 },
-    { id: 'projects', label: 'All Projects', icon: FolderKanban },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-    { id: 'rfis', label: 'RFIs', icon: FileText },
-    { id: 'submittals', label: 'Submittals', icon: ClipboardList },
-    { id: 'team', label: 'Team', icon: Users },
-  ];
-
-  const vpNavItems = [
-    { id: 'dashboard', label: 'Executive', icon: TrendingUp },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'clients', label: 'Clients', icon: Briefcase },
-    { id: 'projects', label: 'All Projects', icon: FolderKanban },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
-  ];
-
-  // ← IT ADDED: IT Nav Items
-  const itNavItems = [
-    { id: 'dashboard', label: 'IT Dashboard', icon: Shield },
-    { id: 'projects', label: 'All Projects', icon: FolderKanban },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-    { id: 'rfis', label: 'RFIs', icon: FileText },
-    { id: 'submittals', label: 'Submittals', icon: ClipboardList },
-  ];
-
-  // Select nav items based on dashboard type
-  const navItems = dashboardType === 'vp' 
-    ? vpNavItems 
-    : dashboardType === 'director' 
-      ? directorNavItems 
-      : dashboardType === 'it'                                       // ← IT ADDED
-        ? itNavItems                                                 // ← IT ADDED
-        : pmNavItems;
+  const currentConfig = getDashboardConfig(dashboardType);
+  const CurrentIcon = currentConfig.icon;
 
   // ==========================================================================
-  // RENDER
+  // RENDER: Stats by Dashboard Type
   // ==========================================================================
-  return (
-    <aside className="sidebar">
-      {/* ================================================================== */}
-      {/* LOGO                                                              */}
-      {/* ================================================================== */}
-      <div className="sidebar-logo">
-        <div style={{
-          width: '40px',
-          height: '40px',
-          background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
-          borderRadius: '10px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginRight: '12px',
-          flexShrink: 0
-        }}>
-          <Building2 size={24} color="white" />
-        </div>
-        <div>
-          <h1 style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
-            Sunbelt PM
-          </h1>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
-            Project Management
-          </p>
-        </div>
-      </div>
-
-      {/* ================================================================== */}
-      {/* DASHBOARD SWITCHER - Role-based access                            */}
-      {/* ================================================================== */}
-      {canSwitchDashboard && (
-        <div style={{ padding: '8px 16px', marginBottom: '8px' }}>
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowDashboardMenu(!showDashboardMenu)}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '10px 12px',
-                background: dashboardType === 'vp' 
-                  ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05))'
-                  : dashboardType === 'it'                           // ← IT ADDED
-                    ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05))'
-                    : dashboardType === 'director' 
-                      ? 'linear-gradient(135deg, rgba(255, 107, 53, 0.15), rgba(255, 107, 53, 0.05))'
-                      : 'var(--bg-tertiary)',
-                border: dashboardType === 'vp' 
-                  ? '1px solid #8b5cf6' 
-                  : dashboardType === 'it'                           // ← IT ADDED
-                    ? '1px solid #06b6d4'                            // ← IT ADDED (cyan)
-                    : dashboardType === 'director' 
-                      ? '1px solid var(--sunbelt-orange)' 
-                      : '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-                color: 'var(--text-primary)'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {dashboardType === 'vp' ? (
-                  <TrendingUp size={18} style={{ color: '#8b5cf6' }} />
-                ) : dashboardType === 'it' ? (                       // ← IT ADDED
-                  <Shield size={18} style={{ color: '#06b6d4' }} />  // ← IT ADDED
-                ) : dashboardType === 'director' ? (
-                  <BarChart3 size={18} style={{ color: 'var(--sunbelt-orange)' }} />
-                ) : (
-                  <LayoutDashboard size={18} style={{ color: 'var(--text-secondary)' }} />
-                )}
-                <span style={{ fontSize: '0.875rem', fontWeight: '600' }}>
-                  {dashboardType === 'vp' ? 'VP View' 
-                    : dashboardType === 'it' ? 'IT View'             // ← IT ADDED
-                    : dashboardType === 'director' ? 'Director View' 
-                    : 'PM View'}
-                </span>
-              </div>
-              <ChevronDown 
-                size={16} 
-                style={{ 
-                  color: 'var(--text-tertiary)',
-                  transform: showDashboardMenu ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s'
-                }} 
-              />
-            </button>
-
-            {/* ============================================================ */}
-            {/* DASHBOARD DROPDOWN MENU                                      */}
-            {/* ============================================================ */}
-            {showDashboardMenu && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                right: 0,
-                marginTop: '4px',
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                zIndex: 100,
-                overflow: 'hidden'
-              }}>
-                {/* VP Option - Only shown if canAccessVP */}
-                {canAccessVP && (
-                  <button
-                    onClick={() => handleDashboardSwitch('vp')}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '10px 12px',
-                      background: dashboardType === 'vp' ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: dashboardType === 'vp' ? '#8b5cf6' : 'var(--text-primary)',
-                      fontSize: '0.875rem',
-                      textAlign: 'left'
-                    }}
-                  >
-                    <TrendingUp size={18} />
-                    <div>
-                      <div style={{ fontWeight: '600' }}>VP View</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Executive overview</div>
-                    </div>
-                  </button>
-                )}
-
-                {/* ← IT ADDED: IT Option - Only shown if canAccessIT */}
-                {canAccessIT && (
-                  <button
-                    onClick={() => handleDashboardSwitch('it')}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '10px 12px',
-                      background: dashboardType === 'it' ? 'rgba(6, 182, 212, 0.1)' : 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: dashboardType === 'it' ? '#06b6d4' : 'var(--text-primary)',
-                      fontSize: '0.875rem',
-                      textAlign: 'left'
-                    }}
-                  >
-                    <Shield size={18} />
-                    <div>
-                      <div style={{ fontWeight: '600' }}>IT View</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>System administration</div>
-                    </div>
-                  </button>
-                )}
-                
-                {/* Director Option - Shown to Directors, Admins, VPs, and IT */}
-                <button
-                  onClick={() => handleDashboardSwitch('director')}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 12px',
-                    background: dashboardType === 'director' ? 'rgba(255, 107, 53, 0.1)' : 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: dashboardType === 'director' ? 'var(--sunbelt-orange)' : 'var(--text-primary)',
-                    fontSize: '0.875rem',
-                    textAlign: 'left'
-                  }}
-                >
-                  <BarChart3 size={18} />
-                  <div>
-                    <div style={{ fontWeight: '600' }}>Director View</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Portfolio & team oversight</div>
-                  </div>
-                </button>
-                
-                {/* PM Option - Shown to all */}
-                <button
-                  onClick={() => handleDashboardSwitch('pm')}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 12px',
-                    background: dashboardType === 'pm' ? 'rgba(255, 107, 53, 0.1)' : 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: dashboardType === 'pm' ? 'var(--sunbelt-orange)' : 'var(--text-primary)',
-                    fontSize: '0.875rem',
-                    textAlign: 'left'
-                  }}
-                >
-                  <LayoutDashboard size={18} />
-                  <div>
-                    <div style={{ fontWeight: '600' }}>PM View</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>My projects & tasks</div>
-                  </div>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ================================================================== */}
-      {/* STATS - DIFFERENT FOR EACH VIEW                                   */}
-      {/* ================================================================== */}
-      <div style={{ padding: '0 16px', marginBottom: '12px' }}>
-        
-        {/* ===== VP VIEW STATS ===== */}
-        {dashboardType === 'vp' ? (
-          <>
-            {/* Portfolio Value */}
-            <div style={{
-              padding: '14px',
-              background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: '8px',
-              color: 'white'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', opacity: 0.9 }}>
-                <DollarSign size={16} />
-                <span style={{ fontSize: '0.75rem', fontWeight: '600' }}>Portfolio Value</span>
-              </div>
-              <div style={{ fontSize: '1.5rem', fontWeight: '700' }}>
-                {formatCurrency(vpStats.portfolioValue)}
-              </div>
-            </div>
-
-            {/* KPIs Row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-              <div style={{
-                padding: '12px 10px',
-                background: 'var(--bg-secondary)',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-color)',
-                textAlign: 'center'
-              }}>
-                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>{vpStats.activeProjects}</div>
-                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Active</div>
-              </div>
-              <div style={{
-                padding: '12px 10px',
-                background: 'var(--bg-secondary)',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-color)',
-                textAlign: 'center'
-              }}>
-                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: vpStats.onTimeRate >= 90 ? '#22c55e' : '#f59e0b' }}>{vpStats.onTimeRate}%</div>
-                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>On-Time</div>
-              </div>
-            </div>
-
-            {/* Clients */}
-            <div style={{
-              padding: '12px 14px',
-              background: 'var(--bg-secondary)',
-              borderRadius: 'var(--radius-md)',
-              marginTop: '8px',
-              border: '1px solid var(--border-color)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Briefcase size={16} style={{ color: '#8b5cf6' }} />
-                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Total Clients</span>
-              </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
-                {vpStats.totalClients}
-              </div>
-            </div>
-          </>
-
-        /* ===== IT VIEW STATS ===== */                              
-        ) : dashboardType === 'it' ? (                               // ← IT ADDED: Entire block
-          <>
-            {/* System Status */}
-            <div style={{
-              padding: '14px',
-              background: 'linear-gradient(135deg, #06b6d4, #0891b2)',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: '8px',
-              color: 'white'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', opacity: 0.9 }}>
-                <Server size={16} />
-                <span style={{ fontSize: '0.75rem', fontWeight: '600' }}>System Status</span>
-              </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: '700' }}>
-                All Systems Operational
-              </div>
-            </div>
-
-            {/* Users Row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-              <div style={{
-                padding: '12px 10px',
-                background: 'var(--bg-secondary)',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-color)',
-                textAlign: 'center'
-              }}>
-                <Users size={16} style={{ color: '#06b6d4', marginBottom: '4px' }} />
-                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>{itStats.totalUsers}</div>
-                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Users</div>
-              </div>
-              <div style={{
-                padding: '12px 10px',
-                background: 'var(--bg-secondary)',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-color)',
-                textAlign: 'center'
-              }}>
-                <Database size={16} style={{ color: '#06b6d4', marginBottom: '4px' }} />
-                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>{itStats.totalProjects}</div>
-                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Projects</div>
-              </div>
-            </div>
-
-            {/* Active Users */}
-            <div style={{
-              padding: '12px 14px',
-              background: 'var(--bg-secondary)',
-              borderRadius: 'var(--radius-md)',
-              marginTop: '8px',
-              border: '1px solid var(--border-color)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Activity size={16} style={{ color: '#22c55e' }} />
-                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Active Users</span>
-              </div>
-              <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#22c55e', marginTop: '4px' }}>
-                {itStats.activeUsers}
-              </div>
-            </div>
-          </>
-
-        ) : dashboardType === 'director' ? (
-          /* ===== DIRECTOR VIEW STATS ===== */
-          <>
-            {/* Portfolio Health */}
-            <div style={{
-              padding: '12px 14px',
-              background: 'var(--bg-secondary)',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: '8px',
-              border: '1px solid var(--border-color)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <Activity size={16} style={{ color: 'var(--sunbelt-orange)' }} />
-                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontWeight: '600' }}>Portfolio Health</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#22c55e' }}>{directorStats.onTrack}</div>
-                  <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>On Track</div>
-                </div>
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#f59e0b' }}>{directorStats.atRisk}</div>
-                  <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>At Risk</div>
-                </div>
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ef4444' }}>{directorStats.critical}</div>
-                  <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Critical</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Total Overdue */}
-            <div style={{
-              padding: '12px 14px',
-              background: directorStats.totalOverdue > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: '8px',
-              border: directorStats.totalOverdue > 0 ? '1px solid var(--danger)' : '1px solid var(--border-color)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <AlertTriangle size={16} style={{ color: directorStats.totalOverdue > 0 ? 'var(--danger)' : 'var(--text-tertiary)' }} />
-                <span style={{ fontSize: '0.8125rem', color: directorStats.totalOverdue > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>Total Overdue Items</span>
-              </div>
-              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: directorStats.totalOverdue > 0 ? 'var(--danger)' : 'var(--text-primary)', marginTop: '4px' }}>
-                {directorStats.totalOverdue}
-              </div>
-            </div>
-
-            {/* Team & Projects */}
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <div style={{
-                flex: 1,
-                padding: '12px 10px',
-                background: 'var(--bg-secondary)',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-color)',
-                textAlign: 'center'
-              }}>
-                <FolderKanban size={16} style={{ color: 'var(--sunbelt-orange)', marginBottom: '4px' }} />
-                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>{directorStats.totalProjects}</div>
-                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Projects</div>
-              </div>
-              <div style={{
-                flex: 1,
-                padding: '12px 10px',
-                background: 'var(--bg-secondary)',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-color)',
-                textAlign: 'center'
-              }}>
-                <Users size={16} style={{ color: 'var(--sunbelt-orange)', marginBottom: '4px' }} />
-                <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)' }}>{directorStats.teamMembers}</div>
-                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Team</div>
-              </div>
-            </div>
-          </>
-        ) : (
-          /* ===== PM VIEW STATS ===== */
+  const renderStats = () => {
+    switch (dashboardType) {
+      case 'pm':
+        return (
           <>
             <div style={{
               padding: '12px 14px',
@@ -986,108 +533,515 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
               )}
             </button>
           </>
-        )}
+        );
+
+      case 'director':
+        return (
+          <>
+            <div style={{
+              padding: '12px 14px',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '8px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FolderKanban size={16} style={{ color: 'var(--info)' }} />
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Active Projects</span>
+              </div>
+              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
+                {directorStats.totalProjects}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+              <div style={{
+                padding: '8px',
+                background: 'rgba(34, 197, 94, 0.1)',
+                borderRadius: 'var(--radius-md)',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--success)' }}>{directorStats.onTrack}</div>
+                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>On Track</div>
+              </div>
+              <div style={{
+                padding: '8px',
+                background: 'rgba(245, 158, 11, 0.1)',
+                borderRadius: 'var(--radius-md)',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--warning)' }}>{directorStats.atRisk}</div>
+                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>At Risk</div>
+              </div>
+              <div style={{
+                padding: '8px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                borderRadius: 'var(--radius-md)',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--danger)' }}>{directorStats.critical}</div>
+                <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>Critical</div>
+              </div>
+            </div>
+
+            <div style={{
+              padding: '12px 14px',
+              background: directorStats.totalOverdue > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '8px',
+              border: directorStats.totalOverdue > 0 ? '1px solid var(--danger)' : '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle size={16} style={{ color: directorStats.totalOverdue > 0 ? 'var(--danger)' : 'var(--text-tertiary)' }} />
+                <span style={{ fontSize: '0.8125rem', color: directorStats.totalOverdue > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>Total Overdue</span>
+              </div>
+              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: directorStats.totalOverdue > 0 ? 'var(--danger)' : 'var(--text-primary)', marginTop: '4px' }}>
+                {directorStats.totalOverdue}
+              </div>
+            </div>
+
+            <div style={{
+              padding: '12px 14px',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Users size={16} style={{ color: 'var(--info)' }} />
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Team Members</span>
+              </div>
+              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
+                {directorStats.teamMembers}
+              </div>
+            </div>
+          </>
+        );
+
+      case 'vp':
+        return (
+          <>
+            <div style={{
+              padding: '12px 14px',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '8px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <DollarSign size={16} style={{ color: '#8b5cf6' }} />
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Portfolio Value</span>
+              </div>
+              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
+                {formatCurrency(vpStats.portfolioValue)}
+              </div>
+            </div>
+
+            <div style={{
+              padding: '12px 14px',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '8px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FolderKanban size={16} style={{ color: '#8b5cf6' }} />
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Active Projects</span>
+              </div>
+              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
+                {vpStats.activeProjects}
+              </div>
+            </div>
+
+            <div style={{
+              padding: '12px 14px',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '8px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Target size={16} style={{ color: vpStats.onTimeRate >= 90 ? 'var(--success)' : 'var(--warning)' }} />
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>On-Time Rate</span>
+              </div>
+              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: vpStats.onTimeRate >= 90 ? 'var(--success)' : 'var(--warning)', marginTop: '4px' }}>
+                {vpStats.onTimeRate}%
+              </div>
+            </div>
+
+            <div style={{
+              padding: '12px 14px',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Briefcase size={16} style={{ color: '#8b5cf6' }} />
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Total Clients</span>
+              </div>
+              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
+                {vpStats.totalClients}
+              </div>
+            </div>
+          </>
+        );
+
+      case 'it':
+        return (
+          <>
+            <div style={{
+              padding: '12px 14px',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '8px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Users size={16} style={{ color: '#06b6d4' }} />
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Total Users</span>
+              </div>
+              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
+                {itStats.totalUsers}
+              </div>
+            </div>
+
+            <div style={{
+              padding: '12px 14px',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '8px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Activity size={16} style={{ color: 'var(--success)' }} />
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Active Users</span>
+              </div>
+              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--success)', marginTop: '4px' }}>
+                {itStats.activeUsers}
+              </div>
+            </div>
+
+            <div style={{
+              padding: '12px 14px',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '8px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Database size={16} style={{ color: '#06b6d4' }} />
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Total Projects</span>
+              </div>
+              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '4px' }}>
+                {itStats.totalProjects}
+              </div>
+            </div>
+
+            <div style={{
+              padding: '12px 14px',
+              background: itStats.recentErrors > 0 ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              border: itStats.recentErrors > 0 ? '1px solid var(--danger)' : '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Server size={16} style={{ color: itStats.recentErrors > 0 ? 'var(--danger)' : 'var(--success)' }} />
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>System Status</span>
+              </div>
+              <div style={{ fontSize: '1.375rem', fontWeight: '700', color: itStats.recentErrors > 0 ? 'var(--danger)' : 'var(--success)', marginTop: '4px' }}>
+                {itStats.recentErrors > 0 ? `${itStats.recentErrors} Errors` : 'Healthy'}
+              </div>
+            </div>
+          </>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // ==========================================================================
+  // RENDER: Navigation Items by Dashboard Type
+  // ==========================================================================
+  const renderNavItems = () => {
+    const commonItems = [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: 'projects', label: 'Projects', icon: FolderKanban },
+      { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+      { id: 'rfis', label: 'RFIs', icon: FileText },
+      { id: 'submittals', label: 'Submittals', icon: ClipboardList }
+    ];
+
+    // VP gets additional nav items
+    if (dashboardType === 'vp') {
+      return [
+        ...commonItems,
+        { id: 'analytics', label: 'Analytics', icon: PieChart },
+        { id: 'clients', label: 'Clients', icon: Briefcase }
+      ];
+    }
+
+    return commonItems;
+  };
+
+  // ==========================================================================
+  // MAIN RENDER
+  // ==========================================================================
+  return (
+    <aside style={{
+      position: 'fixed',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: '280px',
+      background: 'var(--bg-secondary)',
+      borderRight: '1px solid var(--border-color)',
+      display: 'flex',
+      flexDirection: 'column',
+      zIndex: 100
+    }}>
+      {/* ================================================================== */}
+      {/* LOGO                                                              */}
+      {/* ================================================================== */}
+      <div style={{
+        padding: 'var(--space-lg)',
+        borderBottom: '1px solid var(--border-color)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+          <Building2 size={28} style={{ color: 'var(--sunbelt-orange)' }} />
+          <div>
+            <div style={{ fontWeight: '700', fontSize: '1.125rem', color: 'var(--text-primary)' }}>Sunbelt PM</div>
+            <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>Project Management</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ================================================================== */}
+      {/* DASHBOARD SELECTOR                                                */}
+      {/* ================================================================== */}
+      <div style={{ padding: 'var(--space-md) var(--space-lg)' }}>
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowDashboardMenu(!showDashboardMenu)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 14px',
+              background: `${currentConfig.color}15`,
+              border: `1px solid ${currentConfig.color}40`,
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              color: currentConfig.color,
+              fontWeight: '600',
+              fontSize: '0.875rem'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <CurrentIcon size={18} />
+              {currentConfig.label}
+            </div>
+            <ChevronDown size={16} style={{ 
+              transform: showDashboardMenu ? 'rotate(180deg)' : 'rotate(0)', 
+              transition: 'transform 0.2s' 
+            }} />
+          </button>
+
+          {showDashboardMenu && (
+            <>
+              <div 
+                style={{ position: 'fixed', inset: 0, zIndex: 98 }} 
+                onClick={() => setShowDashboardMenu(false)} 
+              />
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                marginTop: '4px',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-lg)',
+                zIndex: 99,
+                overflow: 'hidden'
+              }}>
+                {['pm', 'director', 'vp', 'it'].map(type => {
+                  if (!canAccessDashboard(type)) return null;
+                  const config = getDashboardConfig(type);
+                  const Icon = config.icon;
+                  const isActive = dashboardType === type;
+                  
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => {
+                        setDashboardType(type);
+                        localStorage.setItem('dashboardType', type);
+                        setCurrentView('dashboard');
+                        setShowDashboardMenu(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '10px 14px',
+                        border: 'none',
+                        background: isActive ? `${config.color}15` : 'transparent',
+                        color: isActive ? config.color : 'var(--text-primary)',
+                        cursor: 'pointer',
+                        fontSize: '0.875rem',
+                        textAlign: 'left'
+                      }}
+                      onMouseEnter={(e) => !isActive && (e.target.style.background = 'var(--bg-tertiary)')}
+                      onMouseLeave={(e) => !isActive && (e.target.style.background = 'transparent')}
+                    >
+                      <Icon size={16} style={{ color: config.color }} />
+                      {config.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ================================================================== */}
+      {/* STATS SECTION                                                     */}
+      {/* ================================================================== */}
+      <div style={{ padding: '0 var(--space-lg) var(--space-md)' }}>
+        {renderStats()}
       </div>
 
       {/* ================================================================== */}
       {/* NAVIGATION                                                        */}
       {/* ================================================================== */}
-      <nav className="sidebar-nav">
-        {navItems.map(item => {
+      <nav style={{ flex: 1, padding: '0 var(--space-md)', overflowY: 'auto' }}>
+        {renderNavItems().map(item => {
           const Icon = item.icon;
           const isActive = currentView === item.id;
+          
           return (
             <button
               key={item.id}
-              onClick={() => setCurrentView && setCurrentView(item.id)}
-              className={`sidebar-link ${isActive ? 'active' : ''}`}
+              onClick={() => setCurrentView(item.id)}
               style={{
                 width: '100%',
-                textAlign: 'left',
-                background: isActive ? 'rgba(255, 107, 53, 0.1)' : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-sm)',
+                padding: '10px 14px',
+                marginBottom: '2px',
+                background: isActive ? 'var(--sunbelt-orange)' : 'transparent',
                 border: 'none',
-                cursor: 'pointer'
+                borderRadius: 'var(--radius-md)',
+                color: isActive ? 'white' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                fontWeight: isActive ? '600' : '400',
+                textAlign: 'left',
+                transition: 'all 0.15s'
               }}
+              onMouseEnter={(e) => !isActive && (e.target.style.background = 'var(--bg-tertiary)')}
+              onMouseLeave={(e) => !isActive && (e.target.style.background = 'transparent')}
             >
-              <Icon size={20} />
-              <span>{item.label}</span>
+              <Icon size={18} />
+              {item.label}
             </button>
           );
         })}
       </nav>
 
-      {/* Spacer */}
-      <div style={{ flex: 1 }} />
-
       {/* ================================================================== */}
-      {/* DARK MODE TOGGLE                                                  */}
+      {/* FOOTER                                                            */}
       {/* ================================================================== */}
-      <div style={{ padding: '0 16px', marginBottom: '12px' }}>
-        <button
-          onClick={toggleDarkMode}
-          style={{
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            padding: '10px',
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-            fontWeight: '500'
-          }}
-        >
-          {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-          <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
-        </button>
-      </div>
-
-      {/* ================================================================== */}
-      {/* USER PROFILE                                                      */}
-      {/* ================================================================== */}
-      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{
+        padding: 'var(--space-md) var(--space-lg)',
+        borderTop: '1px solid var(--border-color)'
+      }}>
+        {/* User Info */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--space-sm)',
+          marginBottom: 'var(--space-md)'
+        }}>
           <div style={{
             width: '36px',
             height: '36px',
             borderRadius: '50%',
-            background: dashboardType === 'vp' 
-              ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)'
-              : dashboardType === 'it'                               // ← IT ADDED
-                ? 'linear-gradient(135deg, #06b6d4, #0891b2)'        // ← IT ADDED
-                : 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+            background: 'var(--sunbelt-orange)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: 'white',
             fontWeight: '600',
-            fontSize: '0.875rem',
-            flexShrink: 0
+            fontSize: '0.875rem'
           }}>
-            {displayUser?.name?.charAt(0) || 'U'}
+            {currentUser?.name?.charAt(0) || 'U'}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {displayUser?.name || 'User'}
+            <div style={{
+              fontWeight: '600',
+              color: 'var(--text-primary)',
+              fontSize: '0.875rem',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              {currentUser?.name || 'User'}
             </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              {displayUser?.role || 'Team Member'}
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+              {currentUser?.role || 'PM'}
             </div>
           </div>
-          <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '8px', display: 'flex', borderRadius: '6px' }} title="Logout">
-            <LogOut size={18} />
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+          <button
+            onClick={toggleDarkMode}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '8px',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              fontSize: '0.75rem'
+            }}
+          >
+            {darkMode ? <Sun size={14} /> : <Moon size={14} />}
+            {darkMode ? 'Light' : 'Dark'}
+          </button>
+          <button
+            onClick={handleLogout}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '8px',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              fontSize: '0.75rem'
+            }}
+          >
+            <LogOut size={14} />
+            Logout
           </button>
         </div>
       </div>
-
-      {/* Click outside to close dropdown */}
-      {showDashboardMenu && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 }} onClick={() => setShowDashboardMenu(false)} />
-      )}
     </aside>
   );
 }

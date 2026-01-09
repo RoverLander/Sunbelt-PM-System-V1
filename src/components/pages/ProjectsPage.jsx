@@ -107,7 +107,7 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
       // For PM view, only show their projects
       if (!isDirectorView && userData) {
         projectsQuery = projectsQuery.or(
-          `owner_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`
+          `owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`
         );
       }
 

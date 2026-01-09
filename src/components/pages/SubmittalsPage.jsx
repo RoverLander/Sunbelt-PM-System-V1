@@ -55,7 +55,7 @@ function SubmittalsPage({ isDirectorView = false, onNavigateToProject }) {
       
       if (!isDirectorView && userData) {
         // Include projects where user is: PM (owner_id), Backup PM, or Creator
-        projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
       }
 
       const { data: projectsData } = await projectsQuery;
