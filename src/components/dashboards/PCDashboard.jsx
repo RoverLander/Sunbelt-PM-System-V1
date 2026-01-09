@@ -403,22 +403,18 @@ function PCDashboard({ onNavigateToProject }) {
       }
 
       // Count warning emails (if table exists)
+      // Note: warning_emails_log only tracks sent emails (logged when email opens in client)
+      // There is no status column - sent_at defaults to NOW() on insert
       try {
         const { count: sentCount } = await supabase
           .from('warning_emails_log')
           .select('*', { count: 'exact', head: true })
           .in('project_id', projectIds)
-          .eq('status', 'Sent');
-
-        const { count: pendingCount } = await supabase
-          .from('warning_emails_log')
-          .select('*', { count: 'exact', head: true })
-          .in('project_id', projectIds)
-          .eq('status', 'Draft');
+          .not('sent_at', 'is', null);
 
         setWarningEmailsCount({
           sent: sentCount || 0,
-          pending: pendingCount || 0
+          pending: 0 // No draft tracking in current schema
         });
       } catch {
         // Table might not exist yet
