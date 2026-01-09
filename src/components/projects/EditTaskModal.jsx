@@ -43,7 +43,8 @@ import { draftTaskEmail } from '../../utils/emailUtils';
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-const TASK_STATUSES = ['Not Started', 'In Progress', 'On Hold', 'Completed', 'Cancelled'];
+// Updated Jan 9, 2026: 'On Hold' changed to 'Awaiting Response'
+const TASK_STATUSES = ['Not Started', 'In Progress', 'Awaiting Response', 'Completed', 'Cancelled'];
 const TASK_PRIORITIES = ['Low', 'Medium', 'High'];
 
 // ============================================================================

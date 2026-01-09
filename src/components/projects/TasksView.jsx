@@ -25,11 +25,11 @@ import { supabase } from '../../utils/supabaseClient';
 // ============================================================================
 
 // Status options matching database values (Title Case)
+// Updated Jan 9, 2026: 'On Hold' and 'Blocked' merged into 'Awaiting Response'
 const STATUS_OPTIONS = [
   { value: 'Not Started', label: 'Not Started', color: 'var(--text-tertiary)' },
   { value: 'In Progress', label: 'In Progress', color: 'var(--sunbelt-orange)' },
-  { value: 'On Hold', label: 'On Hold', color: 'var(--warning)' },
-  { value: 'Blocked', label: 'Blocked', color: 'var(--danger)' },
+  { value: 'Awaiting Response', label: 'Awaiting Response', color: 'var(--warning)' },
   { value: 'Completed', label: 'Completed', color: 'var(--success)' },
   { value: 'Cancelled', label: 'Cancelled', color: 'var(--text-tertiary)' }
 ];

@@ -41,12 +41,13 @@ import { draftTaskEmail } from '../../utils/emailUtils';
 // ============================================================================
 // CONSTANTS
 // ============================================================================
+// Updated Jan 9, 2026: 'On Hold' and 'Blocked' merged into 'Awaiting Response'
 const STATUS_OPTIONS = [
   { value: 'Not Started', label: 'Not Started' },
   { value: 'In Progress', label: 'In Progress' },
-  { value: 'On Hold', label: 'On Hold' },
-  { value: 'Blocked', label: 'Blocked' },
-  { value: 'Completed', label: 'Completed' }
+  { value: 'Awaiting Response', label: 'Awaiting Response' },
+  { value: 'Completed', label: 'Completed' },
+  { value: 'Cancelled', label: 'Cancelled' }
 ];
 
 const PRIORITY_OPTIONS = [

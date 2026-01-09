@@ -70,7 +70,8 @@ const TABS = [
   { id: 'floorplan', label: 'Floorplan', icon: Map },
 ];
 
-const TASK_STATUS_OPTIONS = ['All', 'Not Started', 'In Progress', 'On Hold', 'Blocked', 'Completed', 'Cancelled'];
+// Updated Jan 9, 2026: 'On Hold' and 'Blocked' merged into 'Awaiting Response'
+const TASK_STATUS_OPTIONS = ['All', 'Not Started', 'In Progress', 'Awaiting Response', 'Completed', 'Cancelled'];
 const RFI_STATUS_OPTIONS = ['All', 'Draft', 'Open', 'Answered', 'Closed'];
 const SUBMITTAL_STATUS_OPTIONS = ['All', 'Pending', 'Submitted', 'Under Review', 'Approved', 'Approved as Noted', 'Revise and Resubmit', 'Rejected'];
 
@@ -91,13 +92,18 @@ const formatCurrency = (value) => {
 
 const getStatusColor = (status) => {
   const colors = {
+    // Project statuses
     'Planning': 'var(--sunbelt-orange)', 'Pre-PM': 'var(--sunbelt-orange)',
     'PM Handoff': 'var(--sunbelt-orange)',
     'In Progress': 'var(--sunbelt-orange)', 'On Hold': 'var(--text-tertiary)',
     'Completed': 'var(--success)', 'Cancelled': 'var(--danger)', 'Warranty': 'var(--info)',
-    'Not Started': 'var(--text-tertiary)', 'Blocked': 'var(--danger)',
+    // Task statuses (Updated Jan 9, 2026)
+    'Not Started': 'var(--text-tertiary)',
+    'Awaiting Response': 'var(--warning)',
+    // RFI statuses
     'Draft': 'var(--text-tertiary)', 'Open': 'var(--sunbelt-orange)',
     'Pending': 'var(--warning)', 'Answered': 'var(--success)', 'Closed': 'var(--text-tertiary)',
+    // Submittal statuses
     'Submitted': 'var(--sunbelt-orange)', 'Under Review': 'var(--warning)',
     'Approved': 'var(--success)', 'Approved as Noted': 'var(--info)',
     'Revise and Resubmit': 'var(--warning)', 'Rejected': 'var(--danger)'

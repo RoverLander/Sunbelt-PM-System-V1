@@ -1,11 +1,12 @@
 // ============================================================================
-// Sidebar Component - With PM/Director/VP/IT View Modes
+// Sidebar Component - With PM/Director/VP/IT/PC View Modes
 // ============================================================================
 // Shows different sidebar content based on user role and dashboard type:
 // - PM View: My Projects, My Tasks, Overdue counts
 // - Director View: Portfolio Health, At-Risk, Team stats
 // - VP View: Executive KPIs, Portfolio Value
 // - IT View: User management, System health, Audit stats
+// - PC View: Factory projects, Deadlines, Warning emails
 //
 // FIXES (Jan 9, 2026):
 // - ✅ FIXED: Different nav items per dashboard type with role-specific pages first
@@ -18,6 +19,11 @@
 // - Director: Dashboard → Team, Reports → Projects, Tasks, RFIs, Submittals, Calendar
 // - VP: Dashboard → Analytics, Clients, Team, Reports → Projects, Tasks, RFIs, Submittals, Calendar
 // - IT: Dashboard → User Management → Projects, Tasks, RFIs, Submittals, Calendar
+// - PC: Dashboard → Deadlines, Drawings, Approvals → Projects, Tasks, Calendar
+//
+// UPDATES (Jan 9, 2026):
+// - ✅ ADDED: PC (Project Coordinator) dashboard type
+// - ✅ ADDED: Factory-specific stats for PC role
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -45,7 +51,10 @@ import {
   Briefcase,
   PieChart,
   Shield,
-  Server
+  Server,
+  Factory,
+  Clock,
+  Mail
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -99,6 +108,14 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     recentErrors: 0
   });
 
+  // PC View Stats
+  const [pcStats, setPCStats] = useState({
+    factoryProjects: 0,
+    overdueItems: 0,
+    dueThisWeek: 0,
+    warningsSent: 0
+  });
+
   // ==========================================================================
   // EFFECTS
   // ==========================================================================
@@ -108,7 +125,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     }
   }, [user]);
 
-  // Fetch VP/Director/IT stats immediately (don't need currentUser)
+  // Fetch VP/Director/IT/PC stats immediately (don't need currentUser for some)
   useEffect(() => {
     if (dashboardType === 'vp') {
       fetchVPStats();
@@ -116,6 +133,8 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       fetchDirectorStats();
     } else if (dashboardType === 'it') {
       fetchITStats();
+    } else if (dashboardType === 'pc') {
+      fetchPCStats();
     }
   }, [dashboardType]);
 
@@ -144,6 +163,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         } else if (userRole === 'director' || userRole === 'admin') {
           setDashboardType('director');
           localStorage.setItem('dashboardType', 'director');
+        } else if (userRole === 'project coordinator' || userRole === 'pc') {
+          setDashboardType('pc');
+          localStorage.setItem('dashboardType', 'pc');
         } else {
           setDashboardType('pm');
           localStorage.setItem('dashboardType', 'pm');
@@ -337,6 +359,67 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
     }
   };
 
+  const fetchPCStats = async () => {
+    if (!user?.id) return;
+
+    try {
+      const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
+      const today = new Date().toISOString().split('T')[0];
+      const weekFromNow = new Date();
+      weekFromNow.setDate(weekFromNow.getDate() + 7);
+      const weekEndDate = weekFromNow.toISOString().split('T')[0];
+
+      // Get user's factory_code
+      const { data: userData } = await supabase
+        .from('users')
+        .select('factory_code, factory_id')
+        .eq('id', user.id)
+        .single();
+
+      // Fetch factory projects
+      let projectQuery = supabase
+        .from('projects')
+        .select('id')
+        .in('status', activeStatuses);
+
+      if (userData?.factory_id) {
+        projectQuery = projectQuery.eq('factory_id', userData.factory_id);
+      } else if (userData?.factory_code) {
+        projectQuery = projectQuery.eq('factory_code', userData.factory_code);
+      }
+
+      const { data: projects } = await projectQuery;
+      const projectIds = (projects || []).map(p => p.id);
+
+      // Count overdue tasks
+      const { count: overdueCount } = await supabase
+        .from('tasks')
+        .select('id', { count: 'exact', head: true })
+        .in('project_id', projectIds)
+        .lt('due_date', today)
+        .in('status', ['Not Started', 'In Progress', 'Awaiting Response']);
+
+      // Count due this week
+      const { count: weekCount } = await supabase
+        .from('tasks')
+        .select('id', { count: 'exact', head: true })
+        .in('project_id', projectIds)
+        .gte('due_date', today)
+        .lte('due_date', weekEndDate)
+        .in('status', ['Not Started', 'In Progress', 'Awaiting Response']);
+
+      setPCStats({
+        factoryProjects: projectIds.length,
+        overdueItems: overdueCount || 0,
+        dueThisWeek: weekCount || 0,
+        warningsSent: 0 // Would need warning_emails_log table
+      });
+
+    } catch (error) {
+      console.error('Error fetching PC stats:', error);
+    }
+  };
+
   // ==========================================================================
   // HANDLERS
   // ==========================================================================
@@ -362,14 +445,15 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   const canAccessDashboard = (type) => {
     if (!currentUser) return false;
     const role = (currentUser.role || '').toLowerCase();
-    
+
     const access = {
-      pm: ['pm', 'director', 'vp', 'it', 'admin'],
+      pm: ['pm', 'director', 'vp', 'it', 'admin', 'project coordinator', 'plant manager'],
       director: ['director', 'vp', 'admin'],
       vp: ['vp', 'admin'],
-      it: ['it', 'admin']
+      it: ['it', 'admin'],
+      pc: ['project coordinator', 'pc', 'plant manager', 'director', 'vp', 'admin']
     };
-    
+
     return access[type]?.includes(role) || false;
   };
 
@@ -391,7 +475,8 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       pm: { icon: LayoutDashboard, label: 'PM Dashboard', color: 'var(--sunbelt-orange)' },
       director: { icon: BarChart3, label: 'Director Dashboard', color: 'var(--info)' },
       vp: { icon: TrendingUp, label: 'VP Dashboard', color: '#8b5cf6' },
-      it: { icon: Shield, label: 'IT Dashboard', color: '#06b6d4' }
+      it: { icon: Shield, label: 'IT Dashboard', color: '#06b6d4' },
+      pc: { icon: Factory, label: 'PC Dashboard', color: '#ec4899' }
     };
     return configs[type] || configs.pm;
   };
@@ -675,6 +760,73 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
           </div>
         );
 
+      case 'pc':
+        return (
+          <div style={{ padding: '0 var(--space-md)', marginBottom: 'var(--space-sm)' }}>
+            {/* Factory projects count */}
+            <div style={{
+              padding: '8px 10px',
+              background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.15), rgba(236, 72, 153, 0.05))',
+              borderRadius: 'var(--radius-sm)',
+              marginBottom: '8px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                <Factory size={12} style={{ color: '#ec4899' }} />
+                <span style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>Factory Projects</span>
+              </div>
+              <div style={{ fontSize: '1.125rem', fontWeight: '700', color: '#ec4899' }}>
+                {pcStats.factoryProjects}
+              </div>
+            </div>
+
+            {/* Deadlines row */}
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+              {pcStats.overdueItems > 0 && (
+                <div style={{
+                  flex: 1,
+                  padding: '6px 8px',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  borderRadius: 'var(--radius-sm)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <AlertCircle size={12} style={{ color: 'var(--danger)' }} />
+                  <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--danger)' }}>{pcStats.overdueItems}</span>
+                  <span style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>Overdue</span>
+                </div>
+              )}
+              <div style={{
+                flex: 1,
+                padding: '6px 8px',
+                background: 'var(--bg-tertiary)',
+                borderRadius: 'var(--radius-sm)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <Clock size={12} style={{ color: 'var(--warning)' }} />
+                <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-primary)' }}>{pcStats.dueThisWeek}</span>
+                <span style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>This Week</span>
+              </div>
+            </div>
+
+            {/* Warnings sent */}
+            <div style={{
+              padding: '6px 10px',
+              background: 'var(--bg-tertiary)',
+              borderRadius: 'var(--radius-sm)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <Mail size={14} style={{ color: 'var(--text-secondary)' }} />
+              <span style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--text-primary)' }}>{pcStats.warningsSent}</span>
+              <span style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>Warnings Sent</span>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -728,6 +880,15 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'users', label: 'User Management', icon: Users },
           ...commonItems,
+        ];
+
+      case 'pc':
+        // PC: Dashboard → [focused common pages]
+        return [
+          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'projects', label: 'Projects', icon: FolderKanban },
+          { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+          { id: 'calendar', label: 'Calendar', icon: Calendar },
         ];
 
       default:
