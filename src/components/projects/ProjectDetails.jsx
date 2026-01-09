@@ -7,6 +7,13 @@
 // - Consistent max-width for ALL tab content
 // - Kanban as default view for Tasks
 // - Floorplan tab restored
+// - Calendar tab with ProjectCalendarMonth
+// - Week calendar on Overview tab
+//
+// FIXES (Jan 9, 2026):
+// - ✅ FIXED: Removed duplicate Calendar tab
+// - ✅ FIXED: Calendar tab now shows ProjectCalendarMonth
+// - ✅ ADDED: ProjectCalendarWeek on Overview tab
 // ============================================================================
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -44,62 +51,53 @@ import AddSubmittalModal from './AddSubmittalModal';
 import EditSubmittalModal from './EditSubmittalModal';
 import AddMilestoneModal from './AddMilestoneModal';
 import { FloorPlansTab } from '../floorplans';
+
+// ✅ ADDED: Calendar imports
 import ProjectCalendarMonth from './ProjectCalendarMonth';
+import ProjectCalendarWeek from './ProjectCalendarWeek';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
+// ✅ FIXED: Only ONE Calendar tab
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'tasks', label: 'Tasks', icon: CheckSquare },
   { id: 'rfis', label: 'RFIs', icon: MessageSquare },
   { id: 'submittals', label: 'Submittals', icon: ClipboardList },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
+  { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'files', label: 'Files', icon: FolderOpen },
   { id: 'floorplan', label: 'Floorplan', icon: Map },
-  { id: 'calendar', label: 'Calendar', icon: Calendar }
 ];
 
-const TASK_STATUS_OPTIONS = ['All', 'Not Started', 'In Progress', 'On Hold', 'Blocked', 'Completed'];
-const RFI_STATUS_OPTIONS = ['All', 'Draft', 'Open', 'Pending', 'Answered', 'Closed'];
+const TASK_STATUS_OPTIONS = ['All', 'Not Started', 'In Progress', 'On Hold', 'Blocked', 'Completed', 'Cancelled'];
+const RFI_STATUS_OPTIONS = ['All', 'Draft', 'Open', 'Answered', 'Closed'];
 const SUBMITTAL_STATUS_OPTIONS = ['All', 'Pending', 'Submitted', 'Under Review', 'Approved', 'Approved as Noted', 'Revise and Resubmit', 'Rejected'];
 
-// Kanban column configuration - Title Case to match database
-const KANBAN_COLUMNS = [
-  { id: 'Not Started', label: 'Not Started', color: 'var(--text-tertiary)' },
-  { id: 'In Progress', label: 'In Progress', color: 'var(--sunbelt-orange)' },
-  { id: 'On Hold', label: 'On Hold', color: 'var(--warning)' },
-  { id: 'Completed', label: 'Completed', color: 'var(--success)' }
-];
-
-// Consistent content width for all tabs
-const TAB_CONTENT_MAX_WIDTH = '1200px';
+const TAB_CONTENT_MAX_WIDTH = '1400px';
 
 // ============================================================================
-// HELPER FUNCTIONS
+// UTILITY FUNCTIONS
 // ============================================================================
 const formatDate = (dateString) => {
   if (!dateString) return '—';
-  return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-const formatCurrency = (amount) => {
-  if (!amount) return '—';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+const formatCurrency = (value) => {
+  if (!value) return '—';
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
 };
 
 const getStatusColor = (status) => {
   const colors = {
-    // Project statuses
-    'Planning': 'var(--info)', 'Pre-PM': 'var(--warning)', 'PM Handoff': 'var(--sunbelt-orange)',
+    'Planning': 'var(--sunbelt-orange)', 'Pre-PM': 'var(--sunbelt-orange)',
+    'PM Handoff': 'var(--sunbelt-orange)',
     'In Progress': 'var(--sunbelt-orange)', 'On Hold': 'var(--text-tertiary)',
     'Completed': 'var(--success)', 'Cancelled': 'var(--danger)', 'Warranty': 'var(--info)',
-    // Task statuses
     'Not Started': 'var(--text-tertiary)', 'Blocked': 'var(--danger)',
-    // RFI statuses
     'Draft': 'var(--text-tertiary)', 'Open': 'var(--sunbelt-orange)',
     'Pending': 'var(--warning)', 'Answered': 'var(--success)', 'Closed': 'var(--text-tertiary)',
-    // Submittal statuses
     'Submitted': 'var(--sunbelt-orange)', 'Under Review': 'var(--warning)',
     'Approved': 'var(--success)', 'Approved as Noted': 'var(--info)',
     'Revise and Resubmit': 'var(--warning)', 'Rejected': 'var(--danger)'
@@ -139,7 +137,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
   // Filters
   const [taskSearch, setTaskSearch] = useState('');
   const [taskStatusFilter, setTaskStatusFilter] = useState('All');
-  const [taskView, setTaskView] = useState('kanban'); // DEFAULT: Kanban view
+  const [taskView, setTaskView] = useState('kanban');
   
   const [rfiSearch, setRfiSearch] = useState('');
   const [rfiStatusFilter, setRfiStatusFilter] = useState('All');
@@ -175,222 +173,142 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
   // DATA FETCHING
   // ==========================================================================
   const fetchProjectData = useCallback(async () => {
+    if (!project?.id) return;
     setLoading(true);
+    
     try {
-      const [projectRes, tasksRes, rfisRes, submittalsRes, milestonesRes] = await Promise.all([
-        supabase.from('projects').select('*').eq('id', project.id).single(),
-        supabase.from('tasks')
-          .select('*, assignee:assignee_id(id, name), internal_owner:internal_owner_id(id, name)')
-          .eq('project_id', project.id)
-          .order('created_at', { ascending: false }),
-        supabase.from('rfis')
-          .select('*')
-          .eq('project_id', project.id)
-          .order('created_at', { ascending: false }),
-        supabase.from('submittals')
-          .select('*')
-          .eq('project_id', project.id)
-          .order('created_at', { ascending: false }),
-        supabase.from('milestones')
-          .select('*')
-          .eq('project_id', project.id)
-          .order('due_date', { ascending: true })
+      const [tasksRes, rfisRes, submittalsRes, milestonesRes] = await Promise.all([
+        supabase.from('tasks').select('*, assignee:assignee_id(id, name, email)').eq('project_id', project.id).order('due_date'),
+        supabase.from('rfis').select('*').eq('project_id', project.id).order('created_at', { ascending: false }),
+        supabase.from('submittals').select('*').eq('project_id', project.id).order('created_at', { ascending: false }),
+        supabase.from('milestones').select('*').eq('project_id', project.id).order('due_date')
       ]);
 
-      if (projectRes.data) setProject(projectRes.data);
       setTasks(tasksRes.data || []);
       setRFIs(rfisRes.data || []);
       setSubmittals(submittalsRes.data || []);
       setMilestones(milestonesRes.data || []);
     } catch (error) {
       console.error('Error fetching project data:', error);
-      showToast('Failed to load project data', 'error');
+      showToast('Error loading project data', 'error');
     } finally {
       setLoading(false);
     }
-  }, [project.id, showToast]);
+  }, [project?.id, showToast]);
 
   useEffect(() => {
     fetchProjectData();
   }, [fetchProjectData]);
 
-  // Set initial tab if provided
-  useEffect(() => {
-    if (initialTab) {
-      setActiveTab(initialTab.toLowerCase());
-    }
-  }, [initialTab]);
+  // ==========================================================================
+  // COMPUTED VALUES
+  // ==========================================================================
+  const stats = useMemo(() => {
+    const taskCompleted = tasks.filter(t => t.status === 'Completed').length;
+    const taskTotal = tasks.length;
+    const rfiOpen = rfis.filter(r => r.status === 'Open' || r.status === 'Draft').length;
+    const subPending = submittals.filter(s => !['Approved', 'Approved as Noted', 'Rejected'].includes(s.status)).length;
+    return { taskCompleted, taskTotal, rfiOpen, subPending };
+  }, [tasks, rfis, submittals]);
 
-  // ==========================================================================
-  // FILTERED DATA
-  // ==========================================================================
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
-      if (taskStatusFilter !== 'All' && task.status !== taskStatusFilter) return false;
-      if (taskSearch) {
-        const search = taskSearch.toLowerCase();
-        if (!task.title?.toLowerCase().includes(search) && !task.description?.toLowerCase().includes(search)) return false;
-      }
-      return true;
+      const matchesSearch = task.title?.toLowerCase().includes(taskSearch.toLowerCase()) ||
+        task.description?.toLowerCase().includes(taskSearch.toLowerCase());
+      const matchesStatus = taskStatusFilter === 'All' || task.status === taskStatusFilter;
+      return matchesSearch && matchesStatus;
     });
-  }, [tasks, taskStatusFilter, taskSearch]);
+  }, [tasks, taskSearch, taskStatusFilter]);
 
   const filteredRFIs = useMemo(() => {
     return rfis.filter(rfi => {
-      if (rfiStatusFilter !== 'All' && rfi.status !== rfiStatusFilter) return false;
-      if (rfiSearch) {
-        const search = rfiSearch.toLowerCase();
-        if (!rfi.rfi_number?.toLowerCase().includes(search) && 
-            !rfi.subject?.toLowerCase().includes(search) &&
-            !rfi.sent_to?.toLowerCase().includes(search)) return false;
-      }
-      return true;
+      const matchesSearch = rfi.subject?.toLowerCase().includes(rfiSearch.toLowerCase()) ||
+        rfi.rfi_number?.toLowerCase().includes(rfiSearch.toLowerCase());
+      const matchesStatus = rfiStatusFilter === 'All' || rfi.status === rfiStatusFilter;
+      return matchesSearch && matchesStatus;
     });
-  }, [rfis, rfiStatusFilter, rfiSearch]);
+  }, [rfis, rfiSearch, rfiStatusFilter]);
 
   const filteredSubmittals = useMemo(() => {
     return submittals.filter(sub => {
-      if (submittalStatusFilter !== 'All' && sub.status !== submittalStatusFilter) return false;
-      if (submittalSearch) {
-        const search = submittalSearch.toLowerCase();
-        if (!sub.submittal_number?.toLowerCase().includes(search) && 
-            !sub.title?.toLowerCase().includes(search) &&
-            !sub.manufacturer?.toLowerCase().includes(search)) return false;
-      }
-      return true;
+      const matchesSearch = sub.title?.toLowerCase().includes(submittalSearch.toLowerCase()) ||
+        sub.submittal_number?.toLowerCase().includes(submittalSearch.toLowerCase());
+      const matchesStatus = submittalStatusFilter === 'All' || sub.status === submittalStatusFilter;
+      return matchesSearch && matchesStatus;
     });
-  }, [submittals, submittalStatusFilter, submittalSearch]);
-
-  // ==========================================================================
-  // STATS
-  // ==========================================================================
-  const stats = useMemo(() => ({
-    taskTotal: tasks.length,
-    taskCompleted: tasks.filter(t => t.status === 'Completed').length,
-    rfiOpen: rfis.filter(r => !['Closed', 'Answered'].includes(r.status)).length,
-    rfiTotal: rfis.length,
-    subPending: submittals.filter(s => !['Approved', 'Approved as Noted', 'Rejected'].includes(s.status)).length,
-    subTotal: submittals.length
-  }), [tasks, rfis, submittals]);
+  }, [submittals, submittalSearch, submittalStatusFilter]);
 
   // ==========================================================================
   // KANBAN HANDLERS
   // ==========================================================================
-  const handleDragStart = useCallback((e, task) => {
+  const handleDragStart = (task) => {
     setDraggedTask(task);
-    e.dataTransfer.effectAllowed = 'move';
-  }, []);
+  };
 
-  const handleDragOver = useCallback((e) => {
+  const handleDragOver = (e) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  }, []);
+  };
 
-  const handleDrop = useCallback(async (e, newStatus) => {
-    e.preventDefault();
+  const handleDrop = async (newStatus) => {
     if (!draggedTask || draggedTask.status === newStatus) {
       setDraggedTask(null);
       return;
     }
 
+    const updatedTask = { ...draggedTask, status: newStatus };
+    setTasks(prev => prev.map(t => t.id === draggedTask.id ? updatedTask : t));
+
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', draggedTask.id);
-      
-      if (error) throw error;
-      
-      setTasks(prev => prev.map(t => t.id === draggedTask.id ? { ...t, status: newStatus } : t));
+      await supabase.from('tasks').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', draggedTask.id);
       showToast(`Task moved to ${newStatus}`);
     } catch (error) {
-      console.error('Error updating task:', error);
-      showToast('Failed to update task', 'error');
-    } finally {
-      setDraggedTask(null);
-    }
-  }, [draggedTask, showToast]);
-
-  const handleTaskStatusChange = useCallback(async (taskId, newStatus) => {
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', taskId);
-      
-      if (error) throw error;
-      
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-      showToast('Task updated');
-    } catch (error) {
-      console.error('Error updating task:', error);
+      setTasks(prev => prev.map(t => t.id === draggedTask.id ? draggedTask : t));
       showToast('Failed to update task', 'error');
     }
-  }, [showToast]);
+    setDraggedTask(null);
+  };
 
   // ==========================================================================
   // RENDER
   // ==========================================================================
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      {/* ================================================================== */}
-      {/* COMPACT HEADER                                                    */}
-      {/* ================================================================== */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 'var(--space-md)',
-        padding: 'var(--space-md) 0', marginBottom: 'var(--space-md)',
-        borderBottom: '1px solid var(--border-color)'
-      }}>
-        <button
-          onClick={onBack}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 'var(--space-xs)',
-            background: 'none', border: 'none', color: 'var(--text-secondary)',
-            cursor: 'pointer', padding: 'var(--space-xs)', fontSize: '0.875rem'
-          }}
-        >
-          <ArrowLeft size={18} /> Back
+  if (!project) {
+    return (
+      <div style={{ padding: 'var(--space-xl)', textAlign: 'center' }}>
+        <AlertCircle size={48} style={{ color: 'var(--danger)', marginBottom: 'var(--space-md)' }} />
+        <p style={{ color: 'var(--text-secondary)' }}>Project not found</p>
+        <button onClick={onBack} style={{ marginTop: 'var(--space-md)', padding: '8px 16px', background: 'var(--sunbelt-orange)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>
+          Go Back
         </button>
+      </div>
+    );
+  }
 
-        <div style={{ width: '1px', height: '24px', background: 'var(--border-color)' }} />
-
-        <div style={{
-          width: '12px', height: '12px', borderRadius: '3px',
-          background: project.color || 'var(--sunbelt-orange)', flexShrink: 0
-        }} />
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
-            <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)' }}>
-              {project.name}
-            </h1>
-            <span style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
-              {project.project_number}
-            </span>
-            <span style={{
-              padding: '2px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '600',
-              background: `${getStatusColor(project.status)}20`, color: getStatusColor(project.status)
-            }}>
-              {project.status}
-            </span>
-          </div>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: '2px', display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
-            {project.contract_value && <span>{formatCurrency(project.contract_value)}</span>}
-            {project.target_online_date && <span>Due {formatDate(project.target_online_date)}</span>}
-            {project.client_name && <span>{project.client_name}</span>}
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '100vh', background: 'var(--bg-primary)' }}>
+      {/* ================================================================== */}
+      {/* HEADER                                                            */}
+      {/* ================================================================== */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-md) var(--space-xl)', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-primary)', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+          <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.875rem' }}>
+            <ArrowLeft size={16} /> Back
+          </button>
+          <div style={{ width: '1px', height: '24px', background: 'var(--border-color)' }} />
+          <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: project.color || 'var(--sunbelt-orange)' }} />
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+              <h1 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>{project.name}</h1>
+              <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>{project.project_number}</span>
+              <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '0.6875rem', fontWeight: '600', background: `${getStatusColor(project.status)}20`, color: getStatusColor(project.status) }}>
+                {project.status}
+              </span>
+            </div>
+            <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              {formatCurrency(project.contract_value)} &nbsp;•&nbsp; {project.client_name || '—'}
+            </div>
           </div>
         </div>
-
-        <button
-          onClick={() => setShowEditProject(true)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 'var(--space-xs)',
-            padding: 'var(--space-sm) var(--space-md)',
-            background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)', color: 'var(--text-primary)',
-            cursor: 'pointer', fontSize: '0.875rem', fontWeight: '500'
-          }}
-        >
+        <button onClick={() => setShowEditProject(true)} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', padding: 'var(--space-sm) var(--space-md)', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.875rem', fontWeight: '500' }}>
           <Edit size={14} /> Edit
         </button>
       </div>
@@ -398,10 +316,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
       {/* ================================================================== */}
       {/* TABS                                                              */}
       {/* ================================================================== */}
-      <div style={{
-        display: 'flex', gap: '0', borderBottom: '1px solid var(--border-color)',
-        marginBottom: 'var(--space-lg)'
-      }}>
+      <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid var(--border-color)', marginBottom: 'var(--space-lg)' }}>
         {TABS.map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -442,19 +357,29 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
       </div>
 
       {/* ================================================================== */}
-      {/* TAB CONTENT - Consistent max-width wrapper                        */}
+      {/* TAB CONTENT                                                       */}
       {/* ================================================================== */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <div style={{ maxWidth: TAB_CONTENT_MAX_WIDTH, margin: '0 auto' }}>
+        <div style={{ maxWidth: TAB_CONTENT_MAX_WIDTH, margin: '0 auto', padding: '0 var(--space-xl) var(--space-xl)' }}>
           {loading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px' }}>
-              <div className="loading-spinner" />
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-2xl)' }}>
+              <div className="loading-spinner"></div>
             </div>
           ) : (
             <>
-              {/* OVERVIEW TAB */}
+              {/* OVERVIEW TAB - ✅ UPDATED with calendar */}
               {activeTab === 'overview' && (
-                <OverviewTab project={project} stats={stats} milestones={milestones} />
+                <OverviewTab 
+                  project={project} 
+                  stats={stats} 
+                  milestones={milestones}
+                  tasks={tasks}
+                  rfis={rfis}
+                  submittals={submittals}
+                  setEditTask={setEditTask}
+                  setEditRFI={setEditRFI}
+                  setEditSubmittal={setEditSubmittal}
+                />
               )}
 
               {/* TASKS TAB */}
@@ -470,7 +395,6 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                   setView={setTaskView}
                   onAdd={() => setShowAddTask(true)}
                   onEdit={setEditTask}
-                  onStatusChange={handleTaskStatusChange}
                   onDragStart={handleDragStart}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
@@ -524,20 +448,20 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                 />
               )}
 
-              {/* CALENDAR TAB */}
+              {/* ✅ FIXED: CALENDAR TAB - Now uses ProjectCalendarMonth */}
               {activeTab === 'calendar' && (
-                <<ProjectCalendarMonth
-  project={project}
-  tasks={tasks}
-  rfis={rfis}
-  submittals={submittals}
-  milestones={milestones}
-  onItemClick={(item) => {
-    if (item.type === 'task') setEditTask(item.data);
-    else if (item.type === 'rfi') setEditRFI(item.data);
-    else if (item.type === 'submittal') setEditSubmittal(item.data);
-  }}
-/> message="Calendar view coming soon" />
+                <ProjectCalendarMonth
+                  project={project}
+                  tasks={tasks}
+                  rfis={rfis}
+                  submittals={submittals}
+                  milestones={milestones}
+                  onItemClick={(item) => {
+                    if (item.type === 'task') setEditTask(item.data);
+                    else if (item.type === 'rfi') setEditRFI(item.data);
+                    else if (item.type === 'submittal') setEditSubmittal(item.data);
+                  }}
+                />
               )}
             </>
           )}
@@ -659,6 +583,17 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
         />
       )}
 
+      <AddMilestoneModal
+        isOpen={showAddMilestone}
+        onClose={() => setShowAddMilestone(false)}
+        projectId={project.id}
+        onSuccess={() => {
+          setShowAddMilestone(false);
+          fetchProjectData();
+          showToast('Milestone created');
+        }}
+      />
+
       {/* TOAST */}
       {toast && (
         <div style={{
@@ -677,7 +612,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
 }
 
 // ============================================================================
-// PLACEHOLDER TAB (for unimplemented tabs)
+// PLACEHOLDER TAB
 // ============================================================================
 function PlaceholderTab({ icon: Icon, message }) {
   return (
@@ -689,82 +624,115 @@ function PlaceholderTab({ icon: Icon, message }) {
 }
 
 // ============================================================================
-// OVERVIEW TAB
+// OVERVIEW TAB - ✅ UPDATED with ProjectCalendarWeek
 // ============================================================================
-function OverviewTab({ project, stats, milestones }) {
+function OverviewTab({ project, stats, milestones, tasks, rfis, submittals, setEditTask, setEditRFI, setEditSubmittal }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-xl)' }}>
-      {/* Project Info */}
-      <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-lg)', border: '1px solid var(--border-color)' }}>
-        <h3 style={{ margin: '0 0 var(--space-md) 0', fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)' }}>Project Details</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
-          <InfoField label="Client" value={project.client_name} />
-          <InfoField label="Location" value={project.location} />
-          <InfoField label="Contract Value" value={formatCurrency(project.contract_value)} />
-          <InfoField label="Target Online" value={formatDate(project.target_online_date)} />
-          <InfoField label="Project Type" value={project.project_type} />
-          <InfoField label="Factory" value={project.factory} />
-        </div>
-        {project.description && (
-          <div style={{ marginTop: 'var(--space-md)', paddingTop: 'var(--space-md)', borderTop: '1px solid var(--border-color)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Description</div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>{project.description}</div>
+    <div>
+      {/* Top Section: Project Info + Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-xl)', marginBottom: 'var(--space-xl)' }}>
+        {/* Project Info */}
+        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-lg)', border: '1px solid var(--border-color)' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', marginBottom: 'var(--space-md)' }}>Project Details</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
+            <InfoItem label="Client" value={project.client_name} />
+            <InfoItem label="Location" value={project.site_address} />
+            <InfoItem label="Contract Value" value={formatCurrency(project.contract_value)} />
+            <InfoItem label="Target Online" value={formatDate(project.target_online_date)} />
+            <InfoItem label="Project Type" value={project.project_type} />
+            <InfoItem label="Factory" value={project.factory_name || project.factory} />
           </div>
-        )}
-      </div>
-
-      {/* Summary Stats & Milestones */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-md)' }}>
-          <StatCard icon={CheckSquare} label="Tasks Done" value={`${stats.taskCompleted}/${stats.taskTotal}`} />
-          <StatCard icon={MessageSquare} label="Open RFIs" value={stats.rfiOpen} highlight={stats.rfiOpen > 0} color="var(--sunbelt-orange)" />
-          <StatCard icon={ClipboardList} label="Pending Subs" value={stats.subPending} highlight={stats.subPending > 0} color="var(--warning)" />
-        </div>
-
-        {/* Milestones */}
-        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-lg)', border: '1px solid var(--border-color)', flex: 1 }}>
-          <h3 style={{ margin: '0 0 var(--space-md) 0', fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)' }}>
-            <Flag size={16} style={{ marginRight: 'var(--space-xs)', verticalAlign: 'middle' }} />
-            Milestones
-          </h3>
-          {milestones.length === 0 ? (
-            <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>No milestones yet</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-              {milestones.slice(0, 5).map(m => (
-                <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--text-primary)', fontSize: '0.875rem' }}>{m.name}</span>
-                  <span style={{
-                    fontSize: '0.8125rem',
-                    color: isOverdue(m.due_date, m.status, ['Completed']) ? 'var(--danger)' : 'var(--text-secondary)'
-                  }}>
-                    {formatDate(m.due_date)}
-                  </span>
-                </div>
-              ))}
+          {project.description && (
+            <div style={{ marginTop: 'var(--space-md)', paddingTop: 'var(--space-md)', borderTop: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Description</span>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{project.description}</p>
             </div>
           )}
         </div>
+
+        {/* Stats + Milestones */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
+          {/* Stats Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-md)' }}>
+            <StatCard icon={CheckSquare} label="Tasks Done" value={`${stats.taskCompleted}/${stats.taskTotal}`} color="var(--sunbelt-orange)" />
+            <StatCard icon={MessageSquare} label="Open RFIs" value={stats.rfiOpen} color="var(--info)" />
+            <StatCard icon={ClipboardList} label="Pending Subs" value={stats.subPending} color="var(--warning)" />
+          </div>
+
+          {/* Milestones */}
+          <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-lg)', border: '1px solid var(--border-color)', flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
+              <Flag size={16} style={{ color: 'var(--sunbelt-orange)' }} />
+              <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>Milestones</h3>
+            </div>
+            {milestones.length === 0 ? (
+              <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>No milestones yet</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                {milestones.slice(0, 4).map(m => (
+                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-sm)', background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)' }}>
+                    <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{m.name}</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{formatDate(m.due_date)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ✅ ADDED: Week Calendar Section */}
+      <div style={{ marginTop: 'var(--space-xl)' }}>
+        <ProjectCalendarWeek
+          project={project}
+          tasks={tasks}
+          rfis={rfis}
+          submittals={submittals}
+          milestones={milestones}
+          onItemClick={(item) => {
+            if (item.type === 'task') setEditTask(item.data);
+            else if (item.type === 'rfi') setEditRFI(item.data);
+            else if (item.type === 'submittal') setEditSubmittal(item.data);
+          }}
+        />
       </div>
     </div>
   );
 }
 
-function InfoField({ label, value }) {
+// ============================================================================
+// SUB-COMPONENTS
+// ============================================================================
+function InfoItem({ label, value }) {
   return (
     <div>
-      <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '2px' }}>{label}</div>
-      <div style={{ color: 'var(--text-primary)' }}>{value || '—'}</div>
+      <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>{label}</span>
+      <p style={{ fontSize: '0.9375rem', color: 'var(--text-primary)', fontWeight: '500', marginTop: '2px' }}>{value || '—'}</p>
     </div>
   );
 }
 
-function StatCard({ icon: Icon, label, value, highlight = false, color = 'var(--sunbelt-orange)' }) {
+function StatCard({ icon: Icon, label, value, color }) {
   return (
-    <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-lg)', border: '1px solid var(--border-color)', textAlign: 'center' }}>
-      <Icon size={24} style={{ color, marginBottom: 'var(--space-sm)' }} />
-      <div style={{ fontSize: '1.5rem', fontWeight: '700', color: highlight ? color : 'var(--text-primary)' }}>{value}</div>
+    <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-md)', border: '1px solid var(--border-color)', textAlign: 'center' }}>
+      <Icon size={24} style={{ color, marginBottom: 'var(--space-xs)' }} />
+      <div style={{ fontSize: '1.5rem', fontWeight: '700', color }}>{value}</div>
       <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{label}</div>
+    </div>
+  );
+}
+
+function SearchInput({ value, onChange, placeholder }) {
+  return (
+    <div style={{ position: 'relative', flex: 1, maxWidth: '300px' }}>
+      <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{ width: '100%', padding: '8px 12px 8px 36px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.875rem' }}
+      />
     </div>
   );
 }
@@ -772,122 +740,86 @@ function StatCard({ icon: Icon, label, value, highlight = false, color = 'var(--
 // ============================================================================
 // TASKS TAB
 // ============================================================================
-function TasksTab({ tasks, allTasks, search, setSearch, statusFilter, setStatusFilter, view, setView, onAdd, onEdit, onStatusChange, onDragStart, onDragOver, onDrop, draggedTask }) {
+function TasksTab({ tasks, allTasks, search, setSearch, statusFilter, setStatusFilter, view, setView, onAdd, onEdit, onDragStart, onDragOver, onDrop, draggedTask }) {
+  const kanbanStatuses = ['Not Started', 'In Progress', 'On Hold', 'Blocked', 'Completed'];
+
   return (
     <div>
       {/* Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
         <div style={{ display: 'flex', gap: 'var(--space-md)', alignItems: 'center', flex: 1 }}>
-          {/* Search */}
           <SearchInput value={search} onChange={setSearch} placeholder="Search tasks..." />
-
-          {/* Status Filter */}
-          <select
-            value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.875rem', cursor: 'pointer' }}
-          >
-            {TASK_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>)}
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.875rem', cursor: 'pointer' }}>
+            {TASK_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === 'All' ? `All Tasks (${allTasks.length})` : s}</option>)}
           </select>
-
-          <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
-            {tasks.length} of {allTasks.length}
-          </span>
         </div>
-
         <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
-          {/* View Toggle - Fixed positioning */}
-          <div style={{ display: 'flex', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '2px', border: '1px solid var(--border-color)', width: '160px' }}>
-            <button
-              onClick={() => setView('kanban')}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
-                flex: 1, padding: '6px 0', border: 'none', borderRadius: 'var(--radius-sm)',
-                background: view === 'kanban' ? 'var(--bg-primary)' : 'transparent',
-                color: view === 'kanban' ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                cursor: 'pointer', fontSize: '0.8125rem', fontWeight: '500'
-              }}
-            >
-              <LayoutGrid size={14} /> Kanban
+          <div style={{ display: 'flex', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+            <button onClick={() => setView('kanban')} style={{ padding: '6px 12px', background: view === 'kanban' ? 'var(--sunbelt-orange)' : 'var(--bg-primary)', color: view === 'kanban' ? 'white' : 'var(--text-secondary)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8125rem' }}>
+              <LayoutGrid size={14} /> Board
             </button>
-            <button
-              onClick={() => setView('list')}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
-                flex: 1, padding: '6px 0', border: 'none', borderRadius: 'var(--radius-sm)',
-                background: view === 'list' ? 'var(--bg-primary)' : 'transparent',
-                color: view === 'list' ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                cursor: 'pointer', fontSize: '0.8125rem', fontWeight: '500'
-              }}
-            >
+            <button onClick={() => setView('list')} style={{ padding: '6px 12px', background: view === 'list' ? 'var(--sunbelt-orange)' : 'var(--bg-primary)', color: view === 'list' ? 'white' : 'var(--text-secondary)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8125rem' }}>
               <List size={14} /> List
             </button>
           </div>
-
-          <button
-            onClick={onAdd}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 'var(--space-xs)',
-              padding: '6px 14px', background: 'var(--sunbelt-orange)', color: 'white',
-              border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer',
-              fontSize: '0.875rem', fontWeight: '600'
-            }}
-          >
-            <Plus size={14} /> Add Task
+          <button onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: '600', fontSize: '0.875rem' }}>
+            <Plus size={16} /> Add Task
           </button>
         </div>
       </div>
 
-      {/* Content */}
-      {view === 'kanban' ? (
-        <KanbanBoard 
-          tasks={allTasks} 
-          onTaskClick={onEdit} 
-          onDragStart={onDragStart}
-          onDragOver={onDragOver}
-          onDrop={onDrop}
-          draggedTask={draggedTask}
-        />
-      ) : (
+      {/* Kanban View */}
+      {view === 'kanban' && (
+        <div style={{ display: 'flex', gap: 'var(--space-md)', overflowX: 'auto', paddingBottom: 'var(--space-md)' }}>
+          {kanbanStatuses.map(status => {
+            const columnTasks = tasks.filter(t => t.status === status);
+            return (
+              <div
+                key={status}
+                onDragOver={onDragOver}
+                onDrop={() => onDrop(status)}
+                style={{ flex: '1', minWidth: '250px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}
+              >
+                <div style={{ padding: 'var(--space-md)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: getStatusColor(status) }} />
+                    <span style={{ fontWeight: '600', fontSize: '0.875rem', color: 'var(--text-primary)' }}>{status}</span>
+                  </div>
+                  <span style={{ background: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: '10px', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)' }}>{columnTasks.length}</span>
+                </div>
+                <div style={{ padding: 'var(--space-sm)', flex: 1, minHeight: '200px', display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                  {columnTasks.map(task => (
+                    <TaskCard key={task.id} task={task} onEdit={onEdit} onDragStart={onDragStart} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* List View */}
+      {view === 'list' && (
         <DataTable
           columns={[
             { key: 'title', label: 'Task', render: (task) => (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                {isOverdue(task.due_date, task.status, ['Completed', 'Cancelled']) && (
-                  <AlertTriangle size={14} style={{ color: 'var(--danger)', flexShrink: 0 }} />
-                )}
-                <div>
-                  <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{task.title}</div>
-                  {task.description && (
-                    <div style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.description}</div>
-                  )}
-                </div>
+              <div>
+                <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{task.title}</div>
+                {task.assignee?.name && <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{task.assignee.name}</div>}
               </div>
             )},
-            { key: 'status', label: 'Status', width: '120px', render: (task) => (
-              <span style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '600', background: `${getStatusColor(task.status)}20`, color: getStatusColor(task.status) }}>
+            { key: 'status', label: 'Status', render: (task) => (
+              <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '0.75rem', fontWeight: '600', background: `${getStatusColor(task.status)}20`, color: getStatusColor(task.status) }}>
                 {task.status}
               </span>
             )},
-            { key: 'priority', label: 'Priority', width: '80px', render: (task) => (
-              <span style={{ fontSize: '0.75rem', fontWeight: '600', color: getPriorityColor(task.priority) }}>
-                {task.priority || '—'}
-              </span>
+            { key: 'priority', label: 'Priority', render: (task) => (
+              <span style={{ fontSize: '0.8125rem', color: getPriorityColor(task.priority), fontWeight: '500' }}>{task.priority || 'Normal'}</span>
             )},
-            { key: 'assignee', label: 'Assignee', width: '150px', render: (task) => {
-              const name = task.external_assignee_name || task.assignee?.name;
-              const isExternal = !!task.external_assignee_email;
-              return name ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontSize: '0.875rem' }}>{name}</span>
-                  {isExternal && <ExternalLink size={12} style={{ color: 'var(--sunbelt-orange)' }} />}
-                </div>
-              ) : <span style={{ color: 'var(--text-tertiary)' }}>—</span>;
-            }},
-            { key: 'due_date', label: 'Due', width: '100px', render: (task) => (
-              <span style={{ fontSize: '0.875rem', color: isOverdue(task.due_date, task.status, ['Completed', 'Cancelled']) ? 'var(--danger)' : 'var(--text-secondary)', fontWeight: isOverdue(task.due_date, task.status, ['Completed', 'Cancelled']) ? '600' : '400' }}>
-                {formatDate(task.due_date)}
-              </span>
-            )}
+            { key: 'due_date', label: 'Due', render: (task) => {
+              const isTaskOverdue = isOverdue(task.due_date, task.status, ['Completed', 'Cancelled']);
+              return <span style={{ fontSize: '0.8125rem', color: isTaskOverdue ? 'var(--danger)' : 'var(--text-secondary)' }}>{formatDate(task.due_date)}</span>;
+            }}
           ]}
           data={tasks}
           onRowClick={onEdit}
@@ -898,169 +830,30 @@ function TasksTab({ tasks, allTasks, search, setSearch, statusFilter, setStatusF
   );
 }
 
-// ============================================================================
-// KANBAN BOARD - Narrower columns to fit within tab content width
-// ============================================================================
-function KanbanBoard({ tasks, onTaskClick, onDragStart, onDragOver, onDrop, draggedTask }) {
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(4, 1fr)',
-      gap: 'var(--space-md)',
-      minHeight: '400px'
-    }}>
-      {KANBAN_COLUMNS.map(column => {
-        const columnTasks = tasks.filter(t => t.status === column.id);
-        const isDropTarget = draggedTask && draggedTask.status !== column.id;
-        
-        return (
-          <div
-            key={column.id}
-            onDragOver={onDragOver}
-            onDrop={(e) => onDrop(e, column.id)}
-            style={{
-              background: isDropTarget ? `${column.color}10` : 'var(--bg-secondary)',
-              borderRadius: 'var(--radius-lg)',
-              border: isDropTarget ? `2px dashed ${column.color}` : '1px solid var(--border-color)',
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: '400px',
-              transition: 'all 0.2s'
-            }}
-          >
-            {/* Column Header */}
-            <div style={{
-              padding: 'var(--space-md)',
-              borderBottom: '1px solid var(--border-color)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: column.color }} />
-                <span style={{ fontWeight: '600', fontSize: '0.875rem', color: 'var(--text-primary)' }}>
-                  {column.label}
-                </span>
-              </div>
-              <span style={{
-                padding: '2px 8px', borderRadius: '10px',
-                fontSize: '0.75rem', fontWeight: '600',
-                background: 'var(--bg-tertiary)', color: 'var(--text-secondary)'
-              }}>
-                {columnTasks.length}
-              </span>
-            </div>
-
-            {/* Column Content */}
-            <div style={{
-              flex: 1,
-              padding: 'var(--space-sm)',
-              overflowY: 'auto',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--space-sm)'
-            }}>
-              {columnTasks.length === 0 ? (
-                <div style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--text-tertiary)',
-                  fontSize: '0.8125rem'
-                }}>
-                  {isDropTarget ? 'Drop here' : 'No tasks'}
-                </div>
-              ) : (
-                columnTasks.map(task => (
-                  <KanbanCard
-                    key={task.id}
-                    task={task}
-                    onClick={() => onTaskClick(task)}
-                    onDragStart={onDragStart}
-                    isDragging={draggedTask?.id === task.id}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function KanbanCard({ task, onClick, onDragStart, isDragging }) {
+function TaskCard({ task, onEdit, onDragStart }) {
   const isTaskOverdue = isOverdue(task.due_date, task.status, ['Completed', 'Cancelled']);
   
   return (
     <div
       draggable
-      onDragStart={(e) => onDragStart(e, task)}
-      onClick={onClick}
-      style={{
-        background: 'var(--bg-primary)',
-        borderRadius: 'var(--radius-md)',
-        padding: 'var(--space-sm)',
-        border: '1px solid var(--border-color)',
-        cursor: 'grab',
-        opacity: isDragging ? 0.5 : 1,
-        transition: 'all 0.15s'
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = 'var(--sunbelt-orange)';
-        e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'var(--border-color)';
-        e.currentTarget.style.boxShadow = 'none';
-      }}
+      onDragStart={() => onDragStart(task)}
+      onClick={() => onEdit(task)}
+      style={{ padding: 'var(--space-sm)', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', cursor: 'pointer', transition: 'all 0.15s' }}
     >
-      {/* Card Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-xs)', marginBottom: 'var(--space-xs)' }}>
-        <GripVertical size={12} style={{ color: 'var(--text-tertiary)', marginTop: '2px', flexShrink: 0 }} />
-        <div style={{
-          flex: 1, fontSize: '0.8125rem', fontWeight: '500',
-          color: 'var(--text-primary)', lineHeight: '1.3'
-        }}>
-          {task.title}
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-xs)' }}>
+        <span style={{ fontSize: '0.8125rem', fontWeight: '500', color: 'var(--text-primary)', flex: 1 }}>{task.title}</span>
+        <GripVertical size={14} style={{ color: 'var(--text-tertiary)', cursor: 'grab', flexShrink: 0 }} />
       </div>
-
-      {/* Card Footer */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'var(--space-xs)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
-          {task.priority && (
-            <span style={{
-              fontSize: '0.625rem', fontWeight: '600',
-              padding: '1px 4px', borderRadius: '3px',
-              background: `${getPriorityColor(task.priority)}20`,
-              color: getPriorityColor(task.priority)
-            }}>
-              {task.priority}
-            </span>
-          )}
-        </div>
-        
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginTop: 'var(--space-xs)' }}>
+        {task.priority && <span style={{ fontSize: '0.6875rem', fontWeight: '600', color: getPriorityColor(task.priority) }}>{task.priority}</span>}
         {task.due_date && (
-          <span style={{
-            fontSize: '0.6875rem',
-            color: isTaskOverdue ? 'var(--danger)' : 'var(--text-tertiary)',
-            fontWeight: isTaskOverdue ? '600' : '400'
-          }}>
+          <span style={{ fontSize: '0.6875rem', color: isTaskOverdue ? 'var(--danger)' : 'var(--text-tertiary)', fontWeight: isTaskOverdue ? '600' : '400' }}>
             {formatDate(task.due_date)}
           </span>
         )}
       </div>
-
-      {/* Assignee */}
       {(task.assignee?.name || task.external_assignee_name) && (
-        <div style={{
-          marginTop: 'var(--space-xs)', paddingTop: 'var(--space-xs)',
-          borderTop: '1px solid var(--border-color)',
-          fontSize: '0.6875rem', color: 'var(--text-secondary)',
-          display: 'flex', alignItems: 'center', gap: '4px'
-        }}>
+        <div style={{ marginTop: 'var(--space-xs)', paddingTop: 'var(--space-xs)', borderTop: '1px solid var(--border-color)', fontSize: '0.6875rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
           {task.external_assignee_name || task.assignee?.name}
           {task.external_assignee_email && <ExternalLink size={10} style={{ color: 'var(--sunbelt-orange)' }} />}
         </div>
@@ -1075,43 +868,30 @@ function KanbanCard({ task, onClick, onDragStart, isDragging }) {
 function RFIsTab({ rfis, allRFIs, search, setSearch, statusFilter, setStatusFilter, onAdd, onEdit }) {
   return (
     <div>
-      {/* Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
         <div style={{ display: 'flex', gap: 'var(--space-md)', alignItems: 'center', flex: 1 }}>
           <SearchInput value={search} onChange={setSearch} placeholder="Search RFIs..." />
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.875rem', cursor: 'pointer' }}>
-            {RFI_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>)}
+            {RFI_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === 'All' ? `All RFIs (${allRFIs.length})` : s}</option>)}
           </select>
-          <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>{rfis.length} of {allRFIs.length}</span>
         </div>
-        <button onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', padding: '6px 14px', background: 'var(--sunbelt-orange)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '0.875rem', fontWeight: '600' }}>
-          <Plus size={14} /> Add RFI
+        <button onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: '600', fontSize: '0.875rem' }}>
+          <Plus size={16} /> Add RFI
         </button>
       </div>
-
       <DataTable
         columns={[
-          { key: 'rfi_number', label: 'RFI #', width: '120px', render: (rfi) => <span style={{ fontWeight: '600', color: 'var(--sunbelt-orange)' }}>{rfi.rfi_number}</span> },
-          { key: 'subject', label: 'Subject', render: (rfi) => (
-            <div>
-              <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{rfi.subject}</div>
-              {rfi.question && <div style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rfi.question}</div>}
-            </div>
-          )},
-          { key: 'status', label: 'Status', width: '100px', render: (rfi) => (
-            <span style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '600', background: `${getStatusColor(rfi.status)}20`, color: getStatusColor(rfi.status) }}>{rfi.status}</span>
-          )},
-          { key: 'sent_to', label: 'Sent To', width: '150px', render: (rfi) => (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ fontSize: '0.875rem' }}>{rfi.sent_to || 'Internal'}</span>
-              {rfi.is_external && <ExternalLink size={12} style={{ color: 'var(--sunbelt-orange)' }} />}
-            </div>
-          )},
-          { key: 'due_date', label: 'Due', width: '100px', render: (rfi) => (
-            <span style={{ fontSize: '0.875rem', color: isOverdue(rfi.due_date, rfi.status, ['Closed', 'Answered']) ? 'var(--danger)' : 'var(--text-secondary)', fontWeight: isOverdue(rfi.due_date, rfi.status, ['Closed', 'Answered']) ? '600' : '400' }}>
-              {formatDate(rfi.due_date)}
+          { key: 'rfi_number', label: 'RFI #', render: (rfi) => <span style={{ fontWeight: '600', color: 'var(--sunbelt-orange)' }}>{rfi.rfi_number}</span> },
+          { key: 'subject', label: 'Subject', render: (rfi) => <span style={{ color: 'var(--text-primary)' }}>{rfi.subject}</span> },
+          { key: 'status', label: 'Status', render: (rfi) => (
+            <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '0.75rem', fontWeight: '600', background: `${getStatusColor(rfi.status)}20`, color: getStatusColor(rfi.status) }}>
+              {rfi.status}
             </span>
-          )}
+          )},
+          { key: 'due_date', label: 'Due', render: (rfi) => {
+            const isRFIOverdue = isOverdue(rfi.due_date, rfi.status, ['Closed', 'Answered']);
+            return <span style={{ fontSize: '0.8125rem', color: isRFIOverdue ? 'var(--danger)' : 'var(--text-secondary)' }}>{formatDate(rfi.due_date)}</span>;
+          }}
         ]}
         data={rfis}
         onRowClick={onEdit}
@@ -1127,41 +907,31 @@ function RFIsTab({ rfis, allRFIs, search, setSearch, statusFilter, setStatusFilt
 function SubmittalsTab({ submittals, allSubmittals, search, setSearch, statusFilter, setStatusFilter, onAdd, onEdit }) {
   return (
     <div>
-      {/* Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
         <div style={{ display: 'flex', gap: 'var(--space-md)', alignItems: 'center', flex: 1 }}>
           <SearchInput value={search} onChange={setSearch} placeholder="Search submittals..." />
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.875rem', cursor: 'pointer' }}>
-            {SUBMITTAL_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>)}
+            {SUBMITTAL_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === 'All' ? `All Submittals (${allSubmittals.length})` : s}</option>)}
           </select>
-          <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>{submittals.length} of {allSubmittals.length}</span>
         </div>
-        <button onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', padding: '6px 14px', background: 'var(--sunbelt-orange)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '0.875rem', fontWeight: '600' }}>
-          <Plus size={14} /> Add Submittal
+        <button onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: '600', fontSize: '0.875rem' }}>
+          <Plus size={16} /> Add Submittal
         </button>
       </div>
-
       <DataTable
         columns={[
-          { key: 'submittal_number', label: 'Sub #', width: '120px', render: (sub) => <span style={{ fontWeight: '600', color: 'var(--sunbelt-orange)' }}>{sub.submittal_number}</span> },
-          { key: 'title', label: 'Title', render: (sub) => (
-            <div>
-              <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{sub.title}</div>
-              {sub.manufacturer && <div style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>{sub.manufacturer}{sub.model_number && ` • ${sub.model_number}`}</div>}
-            </div>
-          )},
-          { key: 'type', label: 'Type', width: '120px', render: (sub) => <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{sub.submittal_type || '—'}</span> },
-          { key: 'status', label: 'Status', width: '130px', render: (sub) => (
-            <span style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '600', background: `${getStatusColor(sub.status)}20`, color: getStatusColor(sub.status), whiteSpace: 'nowrap' }}>{sub.status}</span>
-          )},
-          { key: 'revision', label: 'Rev', width: '50px', render: (sub) => (
-            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '24px', height: '24px', borderRadius: '50%', background: 'var(--bg-tertiary)', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)' }}>{sub.revision_number || 0}</span>
-          )},
-          { key: 'due_date', label: 'Due', width: '100px', render: (sub) => (
-            <span style={{ fontSize: '0.875rem', color: isOverdue(sub.due_date, sub.status, ['Approved', 'Approved as Noted', 'Rejected']) ? 'var(--danger)' : 'var(--text-secondary)', fontWeight: isOverdue(sub.due_date, sub.status, ['Approved', 'Approved as Noted', 'Rejected']) ? '600' : '400' }}>
-              {formatDate(sub.due_date)}
+          { key: 'submittal_number', label: 'Sub #', render: (sub) => <span style={{ fontWeight: '600', color: 'var(--sunbelt-orange)' }}>{sub.submittal_number}</span> },
+          { key: 'title', label: 'Title', render: (sub) => <span style={{ color: 'var(--text-primary)' }}>{sub.title}</span> },
+          { key: 'submittal_type', label: 'Type', render: (sub) => <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{sub.submittal_type || '—'}</span> },
+          { key: 'status', label: 'Status', render: (sub) => (
+            <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '0.75rem', fontWeight: '600', background: `${getStatusColor(sub.status)}20`, color: getStatusColor(sub.status) }}>
+              {sub.status}
             </span>
-          )}
+          )},
+          { key: 'due_date', label: 'Due', render: (sub) => {
+            const isSubOverdue = isOverdue(sub.due_date, sub.status, ['Approved', 'Approved as Noted', 'Rejected']);
+            return <span style={{ fontSize: '0.8125rem', color: isSubOverdue ? 'var(--danger)' : 'var(--text-secondary)' }}>{formatDate(sub.due_date)}</span>;
+          }}
         ]}
         data={submittals}
         onRowClick={onEdit}
@@ -1172,35 +942,12 @@ function SubmittalsTab({ submittals, allSubmittals, search, setSearch, statusFil
 }
 
 // ============================================================================
-// REUSABLE COMPONENTS
+// DATA TABLE COMPONENT
 // ============================================================================
-function SearchInput({ value, onChange, placeholder }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: '8px',
-      padding: '6px 12px', borderRadius: 'var(--radius-md)',
-      border: '1px solid var(--border-color)', background: 'var(--bg-primary)',
-      minWidth: '200px', maxWidth: '280px'
-    }}>
-      <Search size={14} style={{ color: 'var(--text-tertiary)' }} />
-      <input
-        type="text" placeholder={placeholder}
-        value={value} onChange={(e) => onChange(e.target.value)}
-        style={{ border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: '0.875rem', outline: 'none', width: '100%' }}
-      />
-      {value && (
-        <button onClick={() => onChange('')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-tertiary)' }}>
-          <X size={12} />
-        </button>
-      )}
-    </div>
-  );
-}
-
 function DataTable({ columns, data, onRowClick, emptyMessage }) {
   if (data.length === 0) {
     return (
-      <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+      <div style={{ padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--text-tertiary)', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)' }}>
         {emptyMessage}
       </div>
     );
@@ -1210,32 +957,22 @@ function DataTable({ columns, data, onRowClick, emptyMessage }) {
     <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
-          <tr style={{ background: 'var(--bg-tertiary)' }}>
+          <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
             {columns.map(col => (
-              <th key={col.key} style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', width: col.width }}>
+              <th key={col.key} style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-tertiary)', textTransform: 'uppercase', background: 'var(--bg-tertiary)' }}>
                 {col.label}
               </th>
             ))}
-            <th style={{ width: '40px' }}></th>
           </tr>
         </thead>
         <tbody>
-          {data.map((row, index) => (
-            <tr
-              key={row.id}
-              onClick={() => onRowClick?.(row)}
-              style={{ borderTop: index > 0 ? '1px solid var(--border-color)' : 'none', cursor: onRowClick ? 'pointer' : 'default', transition: 'background 0.15s' }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-primary)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-            >
+          {data.map((row, i) => (
+            <tr key={row.id || i} onClick={() => onRowClick(row)} style={{ borderBottom: '1px solid var(--border-color)', cursor: 'pointer', transition: 'background 0.15s' }} onMouseOver={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}>
               {columns.map(col => (
-                <td key={col.key} style={{ padding: 'var(--space-md)' }}>
+                <td key={col.key} style={{ padding: 'var(--space-md)', fontSize: '0.875rem' }}>
                   {col.render ? col.render(row) : row[col.key]}
                 </td>
               ))}
-              <td style={{ padding: 'var(--space-md)' }}>
-                <ChevronRight size={16} style={{ color: 'var(--text-tertiary)' }} />
-              </td>
             </tr>
           ))}
         </tbody>
