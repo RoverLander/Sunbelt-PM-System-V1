@@ -23,32 +23,14 @@ CREATE TABLE IF NOT EXISTS workflow_stations (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Seed workflow stations if empty
-INSERT INTO workflow_stations (station_key, name, description, phase, display_order, default_owner, is_required)
-SELECT * FROM (VALUES
-  ('sales_handoff', 'Sales Handoff', 'Initial project handoff from sales to PM', 1, 1, 'pm', true),
-  ('kickoff_meeting', 'Kickoff Meeting', 'Internal kickoff and planning meeting', 1, 2, 'pm', true),
-  ('site_survey', 'Site Survey', 'Site survey and documentation', 1, 3, 'pm', false),
-  ('drawings_20', '20% Drawings', 'Preliminary layout drawings', 2, 1, 'drafting', true),
-  ('drawings_65', '65% Drawings', 'Design development drawings', 2, 2, 'drafting', true),
-  ('drawings_95', '95% Drawings', 'Construction documents - near final', 2, 3, 'drafting', true),
-  ('drawings_100', '100% Drawings', 'Final construction documents', 2, 4, 'drafting', true),
-  ('color_selections', 'Color Selections', 'Dealer color and finish selections', 2, 5, 'dealer', true),
-  ('long_lead_items', 'Long Lead Items', 'Equipment with extended lead times', 2, 6, 'procurement', true),
-  ('cutsheets', 'Cutsheet Submittals', 'Equipment cutsheet approvals', 2, 7, 'dealer', true),
-  ('engineering_review', 'Engineering Review', 'Internal engineering review', 3, 1, 'engineering', true),
-  ('third_party_review', 'Third Party Review', 'Third party plan review', 3, 2, 'third_party', false),
-  ('state_approval', 'State Approval', 'State modular approval', 3, 3, 'state', false),
-  ('permit_submission', 'Permit Submission', 'Building permit submission', 3, 4, 'pm', false),
-  ('change_orders', 'Change Orders', 'Process any change orders', 3, 5, 'pm', false),
-  ('production_start', 'Production Start', 'Factory production begins', 4, 1, 'factory', true),
-  ('qc_inspection', 'QC Inspection', 'Quality control inspection', 4, 2, 'factory', true),
-  ('delivery_scheduled', 'Delivery Scheduled', 'Delivery date confirmed', 4, 3, 'pm', true),
-  ('delivery_complete', 'Delivery Complete', 'Units delivered to site', 4, 4, 'pm', true),
-  ('set_complete', 'Set Complete', 'Units set on foundation', 4, 5, 'pm', true),
-  ('project_closeout', 'Project Closeout', 'Final documentation', 4, 6, 'pm', true)
-) AS v(station_key, name, description, phase, display_order, default_owner, is_required)
-WHERE NOT EXISTS (SELECT 1 FROM workflow_stations LIMIT 1);
+-- Add missing columns to workflow_stations (if table exists with different schema)
+ALTER TABLE workflow_stations ADD COLUMN IF NOT EXISTS name VARCHAR(100);
+ALTER TABLE workflow_stations ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE workflow_stations ADD COLUMN IF NOT EXISTS default_owner VARCHAR(50);
+ALTER TABLE workflow_stations ADD COLUMN IF NOT EXISTS is_required BOOLEAN DEFAULT true;
+
+-- Copy station_name to name if name is empty
+UPDATE workflow_stations SET name = station_name WHERE name IS NULL AND station_name IS NOT NULL;
 
 -- Project Workflow Status
 CREATE TABLE IF NOT EXISTS project_workflow_status (
