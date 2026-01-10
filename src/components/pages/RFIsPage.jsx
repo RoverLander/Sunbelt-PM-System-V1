@@ -29,7 +29,9 @@ import {
   FileText,
   Search,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -47,7 +49,13 @@ const STATUS_COLORS = {
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
+function RFIsPage({
+  isDirectorView = false,
+  onNavigateToProject,
+  includeBackupProjects = false,
+  onToggleBackupProjects,
+  initialFilter = null
+}) {
   const { user } = useAuth();
 
   // ==========================================================================
@@ -61,16 +69,23 @@ function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
   // ==========================================================================
   // STATE - FILTERS (Default to 'all')
   // ==========================================================================
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterStatus, setFilterStatus] = useState(initialFilter || 'all');
   const [filterProject, setFilterProject] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Update filter when initialFilter prop changes
+  useEffect(() => {
+    if (initialFilter) {
+      setFilterStatus(initialFilter);
+    }
+  }, [initialFilter]);
 
   // ==========================================================================
   // FETCH DATA
   // ==========================================================================
   useEffect(() => {
     if (user) fetchData();
-  }, [user, isDirectorView]);
+  }, [user, isDirectorView, includeBackupProjects]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -86,7 +101,11 @@ function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
       let projectsQuery = supabase.from('projects').select('id, project_number, name, color');
 
       if (!isDirectorView && userData) {
-        projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        if (includeBackupProjects) {
+          projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        } else {
+          projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        }
       }
 
       const { data: projectsData } = await projectsQuery;
@@ -184,21 +203,49 @@ function RFIsPage({ isDirectorView = false, onNavigateToProject }) {
       {/* HEADER                                                            */}
       {/* ================================================================== */}
       <div style={{ marginBottom: 'var(--space-lg)' }}>
-        <h1 style={{
-          fontSize: '1.75rem',
-          fontWeight: '700',
-          color: 'var(--text-primary)',
-          marginBottom: '4px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px'
-        }}>
-          <FileText size={28} style={{ color: 'var(--sunbelt-orange)' }} />
-          {isDirectorView ? 'All RFIs' : 'My RFIs'}
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-          {isDirectorView ? 'RFIs across all projects' : 'RFIs from your assigned projects'}
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h1 style={{
+              fontSize: '1.75rem',
+              fontWeight: '700',
+              color: 'var(--text-primary)',
+              marginBottom: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <FileText size={28} style={{ color: 'var(--sunbelt-orange)' }} />
+              {isDirectorView ? 'All RFIs' : 'My RFIs'}
+            </h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+              {isDirectorView ? 'RFIs across all projects' : 'RFIs from your assigned projects'}
+            </p>
+          </div>
+
+          {/* Include Backup Projects Toggle */}
+          {!isDirectorView && onToggleBackupProjects && (
+            <button
+              onClick={() => onToggleBackupProjects(!includeBackupProjects)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 14px',
+                background: includeBackupProjects ? 'rgba(249, 115, 22, 0.1)' : 'var(--bg-secondary)',
+                border: `1px solid ${includeBackupProjects ? 'var(--sunbelt-orange)' : 'var(--border-color)'}`,
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+                color: includeBackupProjects ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+                fontSize: '0.8125rem',
+                fontWeight: '500',
+                transition: 'all 0.15s'
+              }}
+            >
+              {includeBackupProjects ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+              Include backup PM projects
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ================================================================== */}

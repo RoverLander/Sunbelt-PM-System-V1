@@ -66,6 +66,13 @@ function AppContent() {
   const [selectedProjectTab, setSelectedProjectTab] = useState('overview');
   const [loadingProject, setLoadingProject] = useState(false);
 
+  // Global filter state (synced with sidebar toggle)
+  const [includeBackupProjects, setIncludeBackupProjects] = useState(() => {
+    const saved = localStorage.getItem('includeSecondaryInCounts');
+    return saved !== null ? JSON.parse(saved) : false;
+  });
+  const [initialPageFilter, setInitialPageFilter] = useState(null); // 'overdue', 'open', etc.
+
   // ==========================================================================
   // CHECK USER ROLE ON LOAD
   // ==========================================================================
@@ -193,7 +200,22 @@ function AppContent() {
       setSelectedProjectId(null);
       setSelectedProject(null);
     }
+    setInitialPageFilter(null); // Reset filter when manually navigating
     setCurrentView(view);
+  };
+
+  // Handle toggling backup projects (synced between sidebar and pages)
+  const handleToggleBackupProjects = (value) => {
+    setIncludeBackupProjects(value);
+    localStorage.setItem('includeSecondaryInCounts', JSON.stringify(value));
+  };
+
+  // Handle sidebar stat clicks - navigate to page with filter
+  const handleSidebarStatClick = (page, filter) => {
+    setInitialPageFilter(filter);
+    setSelectedProjectId(null);
+    setSelectedProject(null);
+    setCurrentView(page);
   };
 
   // ==========================================================================
@@ -351,11 +373,35 @@ function AppContent() {
       case 'projects':
         return <ProjectsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
       case 'tasks':
-        return <TasksPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
+        return (
+          <TasksPage
+            isDirectorView={false}
+            onNavigateToProject={handleNavigateToProject}
+            includeBackupProjects={includeBackupProjects}
+            onToggleBackupProjects={handleToggleBackupProjects}
+            initialFilter={initialPageFilter}
+          />
+        );
       case 'rfis':
-        return <RFIsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
+        return (
+          <RFIsPage
+            isDirectorView={false}
+            onNavigateToProject={handleNavigateToProject}
+            includeBackupProjects={includeBackupProjects}
+            onToggleBackupProjects={handleToggleBackupProjects}
+            initialFilter={initialPageFilter}
+          />
+        );
       case 'submittals':
-        return <SubmittalsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
+        return (
+          <SubmittalsPage
+            isDirectorView={false}
+            onNavigateToProject={handleNavigateToProject}
+            includeBackupProjects={includeBackupProjects}
+            onToggleBackupProjects={handleToggleBackupProjects}
+            initialFilter={initialPageFilter}
+          />
+        );
       default:
         return <PMDashboard onNavigateToProject={handleNavigateToProject} />;
     }
@@ -370,11 +416,14 @@ function AppContent() {
       minHeight: '100vh',
       background: 'var(--bg-primary)'
     }}>
-      <Sidebar 
-        currentView={currentView} 
+      <Sidebar
+        currentView={currentView}
         setCurrentView={handleSetCurrentView}
         dashboardType={dashboardType}
         setDashboardType={setDashboardType}
+        includeBackupProjects={includeBackupProjects}
+        onToggleBackupProjects={handleToggleBackupProjects}
+        onStatClick={handleSidebarStatClick}
       />
       <main style={{
         flex: 1,

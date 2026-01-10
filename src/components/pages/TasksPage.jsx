@@ -40,7 +40,9 @@ import {
   X,
   Save,
   ExternalLink,
-  GripVertical
+  GripVertical,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -657,7 +659,13 @@ function EditTaskModal({ task, isOpen, onClose, onSave, onNavigateToProject, use
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-function TasksPage({ isDirectorView = false, onNavigateToProject }) {
+function TasksPage({
+  isDirectorView = false,
+  onNavigateToProject,
+  includeBackupProjects = false,
+  onToggleBackupProjects,
+  initialFilter = null
+}) {
   const { user } = useAuth();
 
   // ==========================================================================
@@ -680,17 +688,24 @@ function TasksPage({ isDirectorView = false, onNavigateToProject }) {
   // ==========================================================================
   // STATE - FILTERS
   // ==========================================================================
-  const [filterStatus, setFilterStatus] = useState('open');
+  const [filterStatus, setFilterStatus] = useState(initialFilter || 'open');
   const [filterProject, setFilterProject] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Update filter when initialFilter prop changes (from sidebar click)
+  useEffect(() => {
+    if (initialFilter) {
+      setFilterStatus(initialFilter);
+    }
+  }, [initialFilter]);
 
   // ==========================================================================
   // FETCH DATA
   // ==========================================================================
   useEffect(() => {
     if (user) fetchData();
-  }, [user, isDirectorView]);
+  }, [user, isDirectorView, includeBackupProjects]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -717,7 +732,14 @@ function TasksPage({ isDirectorView = false, onNavigateToProject }) {
       let projectsQuery = supabase.from('projects').select('id, project_number, name, color');
 
       if (!isDirectorView && userData) {
-        projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        // Build OR conditions based on includeBackupProjects setting
+        if (includeBackupProjects) {
+          // Include both primary and backup projects
+          projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        } else {
+          // Only include primary projects (exclude backup_pm_id)
+          projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        }
       }
 
       const { data: projectsData } = await projectsQuery;
@@ -958,21 +980,49 @@ function TasksPage({ isDirectorView = false, onNavigateToProject }) {
       {/* HEADER                                                            */}
       {/* ================================================================== */}
       <div style={{ marginBottom: 'var(--space-lg)' }}>
-        <h1 style={{
-          fontSize: '1.75rem',
-          fontWeight: '700',
-          color: 'var(--text-primary)',
-          marginBottom: '4px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px'
-        }}>
-          <CheckSquare size={28} style={{ color: 'var(--sunbelt-orange)' }} />
-          {isDirectorView ? 'All Tasks' : 'My Tasks'}
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-          {isDirectorView ? 'Tasks across all projects' : 'Tasks from your assigned projects'}
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h1 style={{
+              fontSize: '1.75rem',
+              fontWeight: '700',
+              color: 'var(--text-primary)',
+              marginBottom: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <CheckSquare size={28} style={{ color: 'var(--sunbelt-orange)' }} />
+              {isDirectorView ? 'All Tasks' : 'My Tasks'}
+            </h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+              {isDirectorView ? 'Tasks across all projects' : 'Tasks from your assigned projects'}
+            </p>
+          </div>
+
+          {/* Include Backup Projects Toggle - only show for PM view */}
+          {!isDirectorView && onToggleBackupProjects && (
+            <button
+              onClick={() => onToggleBackupProjects(!includeBackupProjects)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 14px',
+                background: includeBackupProjects ? 'rgba(249, 115, 22, 0.1)' : 'var(--bg-secondary)',
+                border: `1px solid ${includeBackupProjects ? 'var(--sunbelt-orange)' : 'var(--border-color)'}`,
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+                color: includeBackupProjects ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+                fontSize: '0.8125rem',
+                fontWeight: '500',
+                transition: 'all 0.15s'
+              }}
+            >
+              {includeBackupProjects ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+              Include backup PM projects
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ================================================================== */}
