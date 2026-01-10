@@ -902,22 +902,40 @@ function AddTaskModal({
           <div style={styles.row}>
             {/* Workflow Station */}
             <div style={styles.formGroup}>
-              <label style={styles.label}>Workflow Station</label>
+              <label style={styles.label}>Link to Workflow Station</label>
               <select
                 name="workflow_station_key"
                 value={formData.workflow_station_key}
                 onChange={handleChange}
-                style={styles.select}
+                style={{ ...styles.select, fontSize: '0.875rem' }}
               >
-                <option value="">No station</option>
-                {workflowStations
-                  .filter(s => !s.parent_station_key)
-                  .map(s => (
-                    <option key={s.station_key} value={s.station_key}>
-                      Phase {s.phase}: {s.name}
-                    </option>
-                  ))}
+                <option value="">— None (standalone task) —</option>
+                {/* Group stations by phase */}
+                {[1, 2, 3, 4, 5, 6].map(phase => {
+                  const phaseStations = workflowStations.filter(s => s.phase === phase && !s.parent_station_key);
+                  if (phaseStations.length === 0) return null;
+                  const phaseNames = {
+                    1: 'Pre-Production',
+                    2: 'Production',
+                    3: 'QC & Shipping',
+                    4: 'Site Work',
+                    5: 'Installation',
+                    6: 'Closeout'
+                  };
+                  return (
+                    <optgroup key={phase} label={`━━ Phase ${phase}: ${phaseNames[phase] || 'Other'} ━━`}>
+                      {phaseStations.map(station => (
+                        <option key={station.station_key} value={station.station_key}>
+                          {station.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
               </select>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '4px', display: 'block' }}>
+                Link this task to a workflow station to track progress
+              </span>
             </div>
 
             {/* Assigned Court */}

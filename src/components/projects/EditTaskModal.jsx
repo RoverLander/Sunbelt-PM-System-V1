@@ -683,20 +683,41 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
           {/* ============================================================ */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)' }}>
             <div className="form-group">
-              <label className="form-label">Workflow Station</label>
+              <label className="form-label">Link to Workflow Station</label>
               <select
                 name="workflow_station_key"
                 value={formData.workflow_station_key}
                 onChange={handleChange}
                 className="form-input"
+                style={{ fontSize: '0.875rem' }}
               >
-                <option value="">No station</option>
-                {workflowStations.map(station => (
-                  <option key={station.station_key} value={station.station_key}>
-                    Phase {station.phase}: {station.name}
-                  </option>
-                ))}
+                <option value="">— None (standalone task) —</option>
+                {/* Group stations by phase */}
+                {[1, 2, 3, 4, 5, 6].map(phase => {
+                  const phaseStations = workflowStations.filter(s => s.phase === phase);
+                  if (phaseStations.length === 0) return null;
+                  const phaseNames = {
+                    1: 'Pre-Production',
+                    2: 'Production',
+                    3: 'QC & Shipping',
+                    4: 'Site Work',
+                    5: 'Installation',
+                    6: 'Closeout'
+                  };
+                  return (
+                    <optgroup key={phase} label={`━━ Phase ${phase}: ${phaseNames[phase] || 'Other'} ━━`}>
+                      {phaseStations.map(station => (
+                        <option key={station.station_key} value={station.station_key}>
+                          {station.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
               </select>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '4px', display: 'block' }}>
+                Link this task to a workflow station to track progress
+              </span>
             </div>
 
             <div className="form-group">
