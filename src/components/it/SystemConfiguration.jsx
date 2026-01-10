@@ -533,7 +533,6 @@ function SystemConfiguration() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '12px 0',
               background: config.features.maintenanceMode ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
               margin: '0 -20px',
               padding: '12px 20px',

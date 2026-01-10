@@ -52,14 +52,14 @@ const TOAST_DURATION = 3000;
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-function ITDashboard() {
+function ITDashboard({ initialTab }) {
   const { user } = useAuth();
 
   // ==========================================================================
   // STATE
   // ==========================================================================
   const [loading, setLoading] = useState(true);
-  const [activePanel, setActivePanel] = useState('overview'); // overview, users, health, audit, security, database, settings
+  const [activePanel, setActivePanel] = useState(initialTab || 'overview'); // overview, users, health, audit, security, database, settings
   const [toast, setToast] = useState(null);
 
   // Stats

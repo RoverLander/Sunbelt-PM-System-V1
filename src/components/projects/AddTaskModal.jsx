@@ -911,7 +911,7 @@ function AddTaskModal({
                   .filter(s => !s.parent_station_key)
                   .map(s => (
                     <option key={s.station_key} value={s.station_key}>
-                      {s.station_name}
+                      Phase {s.phase}: {s.name}
                     </option>
                   ))}
               </select>

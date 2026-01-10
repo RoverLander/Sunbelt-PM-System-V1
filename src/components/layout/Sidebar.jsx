@@ -973,7 +973,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
               zIndex: 200,
               overflow: 'hidden'
             }}>
-              {['pm', 'director', 'vp', 'it'].map(type => {
+              {['pm', 'director', 'vp', 'it', 'pc'].map(type => {
                 if (!canAccessDashboard(type)) return null;
                 const config = getDashboardConfig(type);
                 const Icon = config.icon;
