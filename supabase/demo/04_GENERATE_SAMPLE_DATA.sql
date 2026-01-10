@@ -233,15 +233,14 @@ BEGIN
 
     -- ======================================================================
     -- SUBMITTALS (2-3 per project)
-    -- Include: number, sent_to, is_external fields
+    -- Include: sent_to, is_external fields
     -- ======================================================================
 
     -- Submittal 1: HVAC Equipment
-    INSERT INTO submittals (project_id, submittal_number, number, title, description, status, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
+    INSERT INTO submittals (project_id, submittal_number, title, description, status, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
     VALUES (
       v_project.id,
       v_project.project_number || '-SUB-' || LPAD(v_submittal_num::TEXT, 3, '0'),
-      v_submittal_num,
       'HVAC Equipment Cutsheets',
       'Carrier 5-ton rooftop unit with economizer - Model 48TCDD06A2A5-0A0A0',
       CASE
@@ -260,11 +259,10 @@ BEGIN
     v_submittal_num := v_submittal_num + 1;
 
     -- Submittal 2: Electrical
-    INSERT INTO submittals (project_id, submittal_number, number, title, description, status, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
+    INSERT INTO submittals (project_id, submittal_number, title, description, status, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
     VALUES (
       v_project.id,
       v_project.project_number || '-SUB-' || LPAD(v_submittal_num::TEXT, 3, '0'),
-      v_submittal_num,
       'Main Electrical Panel',
       'Square D 200A main breaker panel with surge protection',
       CASE
@@ -283,11 +281,10 @@ BEGIN
 
     -- Submittal 3: Rejected for problem projects
     IF v_project.health_status = 'Critical' THEN
-      INSERT INTO submittals (project_id, submittal_number, number, title, description, status, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
+      INSERT INTO submittals (project_id, submittal_number, title, description, status, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
       VALUES (
         v_project.id,
         v_project.project_number || '-SUB-' || LPAD(v_submittal_num::TEXT, 3, '0'),
-        v_submittal_num,
         'Exterior Finish Materials',
         'Fiber cement siding and trim package - Hardie Board',
         'Rejected',
