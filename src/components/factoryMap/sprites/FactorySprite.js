@@ -213,7 +213,11 @@ export class FactorySprite extends PIXI.Container {
   onPointerTap(event) {
     // Pulse animation
     this.scale.set(1.2);
-    setTimeout(() => this.scale.set(1.1), 100);
+    this._pulseTimeout = setTimeout(() => {
+      if (!this.destroyed) {
+        this.scale.set(1.1);
+      }
+    }, 100);
 
     this.emit('factory:click', {
       factoryData: this.factoryData,
@@ -260,6 +264,17 @@ export class FactorySprite extends PIXI.Container {
 
   // Clean up
   destroy(options) {
+    // Clear any pending timeouts
+    if (this._pulseTimeout) {
+      clearTimeout(this._pulseTimeout);
+      this._pulseTimeout = null;
+    }
+
+    // Remove event listeners
+    this.off('pointerover');
+    this.off('pointerout');
+    this.off('pointertap');
+
     this.smokeParticles = [];
     super.destroy(options);
   }

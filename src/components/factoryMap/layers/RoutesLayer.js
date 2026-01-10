@@ -132,6 +132,9 @@ export class RoutesLayer extends PIXI.Container {
       const dy = points[i].y - points[i - 1].y;
       const segmentLength = Math.sqrt(dx * dx + dy * dy);
 
+      // Skip zero-length segments
+      if (segmentLength < 0.001) continue;
+
       let remaining = segmentLength;
       let startPoint = points[i - 1];
 

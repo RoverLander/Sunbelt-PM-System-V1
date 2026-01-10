@@ -143,6 +143,16 @@ export class JobSiteSprite extends PIXI.Container {
     this.status = newData.status || this.status;
     // Could rebuild marker if status changed
   }
+
+  // Clean up
+  destroy(options) {
+    // Remove event listeners
+    this.off('pointerover');
+    this.off('pointerout');
+    this.off('pointertap');
+
+    super.destroy(options);
+  }
 }
 
 export default JobSiteSprite;

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Activity, AlertCircle, CheckCircle, Clock, FileText, ClipboardList, TrendingUp, Users } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AlertCircle, CheckCircle, FileText, ClipboardList, Users } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 
@@ -18,6 +18,9 @@ const PMHealthPanel = ({ expanded = false, showTeam = false }) => {
   useEffect(() => {
     if (user?.id) {
       fetchUserData();
+    } else {
+      // No user logged in - stop loading
+      setLoading(false);
     }
   }, [user]);
 

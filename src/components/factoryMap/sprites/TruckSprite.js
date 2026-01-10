@@ -132,6 +132,12 @@ export class TruckSprite extends PIXI.Container {
   updatePosition(progress) {
     this.progress = Math.max(0, Math.min(1, progress));
 
+    // Safety check for route path data
+    if (!this.routePath || !this.routePath.from || !this.routePath.to || !this.routePath.controlPoint) {
+      console.warn('TruckSprite: Invalid routePath data');
+      return;
+    }
+
     const { from, to, controlPoint } = this.routePath;
     const t = this.progress;
 
@@ -200,6 +206,19 @@ export class TruckSprite extends PIXI.Container {
   // Check if delivery is complete
   isComplete() {
     return this.progress >= 1;
+  }
+
+  // Clean up
+  destroy(options) {
+    // Remove event listeners
+    this.off('pointerover');
+    this.off('pointerout');
+    this.off('pointertap');
+
+    // Clear dust particles
+    this.dustParticles = [];
+
+    super.destroy(options);
   }
 }
 
