@@ -59,6 +59,7 @@ import ProjectCalendarWeek from './ProjectCalendarWeek';
 
 // ✅ ADDED: Workflow imports
 import WorkflowTracker from './WorkflowTracker';
+import StationDetailModal from '../workflow/StationDetailModal';
 
 // ============================================================================
 // CONSTANTS
@@ -169,6 +170,10 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
   const [editTask, setEditTask] = useState(null);
   const [editRFI, setEditRFI] = useState(null);
   const [editSubmittal, setEditSubmittal] = useState(null);
+
+  // Workflow station modal
+  const [selectedStation, setSelectedStation] = useState(null);
+  const [prefilledStationKey, setPrefilledStationKey] = useState(null);
 
   // Kanban drag state
   const [draggedTask, setDraggedTask] = useState(null);
@@ -427,9 +432,15 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                   stations={workflowStations}
                   tasks={tasks}
                   projectStatuses={projectWorkflowStatus}
-                  onStationClick={(station, status, deadline) => {
-                    console.log('Station clicked:', station, status, deadline);
-                    // TODO: Open StationDetailModal when implemented
+                  onStationClick={(station, status, deadline, taskCount) => {
+                    // If no tasks linked, open add task modal with station pre-filled
+                    if (taskCount === 0) {
+                      setPrefilledStationKey(station.station_key);
+                      setShowAddTask(true);
+                    } else {
+                      // Open station detail modal to view/manage linked tasks
+                      setSelectedStation(station);
+                    }
                   }}
                 />
               )}
@@ -537,12 +548,17 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
 
       <AddTaskModal
         isOpen={showAddTask}
-        onClose={() => setShowAddTask(false)}
+        onClose={() => {
+          setShowAddTask(false);
+          setPrefilledStationKey(null);
+        }}
         projectId={project.id}
         projectName={project.name}
         projectNumber={project.project_number}
+        prefilledStationKey={prefilledStationKey}
         onSuccess={() => {
           setShowAddTask(false);
+          setPrefilledStationKey(null);
           fetchProjectData();
           showToast('Task created');
         }}
@@ -644,6 +660,24 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
           fetchProjectData();
           showToast('Milestone created');
         }}
+      />
+
+      {/* WORKFLOW STATION DETAIL MODAL */}
+      <StationDetailModal
+        isOpen={!!selectedStation}
+        onClose={() => setSelectedStation(null)}
+        project={project}
+        station={selectedStation}
+        onAddTask={(stationKey) => {
+          setSelectedStation(null);
+          setPrefilledStationKey(stationKey);
+          setShowAddTask(true);
+        }}
+        onTaskClick={(task) => {
+          setSelectedStation(null);
+          setEditTask(task);
+        }}
+        onRefresh={fetchProjectData}
       />
 
       {/* TOAST */}
