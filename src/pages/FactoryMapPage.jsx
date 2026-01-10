@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Factory, Truck, Package, TrendingUp, Search, Filter, X, CheckCircle } from 'lucide-react';
+import { Factory, Truck, Package, TrendingUp, Search, Filter, X, CheckCircle, HelpCircle } from 'lucide-react';
 import PixiMapCanvas from '../components/factoryMap/PixiMapCanvas';
 import MapControls from '../components/factoryMap/MapControls';
 import MapTooltip from '../components/factoryMap/MapTooltip';
 import MiniMap from '../components/factoryMap/MiniMap';
 import PMHealthPanel from '../components/factoryMap/PMHealthPanel';
+import TutorialModal, { useTutorial } from '../components/factoryMap/TutorialModal';
 import { supabase } from '../utils/supabaseClient';
 import { FACTORY_LOCATIONS } from '../components/factoryMap/data/factoryLocations';
 
@@ -75,6 +76,9 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
 
   // Truck positions for minimap
   const [truckPositions, setTruckPositions] = useState([]);
+
+  // Tutorial state
+  const { showTutorial, closeTutorial, openTutorial } = useTutorial();
 
   // Fetch factory stats from database
   useEffect(() => {
@@ -402,6 +406,15 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
               label="Active Projects"
               color="blue"
             />
+
+            {/* Help button */}
+            <button
+              onClick={openTutorial}
+              className="p-2.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg border border-slate-600 hover:border-orange-500 transition-colors group"
+              title="Show tutorial"
+            >
+              <HelpCircle className="w-5 h-5 text-slate-400 group-hover:text-orange-400 transition-colors" />
+            </button>
           </div>
         </div>
       </div>
@@ -602,6 +615,9 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
           Click for details
         </div>
       </div>
+
+      {/* Tutorial Modal */}
+      <TutorialModal isOpen={showTutorial} onClose={closeTutorial} />
     </div>
   );
 };
