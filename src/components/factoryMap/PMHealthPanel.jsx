@@ -54,26 +54,34 @@ const PMHealthPanel = ({ expanded = false, showTeam = false }) => {
       weekFromNow.setDate(weekFromNow.getDate() + 7);
       const weekEnd = weekFromNow.toISOString().split('T')[0];
 
-      // Fetch user's tasks
-      const { data: tasks } = await supabase
+      // Define active statuses for filtering
+      const activeTaskStatuses = ['Not Started', 'In Progress', 'Awaiting Response'];
+      const activeRfiStatuses = ['Open', 'Pending Response'];
+      const activeSubmittalStatuses = ['Pending', 'Under Review'];
+
+      // Fetch user's tasks - filter client-side to avoid Supabase .in() issues
+      const { data: allTasks } = await supabase
         .from('tasks')
         .select('id, status, due_date')
-        .or(`assignee_id.eq.${currentUser.id},internal_owner_id.eq.${currentUser.id}`)
-        .in('status', ['Not Started', 'In Progress', 'Awaiting Response']);
+        .or(`assignee_id.eq.${currentUser.id},internal_owner_id.eq.${currentUser.id}`);
 
-      // Fetch user's RFIs
-      const { data: rfis } = await supabase
+      const tasks = (allTasks || []).filter(t => activeTaskStatuses.includes(t.status));
+
+      // Fetch user's RFIs - filter client-side
+      const { data: allRfis } = await supabase
         .from('rfis')
         .select('id, status, response_due_date')
-        .eq('assigned_to', currentUser.id)
-        .in('status', ['Open', 'Pending Response']);
+        .eq('assigned_to', currentUser.id);
 
-      // Fetch user's submittals
-      const { data: submittals } = await supabase
+      const rfis = (allRfis || []).filter(r => activeRfiStatuses.includes(r.status));
+
+      // Fetch user's submittals - filter client-side
+      const { data: allSubmittals } = await supabase
         .from('submittals')
         .select('id, status, due_date')
-        .eq('submitted_by', currentUser.id)
-        .in('status', ['Pending', 'Under Review']);
+        .eq('submitted_by', currentUser.id);
+
+      const submittals = (allSubmittals || []).filter(s => activeSubmittalStatuses.includes(s.status));
 
       // Calculate health metrics
       const taskList = tasks || [];
@@ -122,31 +130,33 @@ const PMHealthPanel = ({ expanded = false, showTeam = false }) => {
 
   const fetchTeamHealth = async () => {
     try {
-      // Fetch all PMs
-      const { data: pms } = await supabase
+      // Fetch all PMs - filter client-side to avoid .in() issues
+      const { data: allUsers } = await supabase
         .from('users')
         .select('id, name, role, avatar_url')
-        .in('role', ['PM', 'Project Manager', 'Director'])
         .eq('is_active', true);
 
-      if (!pms) return;
+      const pmRoles = ['PM', 'Project Manager', 'Director'];
+      const pms = (allUsers || []).filter(u => pmRoles.includes(u.role));
+
+      if (!pms.length) return;
+
+      // Define active task statuses
+      const activeTaskStatuses = ['Not Started', 'In Progress', 'Awaiting Response'];
 
       // For each PM, calculate their health (simplified)
       const healthPromises = pms.map(async (pm) => {
         const today = new Date().toISOString().split('T')[0];
 
-        const { count: taskCount } = await supabase
+        // Fetch all tasks for this PM and filter client-side
+        const { data: pmTasks } = await supabase
           .from('tasks')
-          .select('id', { count: 'exact', head: true })
-          .or(`assignee_id.eq.${pm.id},internal_owner_id.eq.${pm.id}`)
-          .in('status', ['Not Started', 'In Progress', 'Awaiting Response']);
+          .select('id, status, due_date')
+          .or(`assignee_id.eq.${pm.id},internal_owner_id.eq.${pm.id}`);
 
-        const { count: overdueCount } = await supabase
-          .from('tasks')
-          .select('id', { count: 'exact', head: true })
-          .or(`assignee_id.eq.${pm.id},internal_owner_id.eq.${pm.id}`)
-          .lt('due_date', today)
-          .in('status', ['Not Started', 'In Progress', 'Awaiting Response']);
+        const activeTasks = (pmTasks || []).filter(t => activeTaskStatuses.includes(t.status));
+        const taskCount = activeTasks.length;
+        const overdueCount = activeTasks.filter(t => t.due_date && t.due_date < today).length;
 
         const health = calculateHealth({
           activeTasks: taskCount || 0,
