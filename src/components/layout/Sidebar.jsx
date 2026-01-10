@@ -212,18 +212,11 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
       const today = new Date().toISOString().split('T')[0];
 
-      // Fetch projects where user is owner
-      const { data: ownerProjects } = await supabase
+      // Fetch projects where user is primary PM
+      const { data: primaryProjects } = await supabase
         .from('projects')
         .select('id')
         .eq('owner_id', currentUser.id)
-        .in('status', activeStatuses);
-
-      // Fetch projects where user is primary PM
-      const { data: primaryPmProjects } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('primary_pm_id', currentUser.id)
         .in('status', activeStatuses);
 
       // Fetch projects where user is backup PM (if toggle enabled)
@@ -239,8 +232,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
 
       // Combine and deduplicate
       const allProjectIds = [...new Set([
-        ...(ownerProjects || []).map(p => p.id),
-        ...(primaryPmProjects || []).map(p => p.id),
+        ...(primaryProjects || []).map(p => p.id),
         ...backupProjects.map(p => p.id)
       ])];
 
@@ -348,7 +340,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       // Fetch users
       const { data: users } = await supabase.from('users').select('id, is_active');
       const userList = users || [];
-      const activeUsers = userList.filter(u => u.is_active === true).length;
+      const activeUsers = userList.filter(u => u.is_active !== false).length;
 
       // Fetch project count
       const { count: projectCount } = await supabase
@@ -981,7 +973,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
               zIndex: 200,
               overflow: 'hidden'
             }}>
-              {['pm', 'director', 'vp', 'it', 'pc'].map(type => {
+              {['pm', 'director', 'vp', 'it'].map(type => {
                 if (!canAccessDashboard(type)) return null;
                 const config = getDashboardConfig(type);
                 const Icon = config.icon;
@@ -1101,7 +1093,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
             fontWeight: '600',
             fontSize: '0.75rem'
           }}>
-            {currentUser?.name?.split(' ').filter(n => n).map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
+            {currentUser?.name?.split(' ').map(n => n[0]).join('').slice(0, 2) || '?'}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
