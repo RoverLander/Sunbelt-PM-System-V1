@@ -574,7 +574,7 @@ function PCDashboard({ onNavigateToProject }) {
             margin: 0,
             display: 'flex',
             alignItems: 'center',
-            gap: '12px'
+            gap: '10px'
           }}>
             <Factory size={28} style={{ color: 'var(--sunbelt-orange)' }} />
             Project Coordinator Dashboard

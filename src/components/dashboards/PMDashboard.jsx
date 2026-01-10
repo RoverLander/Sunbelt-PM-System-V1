@@ -736,7 +736,7 @@ function PMDashboard({ onNavigateToProject }) {
           
           {overdueItems.length === 0 ? (
             <p style={{ color: 'var(--text-tertiary)', fontSize: '0.8125rem', margin: 0 }}>
-              No overdue items 🎉
+              No overdue items
             </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
