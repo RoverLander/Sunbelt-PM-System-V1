@@ -229,12 +229,11 @@ function WarningEmailModal({
         .insert({
           project_id: project?.id,
           email_type: emailType,
-          recipient_email: recipientEmail,
-          recipient_name: recipientName,
-          station_key: station?.station_key || null,
-          task_id: task?.id || null,
+          sent_to_emails: [recipientEmail],
+          email_subject: `Warning: ${station?.name || task?.title || 'Action Required'}`,
+          email_body: additionalNotes || null,
           sent_by: user?.id,
-          notes: additionalNotes,
+          status: 'Sent',
         });
 
       if (logError) {
