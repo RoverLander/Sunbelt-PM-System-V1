@@ -166,7 +166,11 @@ function FloorPlanUploadModal({ isOpen, onClose, projectId, projectNumber, onSuc
           name: `Page ${i + 1}`
         }));
 
-        await supabase.from('floor_plan_pages').insert(pages);
+        const { error: pagesError } = await supabase.from('floor_plan_pages').insert(pages);
+        if (pagesError) {
+          console.error('Error creating floor plan pages:', pagesError);
+          // Floor plan created but pages failed - still report success but log error
+        }
       }
 
       onSuccess && onSuccess(data);

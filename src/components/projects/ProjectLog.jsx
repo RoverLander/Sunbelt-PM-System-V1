@@ -284,7 +284,7 @@ function ProjectLog({ projectId, onUpdate }) {
 
   // Group by date
   const groupedLogs = filteredLogs.reduce((groups, log) => {
-    const date = log.log_date || log.created_at?.split('T')[0];
+    const date = log.log_date || log.created_at?.split('T')[0] || 'Unknown';
     if (!groups[date]) groups[date] = [];
     groups[date].push(log);
     return groups;

@@ -70,14 +70,16 @@ function ColorSelectionFormBuilder({
   // Form state
   const [formData, setFormData] = useState({
     category: '',
-    custom_category: '',
+    item_name: '',
     color_name: '',
     color_code: '',
     manufacturer: '',
-    product_line: '',
+    cutsheet_url: '',
+    cutsheet_name: '',
+    is_non_stock: false,
+    non_stock_verified: false,
+    non_stock_lead_time: '',
     status: 'Pending',
-    submitted_date: '',
-    confirmed_date: '',
     notes: '',
   });
 
@@ -121,14 +123,16 @@ function ColorSelectionFormBuilder({
   const resetForm = () => {
     setFormData({
       category: '',
-      custom_category: '',
+      item_name: '',
       color_name: '',
       color_code: '',
       manufacturer: '',
-      product_line: '',
+      cutsheet_url: '',
+      cutsheet_name: '',
+      is_non_stock: false,
+      non_stock_verified: false,
+      non_stock_lead_time: '',
       status: 'Pending',
-      submitted_date: '',
-      confirmed_date: '',
       notes: '',
     });
     setEditingSelection(null);
@@ -136,21 +140,26 @@ function ColorSelectionFormBuilder({
   };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
   };
 
   const handleEditSelection = (selection) => {
     setFormData({
       category: selection.category || '',
-      custom_category: selection.custom_category || '',
+      item_name: selection.item_name || '',
       color_name: selection.color_name || '',
       color_code: selection.color_code || '',
       manufacturer: selection.manufacturer || '',
-      product_line: selection.product_line || '',
+      cutsheet_url: selection.cutsheet_url || '',
+      cutsheet_name: selection.cutsheet_name || '',
+      is_non_stock: selection.is_non_stock || false,
+      non_stock_verified: selection.non_stock_verified || false,
+      non_stock_lead_time: selection.non_stock_lead_time || '',
       status: selection.status || 'Pending',
-      submitted_date: selection.submitted_date || '',
-      confirmed_date: selection.confirmed_date || '',
       notes: selection.notes || '',
     });
     setEditingSelection(selection);
@@ -168,8 +177,8 @@ function ColorSelectionFormBuilder({
   };
 
   const handleSaveSelection = async () => {
-    if (!formData.category) {
-      setError('Category is required');
+    if (!formData.category || !formData.item_name.trim()) {
+      setError('Category and Item Name are required');
       return;
     }
 
@@ -180,14 +189,16 @@ function ColorSelectionFormBuilder({
       const selectionData = {
         project_id: project?.id,
         category: formData.category,
-        custom_category: formData.category === 'other' ? formData.custom_category.trim() : null,
+        item_name: formData.item_name.trim(),
         color_name: formData.color_name.trim() || null,
         color_code: formData.color_code.trim() || null,
         manufacturer: formData.manufacturer.trim() || null,
-        product_line: formData.product_line.trim() || null,
+        cutsheet_url: formData.cutsheet_url.trim() || null,
+        cutsheet_name: formData.cutsheet_name.trim() || null,
+        is_non_stock: formData.is_non_stock || false,
+        non_stock_verified: formData.non_stock_verified || false,
+        non_stock_lead_time: formData.non_stock_lead_time.trim() || null,
         status: formData.status,
-        submitted_date: formData.submitted_date || null,
-        confirmed_date: formData.confirmed_date || null,
         notes: formData.notes.trim() || null,
       };
 
@@ -214,10 +225,7 @@ function ColorSelectionFormBuilder({
         // Insert new
         const { error: insertError } = await supabase
           .from('color_selections')
-          .insert({
-            ...selectionData,
-            created_by: user?.id,
-          });
+          .insert(selectionData);
 
         if (insertError) throw insertError;
       }
@@ -271,13 +279,6 @@ function ColorSelectionFormBuilder({
         status: newStatus,
         updated_at: new Date().toISOString(),
       };
-
-      if (newStatus === 'Submitted' && !selections.find(s => s.id === selectionId)?.submitted_date) {
-        updateData.submitted_date = new Date().toISOString().split('T')[0];
-      }
-      if (newStatus === 'Confirmed' && !selections.find(s => s.id === selectionId)?.confirmed_date) {
-        updateData.confirmed_date = new Date().toISOString().split('T')[0];
-      }
 
       const { error: updateError } = await supabase
         .from('color_selections')

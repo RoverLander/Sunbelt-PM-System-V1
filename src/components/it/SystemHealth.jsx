@@ -220,7 +220,7 @@ function SystemHealth({ showToast }) {
         .from('tasks')
         .select('*', { count: 'exact', head: true })
         .lt('due_date', today)
-        .not('status', 'in', '("Completed","Cancelled")');
+        .not('status', 'in', '(Completed,Cancelled)');
 
       if (overdueTaskCount > 0) {
         issues.push({
@@ -234,7 +234,7 @@ function SystemHealth({ showToast }) {
         .from('rfis')
         .select('*', { count: 'exact', head: true })
         .lt('due_date', today)
-        .not('status', 'in', '("Closed","Answered")');
+        .not('status', 'in', '(Closed,Answered)');
 
       if (overdueRFICount > 0) {
         issues.push({

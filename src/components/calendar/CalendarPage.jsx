@@ -128,8 +128,8 @@ function CalendarPage() {
         setEditSubmittal(item.data);
         break;
       default:
-        // For project dates and milestones, we might want different behavior
-        console.log('Item clicked:', item);
+        // For project dates and milestones - no action needed currently
+        break;
     }
   };
 

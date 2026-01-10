@@ -736,7 +736,7 @@ function PMDashboard({ onNavigateToProject }) {
           
           {overdueItems.length === 0 ? (
             <p style={{ color: 'var(--text-tertiary)', fontSize: '0.8125rem', margin: 0 }}>
-              No overdue items 🎉
+              No overdue items
             </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -1056,7 +1056,7 @@ function PMDashboard({ onNavigateToProject }) {
                         </span>
                       </td>
                       <td style={{ padding: 'var(--space-md)', textAlign: 'right', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                        {formatDate(project.target_delivery_date || project.delivery_date)}
+                        {formatDate(project.target_online_date)}
                       </td>
                       <td style={{ padding: 'var(--space-md)', textAlign: 'right' }}>
                         <ChevronRight size={16} style={{ color: 'var(--text-tertiary)' }} />

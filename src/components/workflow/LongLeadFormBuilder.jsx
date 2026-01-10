@@ -57,15 +57,16 @@ function LongLeadFormBuilder({
   // Form state for adding/editing items
   const [formData, setFormData] = useState({
     item_name: '',
-    description: '',
     manufacturer: '',
     model_number: '',
-    supplier: '',
+    quantity: 1,
     lead_time_weeks: '',
-    order_date: '',
-    expected_delivery: '',
-    actual_delivery: '',
+    has_cutsheet: false,
+    cutsheet_url: '',
+    cutsheet_name: '',
     status: 'Pending',
+    submitted_date: '',
+    signoff_date: '',
     notes: '',
   });
 
@@ -109,15 +110,16 @@ function LongLeadFormBuilder({
   const resetForm = () => {
     setFormData({
       item_name: '',
-      description: '',
       manufacturer: '',
       model_number: '',
-      supplier: '',
+      quantity: 1,
       lead_time_weeks: '',
-      order_date: '',
-      expected_delivery: '',
-      actual_delivery: '',
+      has_cutsheet: false,
+      cutsheet_url: '',
+      cutsheet_name: '',
       status: 'Pending',
+      submitted_date: '',
+      signoff_date: '',
       notes: '',
     });
     setEditingItem(null);
@@ -125,36 +127,26 @@ function LongLeadFormBuilder({
   };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => {
-      const updated = { ...prev, [name]: value };
-
-      // Auto-calculate expected delivery when order date and lead time change
-      if ((name === 'order_date' || name === 'lead_time_weeks') &&
-          updated.order_date && updated.lead_time_weeks) {
-        const orderDate = new Date(updated.order_date);
-        const leadWeeks = parseInt(updated.lead_time_weeks) || 0;
-        const expectedDate = new Date(orderDate);
-        expectedDate.setDate(expectedDate.getDate() + (leadWeeks * 7));
-        updated.expected_delivery = expectedDate.toISOString().split('T')[0];
-      }
-
-      return updated;
-    });
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
   };
 
   const handleEditItem = (item) => {
     setFormData({
       item_name: item.item_name || '',
-      description: item.description || '',
       manufacturer: item.manufacturer || '',
       model_number: item.model_number || '',
-      supplier: item.supplier || '',
+      quantity: item.quantity || 1,
       lead_time_weeks: item.lead_time_weeks || '',
-      order_date: item.order_date || '',
-      expected_delivery: item.expected_delivery || '',
-      actual_delivery: item.actual_delivery || '',
+      has_cutsheet: item.has_cutsheet || false,
+      cutsheet_url: item.cutsheet_url || '',
+      cutsheet_name: item.cutsheet_name || '',
       status: item.status || 'Pending',
+      submitted_date: item.submitted_date || '',
+      signoff_date: item.signoff_date || '',
       notes: item.notes || '',
     });
     setEditingItem(item);
@@ -184,15 +176,16 @@ function LongLeadFormBuilder({
       const itemData = {
         project_id: project?.id,
         item_name: formData.item_name.trim(),
-        description: formData.description.trim() || null,
         manufacturer: formData.manufacturer.trim() || null,
         model_number: formData.model_number.trim() || null,
-        supplier: formData.supplier.trim() || null,
+        quantity: parseInt(formData.quantity) || 1,
         lead_time_weeks: parseInt(formData.lead_time_weeks) || null,
-        order_date: formData.order_date || null,
-        expected_delivery: formData.expected_delivery || null,
-        actual_delivery: formData.actual_delivery || null,
+        has_cutsheet: formData.has_cutsheet || false,
+        cutsheet_url: formData.cutsheet_url.trim() || null,
+        cutsheet_name: formData.cutsheet_name.trim() || null,
         status: formData.status,
+        submitted_date: formData.submitted_date || null,
+        signoff_date: formData.signoff_date || null,
         notes: formData.notes.trim() || null,
       };
 
@@ -211,10 +204,7 @@ function LongLeadFormBuilder({
         // Insert new
         const { error: insertError } = await supabase
           .from('long_lead_items')
-          .insert({
-            ...itemData,
-            created_by: user?.id,
-          });
+          .insert(itemData);
 
         if (insertError) throw insertError;
       }
@@ -267,11 +257,15 @@ function LongLeadFormBuilder({
   };
 
   const isOverdue = (item) => {
-    if (!item.expected_delivery || item.status === 'Delivered') return false;
-    const expected = new Date(item.expected_delivery);
+    // Item is overdue if submitted but not signed off after reasonable time based on lead time
+    if (!item.submitted_date || item.status === 'Delivered' || item.signoff_date) return false;
+    if (!item.lead_time_weeks) return false;
+    const submitted = new Date(item.submitted_date);
+    const expectedDate = new Date(submitted);
+    expectedDate.setDate(expectedDate.getDate() + (item.lead_time_weeks * 7));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return expected < today;
+    return expectedDate < today;
   };
 
   // ==========================================================================
@@ -459,14 +453,15 @@ function LongLeadFormBuilder({
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Supplier</label>
+                  <label className="form-label">Quantity</label>
                   <input
-                    type="text"
-                    name="supplier"
-                    value={formData.supplier}
+                    type="number"
+                    name="quantity"
+                    value={formData.quantity}
                     onChange={handleChange}
                     className="form-input"
-                    placeholder="Supplier name"
+                    min="1"
+                    placeholder="1"
                   />
                 </div>
 
@@ -484,39 +479,67 @@ function LongLeadFormBuilder({
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Order Date</label>
+                  <label className="form-label">Submitted Date</label>
                   <input
                     type="date"
-                    name="order_date"
-                    value={formData.order_date}
+                    name="submitted_date"
+                    value={formData.submitted_date}
                     onChange={handleChange}
                     className="form-input"
                   />
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Expected Delivery</label>
+                  <label className="form-label">Sign-off Date</label>
                   <input
                     type="date"
-                    name="expected_delivery"
-                    value={formData.expected_delivery}
+                    name="signoff_date"
+                    value={formData.signoff_date}
                     onChange={handleChange}
                     className="form-input"
                   />
                 </div>
 
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Description</label>
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    className="form-input"
-                    rows="2"
-                    style={{ resize: 'vertical' }}
-                    placeholder="Additional details about this item..."
-                  />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      name="has_cutsheet"
+                      checked={formData.has_cutsheet}
+                      onChange={handleChange}
+                      style={{ width: '16px', height: '16px' }}
+                    />
+                    <span className="form-label" style={{ margin: 0 }}>Has Cutsheet</span>
+                  </label>
                 </div>
+
+                {formData.has_cutsheet && (
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Cutsheet Name</label>
+                      <input
+                        type="text"
+                        name="cutsheet_name"
+                        value={formData.cutsheet_name}
+                        onChange={handleChange}
+                        className="form-input"
+                        placeholder="Cutsheet document name"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Cutsheet URL</label>
+                      <input
+                        type="text"
+                        name="cutsheet_url"
+                        value={formData.cutsheet_url}
+                        onChange={handleChange}
+                        className="form-input"
+                        placeholder="https://..."
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label className="form-label">Notes</label>
@@ -633,12 +656,10 @@ function LongLeadFormBuilder({
                               <span style={{ color: 'var(--text-secondary)' }}>{item.lead_time_weeks} weeks</span>
                             </div>
                           )}
-                          {item.expected_delivery && (
+                          {item.quantity > 1 && (
                             <div>
-                              <span style={{ color: 'var(--text-tertiary)' }}>Expected: </span>
-                              <span style={{ color: overdue ? 'var(--danger)' : 'var(--text-secondary)' }}>
-                                {new Date(item.expected_delivery).toLocaleDateString()}
-                              </span>
+                              <span style={{ color: 'var(--text-tertiary)' }}>Qty: </span>
+                              <span style={{ color: 'var(--text-secondary)' }}>{item.quantity}</span>
                             </div>
                           )}
                         </div>

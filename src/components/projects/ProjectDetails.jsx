@@ -435,7 +435,6 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                   tasks={tasks}
                   projectStatuses={projectWorkflowStatus}
                   onStationClick={(station, status, deadline) => {
-                    console.log('Station clicked:', station, status, deadline);
                     // TODO: Open StationDetailModal when implemented
                   }}
                 />
