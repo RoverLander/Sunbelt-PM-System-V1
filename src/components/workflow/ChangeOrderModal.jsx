@@ -42,12 +42,12 @@ function ChangeOrderModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
-    change_order_number: '',
-    change_type: 'General',
+    co_number: '',
+    co_type: 'General',
     status: 'Draft',
-    description: '',
-    reason: '',
-    submitted_date: '',
+    notes: '',
+    date: new Date().toISOString().split('T')[0],
+    sent_date: '',
     signed_date: '',
     implemented_date: '',
     total_amount: 0,
@@ -64,12 +64,12 @@ function ChangeOrderModal({
       if (changeOrder) {
         // Edit mode - populate form with existing data
         setFormData({
-          change_order_number: changeOrder.change_order_number || '',
-          change_type: changeOrder.change_type || 'General',
+          co_number: changeOrder.co_number || '',
+          co_type: changeOrder.co_type || 'General',
           status: changeOrder.status || 'Draft',
-          description: changeOrder.description || '',
-          reason: changeOrder.reason || '',
-          submitted_date: changeOrder.submitted_date || '',
+          notes: changeOrder.notes || '',
+          date: changeOrder.date || new Date().toISOString().split('T')[0],
+          sent_date: changeOrder.sent_date || '',
           signed_date: changeOrder.signed_date || '',
           implemented_date: changeOrder.implemented_date || '',
           total_amount: changeOrder.total_amount || 0,
@@ -91,26 +91,24 @@ function ChangeOrderModal({
     try {
       const { data, error } = await supabase
         .from('change_orders')
-        .select('change_order_number')
+        .select('co_number')
         .eq('project_id', project?.id)
-        .order('created_at', { ascending: false })
+        .order('co_number', { ascending: false })
         .limit(1);
 
       if (error) throw error;
 
       let nextNum = 1;
-      if (data && data.length > 0) {
-        const lastNum = parseInt(data[0].change_order_number.replace(/\D/g, '')) || 0;
-        nextNum = lastNum + 1;
+      if (data && data.length > 0 && data[0].co_number) {
+        nextNum = data[0].co_number + 1;
       }
 
-      const coNumber = `CO-${String(nextNum).padStart(3, '0')}`;
-      setNextCONumber(coNumber);
-      setFormData(prev => ({ ...prev, change_order_number: coNumber }));
+      setNextCONumber(nextNum);
+      setFormData(prev => ({ ...prev, co_number: nextNum }));
     } catch (err) {
       console.error('Error generating CO number:', err);
-      setNextCONumber('CO-001');
-      setFormData(prev => ({ ...prev, change_order_number: 'CO-001' }));
+      setNextCONumber(1);
+      setFormData(prev => ({ ...prev, co_number: 1 }));
     }
   };
 
@@ -120,7 +118,7 @@ function ChangeOrderModal({
         .from('change_order_items')
         .select('*')
         .eq('change_order_id', changeOrderId)
-        .order('display_order', { ascending: true });
+        .order('sort_order', { ascending: true });
 
       if (error) throw error;
       setLineItems(data || []);
@@ -132,12 +130,12 @@ function ChangeOrderModal({
 
   const resetForm = () => {
     setFormData({
-      change_order_number: '',
-      change_type: 'General',
+      co_number: '',
+      co_type: 'General',
       status: 'Draft',
-      description: '',
-      reason: '',
-      submitted_date: '',
+      notes: '',
+      date: new Date().toISOString().split('T')[0],
+      sent_date: '',
       signed_date: '',
       implemented_date: '',
       total_amount: 0,
@@ -156,10 +154,8 @@ function ChangeOrderModal({
       {
         id: `temp-${Date.now()}`,
         description: '',
-        quantity: 1,
-        unit_price: 0,
-        total_price: 0,
-        display_order: prev.length,
+        price: 0,
+        sort_order: prev.length,
         isNew: true,
       },
     ]);
@@ -169,14 +165,6 @@ function ChangeOrderModal({
     setLineItems(prev => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
-
-      // Recalculate total price
-      if (field === 'quantity' || field === 'unit_price') {
-        const qty = field === 'quantity' ? value : updated[index].quantity;
-        const price = field === 'unit_price' ? value : updated[index].unit_price;
-        updated[index].total_price = (parseFloat(qty) || 0) * (parseFloat(price) || 0);
-      }
-
       return updated;
     });
   };
@@ -187,7 +175,7 @@ function ChangeOrderModal({
 
   // Calculate total from line items
   const calculateTotal = () => {
-    return lineItems.reduce((sum, item) => sum + (parseFloat(item.total_price) || 0), 0);
+    return lineItems.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
   };
 
   // ==========================================================================
@@ -208,12 +196,12 @@ function ChangeOrderModal({
       const totalAmount = calculateTotal();
       const coData = {
         project_id: project?.id,
-        change_order_number: formData.change_order_number,
-        change_type: formData.change_type,
+        co_number: parseInt(formData.co_number) || 1,
+        co_type: formData.co_type,
         status: formData.status,
-        description: formData.description.trim() || null,
-        reason: formData.reason.trim() || null,
-        submitted_date: formData.submitted_date || null,
+        date: formData.date || new Date().toISOString().split('T')[0],
+        notes: formData.notes?.trim() || null,
+        sent_date: formData.sent_date || null,
         signed_date: formData.signed_date || null,
         implemented_date: formData.implemented_date || null,
         total_amount: totalAmount,
@@ -257,10 +245,8 @@ function ChangeOrderModal({
         const itemsToInsert = lineItems.map((item, index) => ({
           change_order_id: changeOrderId,
           description: item.description,
-          quantity: parseFloat(item.quantity) || 1,
-          unit_price: parseFloat(item.unit_price) || 0,
-          total_price: parseFloat(item.total_price) || 0,
-          display_order: index,
+          price: parseFloat(item.price) || 0,
+          sort_order: index,
         }));
 
         const { error: itemsError } = await supabase
@@ -290,10 +276,10 @@ function ChangeOrderModal({
         project_number: project?.project_number,
       },
       changeOrder: {
-        change_order_number: formData.change_order_number,
-        change_type: formData.change_type,
+        co_number: formData.co_number,
+        co_type: formData.co_type,
         status: formData.status,
-        description: formData.description,
+        notes: formData.notes,
         amount: calculateTotal(),
       },
       type: formData.status === 'Signed' ? 'signed' : formData.status === 'Sent' ? 'reminder' : 'initial',
@@ -424,21 +410,22 @@ function ChangeOrderModal({
             <div className="form-group">
               <label className="form-label">CO Number *</label>
               <input
-                type="text"
-                name="change_order_number"
-                value={formData.change_order_number}
+                type="number"
+                name="co_number"
+                value={formData.co_number}
                 onChange={handleChange}
                 required
                 className="form-input"
-                placeholder="CO-001"
+                placeholder="1"
+                min="1"
               />
             </div>
 
             <div className="form-group">
               <label className="form-label">Type</label>
               <select
-                name="change_type"
-                value={formData.change_type}
+                name="co_type"
+                value={formData.co_type}
                 onChange={handleChange}
                 className="form-input"
               >
@@ -464,47 +451,43 @@ function ChangeOrderModal({
           </div>
 
           {/* ============================================================ */}
-          {/* DESCRIPTION                                                  */}
+          {/* NOTES                                                        */}
           {/* ============================================================ */}
           <div className="form-group">
-            <label className="form-label">Description</label>
+            <label className="form-label">Notes</label>
             <textarea
-              name="description"
-              value={formData.description}
+              name="notes"
+              value={formData.notes}
               onChange={handleChange}
               className="form-input"
               rows="3"
               style={{ resize: 'vertical', minHeight: '80px' }}
-              placeholder="Describe the change order..."
-            />
-          </div>
-
-          {/* ============================================================ */}
-          {/* REASON                                                       */}
-          {/* ============================================================ */}
-          <div className="form-group">
-            <label className="form-label">Reason for Change</label>
-            <textarea
-              name="reason"
-              value={formData.reason}
-              onChange={handleChange}
-              className="form-input"
-              rows="2"
-              style={{ resize: 'vertical', minHeight: '60px' }}
-              placeholder="Why is this change needed?"
+              placeholder="Change order details and notes..."
             />
           </div>
 
           {/* ============================================================ */}
           {/* DATES                                                        */}
           {/* ============================================================ */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-lg)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 'var(--space-lg)' }}>
             <div className="form-group">
-              <label className="form-label">Submitted Date</label>
+              <label className="form-label">Date *</label>
               <input
                 type="date"
-                name="submitted_date"
-                value={formData.submitted_date}
+                name="date"
+                value={formData.date}
+                onChange={handleChange}
+                required
+                className="form-input"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Sent Date</label>
+              <input
+                type="date"
+                name="sent_date"
+                value={formData.sent_date}
                 onChange={handleChange}
                 className="form-input"
               />
@@ -575,9 +558,7 @@ function ChangeOrderModal({
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
                       <th style={{ textAlign: 'left', padding: '8px 4px', color: 'var(--text-secondary)', fontWeight: '600' }}>Description</th>
-                      <th style={{ textAlign: 'center', padding: '8px 4px', color: 'var(--text-secondary)', fontWeight: '600', width: '80px' }}>Qty</th>
-                      <th style={{ textAlign: 'right', padding: '8px 4px', color: 'var(--text-secondary)', fontWeight: '600', width: '120px' }}>Unit Price</th>
-                      <th style={{ textAlign: 'right', padding: '8px 4px', color: 'var(--text-secondary)', fontWeight: '600', width: '120px' }}>Total</th>
+                      <th style={{ textAlign: 'right', padding: '8px 4px', color: 'var(--text-secondary)', fontWeight: '600', width: '150px' }}>Price</th>
                       <th style={{ width: '40px' }}></th>
                     </tr>
                   </thead>
@@ -598,26 +579,12 @@ function ChangeOrderModal({
                           <input
                             type="number"
                             min="0"
-                            step="1"
-                            value={item.quantity}
-                            onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
-                            className="form-input"
-                            style={{ padding: '6px 8px', fontSize: '0.875rem', textAlign: 'center' }}
-                          />
-                        </td>
-                        <td style={{ padding: '8px 4px' }}>
-                          <input
-                            type="number"
-                            min="0"
                             step="0.01"
-                            value={item.unit_price}
-                            onChange={(e) => updateLineItem(index, 'unit_price', e.target.value)}
+                            value={item.price}
+                            onChange={(e) => updateLineItem(index, 'price', e.target.value)}
                             className="form-input"
                             style={{ padding: '6px 8px', fontSize: '0.875rem', textAlign: 'right' }}
                           />
-                        </td>
-                        <td style={{ padding: '8px 4px', textAlign: 'right', fontWeight: '600', color: 'var(--text-primary)' }}>
-                          ${(parseFloat(item.total_price) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </td>
                         <td style={{ padding: '8px 4px' }}>
                           <button
