@@ -37,8 +37,7 @@ import {
   Flag,
   Map,
   GripVertical,
-  GitGraph,
-  BookOpen
+  GitGraph
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -61,12 +60,6 @@ import ProjectCalendarWeek from './ProjectCalendarWeek';
 // ✅ ADDED: Workflow imports
 import WorkflowTracker from './WorkflowTracker';
 
-// ✅ ADDED: Files tab
-import ProjectFiles from './ProjectFiles';
-
-// ✅ ADDED: Project Log tab
-import ProjectLog from './ProjectLog';
-
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -79,7 +72,6 @@ const TABS = [
   { id: 'rfis', label: 'RFIs', icon: MessageSquare },
   { id: 'submittals', label: 'Submittals', icon: ClipboardList },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
-  { id: 'log', label: 'Log', icon: BookOpen },
   { id: 'files', label: 'Files', icon: FolderOpen },
   { id: 'floorplan', label: 'Floorplan', icon: Map },
 ];
@@ -435,6 +427,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                   tasks={tasks}
                   projectStatuses={projectWorkflowStatus}
                   onStationClick={(station, status, deadline) => {
+                    console.log('Station clicked:', station, status, deadline);
                     // TODO: Open StationDetailModal when implemented
                   }}
                 />
@@ -488,20 +481,9 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                 />
               )}
 
-              {/* LOG TAB */}
-              {activeTab === 'log' && (
-                <ProjectLog
-                  projectId={project.id}
-                  onUpdate={fetchProjectData}
-                />
-              )}
-
               {/* FILES TAB */}
               {activeTab === 'files' && (
-                <ProjectFiles
-                  projectId={project.id}
-                  onUpdate={fetchProjectData}
-                />
+                <PlaceholderTab icon={FolderOpen} message="File management coming soon" />
               )}
 
               {/* FLOORPLAN TAB */}
@@ -810,8 +792,7 @@ function SearchInput({ value, onChange, placeholder }) {
 // TASKS TAB
 // ============================================================================
 function TasksTab({ tasks, allTasks, search, setSearch, statusFilter, setStatusFilter, view, setView, onAdd, onEdit, onDragStart, onDragOver, onDrop, draggedTask }) {
-  // Use the task statuses from TASK_STATUS_OPTIONS (excluding 'All')
-  const kanbanStatuses = TASK_STATUS_OPTIONS.filter(s => s !== 'All');
+  kanbanStatuses = ['Not Started', 'In Progress', 'Awaiting Response', 'Completed'];
 
   return (
     <div>
