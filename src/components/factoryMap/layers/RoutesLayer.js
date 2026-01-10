@@ -241,7 +241,8 @@ export class RoutesLayer extends PIXI.Container {
   // Clear all route highlights
   clearHighlights() {
     this.routes.forEach(route => {
-      route.graphics.alpha = route.originalAlpha || 1;
+      // Use nullish coalescing to preserve alpha of 0 if that was the original value
+      route.graphics.alpha = route.originalAlpha ?? 1;
       route.graphics.scale.set(1);
       route.highlighted = false;
     });

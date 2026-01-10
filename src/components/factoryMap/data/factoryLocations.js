@@ -219,14 +219,38 @@ export const getPixelPosition = (factoryCode, mapWidth, mapHeight) => {
   };
 };
 
-// Get state pixel position
-export const getStatePixelPosition = (stateCode, mapWidth, mapHeight) => {
+// Simple hash function for deterministic jitter
+const hashCode = (str) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return hash;
+};
+
+// Seeded pseudo-random number generator
+const seededRandom = (seed) => {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+};
+
+// Get state pixel position with optional seed for consistent positioning
+export const getStatePixelPosition = (stateCode, mapWidth, mapHeight, seed = null) => {
   const coords = STATE_COORDINATES[stateCode];
   if (!coords) return null;
 
-  // Add slight randomization to prevent overlap
-  const jitterX = (Math.random() - 0.5) * 3;
-  const jitterY = (Math.random() - 0.5) * 3;
+  // Use deterministic jitter based on seed (e.g., project ID) for consistency
+  // This ensures the same project always appears in the same position
+  let jitterX = 0;
+  let jitterY = 0;
+
+  if (seed !== null) {
+    const hash = hashCode(String(seed) + stateCode);
+    jitterX = (seededRandom(hash) - 0.5) * 3;
+    jitterY = (seededRandom(hash + 1) - 0.5) * 3;
+  }
 
   return {
     x: ((coords.x + jitterX) / 100) * mapWidth,

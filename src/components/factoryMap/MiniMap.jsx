@@ -68,19 +68,21 @@ const MiniMap = ({ viewport, onNavigate, truckPositions = [] }) => {
             </circle>
           ))}
 
-          {/* Truck dots (animated) */}
-          {truckPositions.map((truck) => (
-            <circle
-              key={truck.id}
-              cx={(truck.x / MAP_WIDTH) * 100}
-              cy={(truck.y / MAP_HEIGHT) * 100}
-              r="1.5"
-              fill="#fbbf24"
-              className="animate-pulse"
-            >
-              <title>{truck.data?.projectName || 'Delivery'}</title>
-            </circle>
-          ))}
+          {/* Truck dots (animated) - filter out invalid positions */}
+          {truckPositions
+            .filter(truck => Number.isFinite(truck.x) && Number.isFinite(truck.y))
+            .map((truck) => (
+              <circle
+                key={truck.id}
+                cx={(truck.x / MAP_WIDTH) * 100}
+                cy={(truck.y / MAP_HEIGHT) * 100}
+                r="1.5"
+                fill="#fbbf24"
+                className="animate-pulse"
+              >
+                <title>{truck.data?.projectName || 'Delivery'}</title>
+              </circle>
+            ))}
 
           {/* Current viewport rectangle */}
           <rect
