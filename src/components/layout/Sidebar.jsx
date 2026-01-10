@@ -218,42 +218,46 @@ function Sidebar({
 
     try {
       const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
+      const activeTaskStatuses = ['Not Started', 'In Progress', 'Awaiting Response'];
       const today = new Date().toISOString().split('T')[0];
 
-      // Fetch projects where user is primary PM
-      const { data: primaryProjects } = await supabase
+      // Fetch projects where user is primary PM - filter client-side
+      const { data: primaryProjectsRaw } = await supabase
         .from('projects')
-        .select('id')
-        .eq('owner_id', currentUser.id)
-        .in('status', activeStatuses);
+        .select('id, status')
+        .eq('owner_id', currentUser.id);
+
+      const primaryProjects = (primaryProjectsRaw || []).filter(p => activeStatuses.includes(p.status));
 
       // Fetch projects where user is backup PM (if toggle enabled)
       let backupProjects = [];
       if (includeSecondary) {
-        const { data: backup } = await supabase
+        const { data: backupRaw } = await supabase
           .from('projects')
-          .select('id')
-          .eq('backup_pm_id', currentUser.id)
-          .in('status', activeStatuses);
-        backupProjects = backup || [];
+          .select('id, status')
+          .eq('backup_pm_id', currentUser.id);
+        backupProjects = (backupRaw || []).filter(p => activeStatuses.includes(p.status));
       }
 
       // Combine and deduplicate
       const allProjectIds = [...new Set([
-        ...(primaryProjects || []).map(p => p.id),
+        ...primaryProjects.map(p => p.id),
         ...backupProjects.map(p => p.id)
       ])];
 
       setActiveProjects(allProjectIds.length);
 
-      // Fetch tasks assigned to user
-      const { data: tasksData } = await supabase
-        .from('tasks')
-        .select('id, status, due_date')
-        .or(`assignee_id.eq.${currentUser.id},internal_owner_id.eq.${currentUser.id}`)
-        .in('status', ['Not Started', 'In Progress', 'Awaiting Response']);
+      // Fetch tasks - use separate queries to avoid .or() issues
+      const [assignedTasksRes, ownedTasksRes] = await Promise.all([
+        supabase.from('tasks').select('id, status, due_date').eq('assignee_id', currentUser.id),
+        supabase.from('tasks').select('id, status, due_date').eq('internal_owner_id', currentUser.id)
+      ]);
 
-      const openTasks = tasksData || [];
+      // Combine and deduplicate, then filter by status
+      const taskMap = new Map();
+      [...(assignedTasksRes.data || []), ...(ownedTasksRes.data || [])].forEach(t => taskMap.set(t.id, t));
+      const openTasks = Array.from(taskMap.values()).filter(t => activeTaskStatuses.includes(t.status));
+
       setMyTasks(openTasks.length);
 
       const overdue = openTasks.filter(t => t.due_date && t.due_date < today).length;
@@ -267,15 +271,15 @@ function Sidebar({
   const fetchDirectorStats = async () => {
     try {
       const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
+      const activeTaskStatuses = ['Not Started', 'In Progress', 'Awaiting Response'];
       const today = new Date().toISOString().split('T')[0];
 
-      // Fetch all active projects
-      const { data: projects } = await supabase
+      // Fetch all projects and filter client-side
+      const { data: allProjects } = await supabase
         .from('projects')
-        .select('id, status, health_status')
-        .in('status', activeStatuses);
+        .select('id, status, health_status');
 
-      const projectList = projects || [];
+      const projectList = (allProjects || []).filter(p => activeStatuses.includes(p.status));
       const total = projectList.length;
 
       // Calculate health breakdown
@@ -283,12 +287,13 @@ function Sidebar({
       const atRisk = projectList.filter(p => p.health_status === 'At Risk').length;
       const critical = projectList.filter(p => p.health_status === 'Critical').length;
 
-      // Fetch overdue tasks
-      const { count: overdueCount } = await supabase
+      // Fetch tasks and filter client-side
+      const { data: allTasks } = await supabase
         .from('tasks')
-        .select('id', { count: 'exact', head: true })
-        .lt('due_date', today)
-        .in('status', ['Not Started', 'In Progress', 'Awaiting Response']);
+        .select('id, status, due_date')
+        .lt('due_date', today);
+
+      const overdueCount = (allTasks || []).filter(t => activeTaskStatuses.includes(t.status)).length;
 
       // Fetch team members
       const { count: teamCount } = await supabase
@@ -301,7 +306,7 @@ function Sidebar({
         onTrack,
         atRisk,
         critical,
-        totalOverdue: overdueCount || 0,
+        totalOverdue: overdueCount,
         teamMembers: teamCount || 0
       });
 
@@ -314,11 +319,12 @@ function Sidebar({
     try {
       const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
 
-      // Fetch projects with contract values
-      const { data: projects } = await supabase
+      // Fetch projects with contract values - filter client-side
+      const { data: allProjects } = await supabase
         .from('projects')
-        .select('id, contract_value, status')
-        .in('status', activeStatuses);
+        .select('id, contract_value, status');
+
+      const projects = (allProjects || []).filter(p => activeStatuses.includes(p.status));
 
       const projectList = projects || [];
       const totalValue = projectList.reduce((sum, p) => sum + (p.contract_value || 0), 0);
@@ -372,6 +378,7 @@ function Sidebar({
 
     try {
       const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
+      const activeTaskStatuses = ['Not Started', 'In Progress', 'Awaiting Response'];
       const today = new Date().toISOString().split('T')[0];
       const weekFromNow = new Date();
       weekFromNow.setDate(weekFromNow.getDate() + 7);
@@ -384,42 +391,42 @@ function Sidebar({
         .eq('id', user.id)
         .single();
 
-      // Fetch factory projects
-      let projectQuery = supabase
+      // Fetch all projects and filter client-side
+      const { data: allProjects } = await supabase
         .from('projects')
-        .select('id')
-        .in('status', activeStatuses);
+        .select('id, status, factory_id, factory_code');
 
+      // Filter by status and factory
+      let projects = (allProjects || []).filter(p => activeStatuses.includes(p.status));
       if (userData?.factory_id) {
-        projectQuery = projectQuery.eq('factory_id', userData.factory_id);
+        projects = projects.filter(p => p.factory_id === userData.factory_id);
       } else if (userData?.factory_code) {
-        projectQuery = projectQuery.eq('factory_code', userData.factory_code);
+        projects = projects.filter(p => p.factory_code === userData.factory_code);
       }
 
-      const { data: projects } = await projectQuery;
-      const projectIds = (projects || []).map(p => p.id);
+      const projectIds = projects.map(p => p.id);
+
+      // Fetch all tasks and filter client-side
+      const { data: allTasks } = await supabase
+        .from('tasks')
+        .select('id, project_id, status, due_date');
+
+      const factoryTasks = (allTasks || []).filter(t =>
+        projectIds.includes(t.project_id) && activeTaskStatuses.includes(t.status)
+      );
 
       // Count overdue tasks
-      const { count: overdueCount } = await supabase
-        .from('tasks')
-        .select('id', { count: 'exact', head: true })
-        .in('project_id', projectIds)
-        .lt('due_date', today)
-        .in('status', ['Not Started', 'In Progress', 'Awaiting Response']);
+      const overdueCount = factoryTasks.filter(t => t.due_date && t.due_date < today).length;
 
       // Count due this week
-      const { count: weekCount } = await supabase
-        .from('tasks')
-        .select('id', { count: 'exact', head: true })
-        .in('project_id', projectIds)
-        .gte('due_date', today)
-        .lte('due_date', weekEndDate)
-        .in('status', ['Not Started', 'In Progress', 'Awaiting Response']);
+      const weekCount = factoryTasks.filter(t =>
+        t.due_date && t.due_date >= today && t.due_date <= weekEndDate
+      ).length;
 
       setPCStats({
         factoryProjects: projectIds.length,
-        overdueItems: overdueCount || 0,
-        dueThisWeek: weekCount || 0,
+        overdueItems: overdueCount,
+        dueThisWeek: weekCount,
         warningsSent: 0 // Would need warning_emails_log table
       });
 
