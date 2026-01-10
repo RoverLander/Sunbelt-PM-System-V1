@@ -55,7 +55,7 @@ import {
   Factory,
   Clock,
   Mail,
-  Map
+  Map as MapIcon
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
