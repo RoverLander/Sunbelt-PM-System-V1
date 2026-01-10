@@ -98,20 +98,34 @@ function AppContent() {
         if (role === 'vp') {
           setDashboardType('vp');
           localStorage.setItem('dashboardType', 'vp');
-        } else {
-          // Check for stale localStorage that doesn't match role
+        }
+        // Force Director/Admin to director dashboard by default
+        else if (role === 'director' || role === 'admin') {
           const storedType = localStorage.getItem('dashboardType');
-          
-          // If PM user has director/vp stored, reset to pm
-          if (role === 'pm' && storedType !== 'pm') {
-            setDashboardType('pm');
-            localStorage.setItem('dashboardType', 'pm');
-          }
-          // If Director/Admin with no stored preference, set to director
-          else if ((role === 'director' || role === 'admin') && !storedType) {
+          // Directors can switch between director/pm, but default to director
+          if (!storedType || storedType === 'vp' || storedType === 'it') {
             setDashboardType('director');
             localStorage.setItem('dashboardType', 'director');
           }
+        }
+        // Force IT to IT dashboard
+        else if (role === 'it') {
+          setDashboardType('it');
+          localStorage.setItem('dashboardType', 'it');
+        }
+        // PM users default to pm dashboard
+        else if (role === 'pm' || role === 'project manager') {
+          const storedType = localStorage.getItem('dashboardType');
+          // PMs can only access pm dashboard
+          if (storedType !== 'pm') {
+            setDashboardType('pm');
+            localStorage.setItem('dashboardType', 'pm');
+          }
+        }
+        // PC (Project Coordinator) users
+        else if (role === 'pc' || role === 'project coordinator') {
+          setDashboardType('pc');
+          localStorage.setItem('dashboardType', 'pc');
         }
       }
     } catch (error) {
