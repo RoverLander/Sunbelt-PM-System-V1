@@ -110,15 +110,15 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
 
   // Update truck positions for minimap periodically
   useEffect(() => {
-    if (!canvasRef.current?.getTruckPositions) return;
-
+    // Poll truck positions - check canvas availability inside interval
+    // since canvas may not be ready on initial mount
     const interval = setInterval(() => {
-      const positions = canvasRef.current.getTruckPositions?.() || [];
+      const positions = canvasRef.current?.getTruckPositions?.() || [];
       setTruckPositions(positions);
     }, 500);
 
     return () => clearInterval(interval);
-  }, [isLoading]);
+  }, []); // Empty dependency - runs once on mount
 
   // Search projects
   useEffect(() => {

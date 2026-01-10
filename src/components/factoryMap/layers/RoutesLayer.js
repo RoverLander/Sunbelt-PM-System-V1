@@ -222,16 +222,19 @@ export class RoutesLayer extends PIXI.Container {
   // Highlight routes from a specific factory
   highlightByFactory(factoryCode) {
     this.routes.forEach(route => {
+      // Only save original alpha on first highlight to prevent overwriting with dimmed value
+      if (route.originalAlpha === undefined) {
+        route.originalAlpha = route.graphics.alpha;
+      }
+
       const routeFactory = route.factoryCode;
       if (routeFactory === factoryCode) {
         // Highlight this route
-        route.originalAlpha = route.graphics.alpha;
         route.graphics.alpha = 1;
         route.graphics.scale.set(1.2);
         route.highlighted = true;
       } else {
         // Dim other routes
-        route.originalAlpha = route.graphics.alpha;
         route.graphics.alpha = 0.2;
         route.highlighted = false;
       }
@@ -245,6 +248,8 @@ export class RoutesLayer extends PIXI.Container {
       route.graphics.alpha = route.originalAlpha ?? 1;
       route.graphics.scale.set(1);
       route.highlighted = false;
+      // Clear saved alpha so it can be set fresh on next highlight
+      route.originalAlpha = undefined;
     });
   }
 

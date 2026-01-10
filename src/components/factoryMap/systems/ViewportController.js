@@ -78,6 +78,15 @@ export class ViewportController {
   }
 
   destroy() {
+    // Guard against calling destroy before full initialization
+    if (!this.app?.canvas) {
+      // Still clean up keyboard listener and animations
+      window.removeEventListener('keydown', this.handleKeyDown);
+      if (this.momentumAnimationId) cancelAnimationFrame(this.momentumAnimationId);
+      if (this.panAnimationId) cancelAnimationFrame(this.panAnimationId);
+      return;
+    }
+
     const view = this.app.canvas;
 
     view.removeEventListener('wheel', this.handleWheel);
