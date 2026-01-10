@@ -222,17 +222,19 @@ const FactoryMapPage = ({ onNavigateToProject, onOpenFullscreen, isFullscreen = 
 
   const fetchProjectsAndDeliveries = async () => {
     try {
-      // Fetch projects with delivery locations
+      // Fetch all projects with delivery locations - filter client-side for better compatibility
       const { data: projectData, error } = await supabase
         .from('projects')
-        .select('id, name, factory, status, delivery_city, delivery_state, contract_value')
-        .not('delivery_state', 'is', null)
-        .in('status', ['In Progress', 'Shipping', 'Installation']);
+        .select('id, name, factory, status, delivery_city, delivery_state, contract_value');
 
       if (error) throw error;
       if (!isMountedRef.current) return; // Prevent state update if unmounted
 
-      const projectsList = projectData || [];
+      // Filter to active projects with delivery states client-side
+      const activeStatuses = ['In Progress', 'Shipping', 'Installation'];
+      const projectsList = (projectData || []).filter(p =>
+        p.delivery_state && activeStatuses.includes(p.status)
+      );
       setProjects(projectsList);
 
       // Create deliveries from shipping projects
