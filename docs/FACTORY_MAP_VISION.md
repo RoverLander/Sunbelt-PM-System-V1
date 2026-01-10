@@ -164,11 +164,449 @@ const FACTORY_LOCATIONS = {
 
 ---
 
+## 🔍 Zoom System & Map Scale
+
+### Map Dimensions
+- **Full map size:** 4000 x 2500 pixels (large canvas for detail)
+- **Viewport:** Fits container, scrollable/pannable
+- **Aspect ratio:** Roughly matches continental US (1.6:1)
+
+### Zoom Levels
+
+| Level | Scale | View | Detail |
+|-------|-------|------|--------|
+| 1 (Min) | 25% | Entire US visible | Factory dots, major highways |
+| 2 | 50% | Half country | Factory sprites (small), region colors |
+| 3 | 100% | Regional view | Full factory detail, terrain sprites |
+| 4 | 150% | State level | Individual trees, detailed terrain |
+| 5 (Max) | 200% | Local area | Full animation detail, road textures |
+
+### Zoom Controls
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  [−] ━━━━━━●━━━━━━━━ [+]    100%    [🏠 Reset] [📍 Find Factory]│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Pan/Navigation
+- **Mouse drag:** Click and drag to pan
+- **Scroll wheel:** Zoom in/out at cursor position
+- **Keyboard:** Arrow keys to pan, +/- to zoom
+- **Touch:** Pinch to zoom, drag to pan
+- **Mini-map:** Small overview in corner showing current viewport
+
+### Mini-Map Preview
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                                                                          │
+│                          [ MAIN MAP VIEW ]                               │
+│                                                                          │
+│                                                               ┌───────┐  │
+│                                                               │ ░░░░░ │  │
+│                                                               │ ░[█]░ │  │
+│                                                               │ ░░░░░ │  │
+│                                                               └───────┘  │
+│                                                                Mini-map  │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🌲 Terrain & Regional Features
+
+### US Geographic Regions
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│   ╔══════════════╗                           ╔═══════════════════╗      │
+│   ║   PACIFIC    ║                           ║    NORTHEAST      ║      │
+│   ║  NORTHWEST   ║     ╔══════════════╗      ║   Urban/Industrial║      │
+│   ║ 🌲🌧️⛰️🦌    ║     ║   NORTHERN   ║      ║   🏙️🍂🏭         ║      │
+│   ╚══════════════╝     ║   PLAINS     ║      ╚═══════════════════╝      │
+│                        ║  🌾🌻🚜🐄   ║                                  │
+│   ╔══════════════╗     ╚══════════════╝      ╔═══════════════════╗      │
+│   ║  CALIFORNIA  ║                           ║    MID-ATLANTIC   ║      │
+│   ║ 🌴☀️🏖️🎬    ║     ╔══════════════╗      ║   🌳🏛️🦌         ║      │
+│   ╚══════════════╝     ║   MIDWEST    ║      ╚═══════════════════╝      │
+│                        ║  🌽🏠🌾🐷   ║                                  │
+│   ╔══════════════╗     ╚══════════════╝      ╔═══════════════════╗      │
+│   ║  SOUTHWEST   ║                           ║    SOUTHEAST      ║      │
+│   ║ 🌵🏜️☀️🦎    ║     ╔══════════════╗      ║   🌳🍑🦀🌡️       ║      │
+│   ╚══════════════╝     ║    TEXAS     ║      ╚═══════════════════╝      │
+│                        ║  🤠🐄🛢️🌵   ║                                  │
+│                        ╚══════════════╝                                 │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Regional Color Palettes
+
+```javascript
+const REGION_PALETTES = {
+  pacificNorthwest: {
+    ground: ['#1a3d2e', '#2d5a3f', '#1f4a35'],  // Deep forest greens
+    accent: '#4a7c59',                           // Mossy green
+    water: '#1a3a4a',                            // Cool blue-gray
+    sky: '#5a7a8a'                               // Overcast
+  },
+  california: {
+    ground: ['#8b7355', '#a08060', '#c4a574'],  // Golden/tan
+    accent: '#d4a84b',                           // Sunshine gold
+    water: '#2a5a7a',                            // Pacific blue
+    sky: '#6a9fc9'                               // Clear blue
+  },
+  southwest: {
+    ground: ['#c4956a', '#d4a070', '#e4b585'],  // Desert sand/orange
+    accent: '#e07020',                           // Sunset orange
+    water: '#3a4a5a',                            // Sparse (dry)
+    sky: '#8ab4d4'                               // Bright blue
+  },
+  texas: {
+    ground: ['#8a7a55', '#9a8a60', '#aa9a70'],  // Dusty tan/brown
+    accent: '#6a8a5a',                           // Scrubland green
+    water: '#4a5a6a',                            // Rivers
+    sky: '#7aa4c4'                               // Big sky
+  },
+  midwest: {
+    ground: ['#5a7a45', '#6a8a50', '#7a9a5a'],  // Farm greens
+    accent: '#c4a040',                           // Wheat gold
+    water: '#3a5a7a',                            // Lakes/rivers
+    sky: '#8ab4d4'                               // Open sky
+  },
+  southeast: {
+    ground: ['#4a6a40', '#5a7a4a', '#6a8a55'],  // Lush greens
+    accent: '#3a8a6a',                           // Humid green
+    water: '#2a4a6a',                            // Atlantic
+    sky: '#7a9ab4'                               // Humid haze
+  },
+  northeast: {
+    ground: ['#4a5a45', '#5a6a50', '#6a7a5a'],  // Forest greens
+    accent: '#8a6a4a',                           // Fall foliage
+    water: '#2a4a5a',                            // Cool waters
+    sky: '#6a8a9a'                               // Urban haze
+  },
+  mountainWest: {
+    ground: ['#5a6a55', '#6a7a60', '#7a8a6a'],  // Alpine greens
+    accent: '#8a9aaa',                           // Rocky gray
+    water: '#3a5a7a',                            // Mountain lakes
+    sky: '#9ab4d4'                               // Clear altitude
+  }
+};
+```
+
+### Regional Sprite Catalog
+
+#### Pacific Northwest (WA, OR) - NWBS, BRIT
+```
+🌲 Evergreen Trees (Dense)     ⛰️ Mountain Ranges         🌧️ Rain Clouds
+     ▲                              ▲▲▲                      ░░░░░░
+    ▲▲▲                            ▲▲▲▲▲                    ░░░░░░░
+   ▲▲▲▲▲                          ▲▲▲▲▲▲▲                  ░░░░░░░░
+    ███                          ▓▓▓▓▓▓▓▓▓                    │││
+
+🦌 Deer (occasional)           ☕ Coffee Shop               🪵 Log Pile
+    ╱╲                           ┌─────┐                     ═══
+   ╱  ╲                          │CAFE │                    ═════
+   │  │                          └─────┘                   ═══════
+```
+
+#### California (CA) - MM, WM-WEST, PMI
+```
+🌴 Palm Trees                  🏖️ Beach/Coast              ☀️ Sun
+    ╲│╱                            ～～～                      ╲│╱
+     │                            ～～～～                    ──●──
+    ╱│╲                          ▒▒▒▒▒▒▒                     ╱│╲
+     │
+     │                          🎬 Hollywood Sign          🌊 Waves
+    ███                         ┌───────────┐               ～～～
+                                │HOLLYWOOD  │              ～～～～
+                                └───────────┘             ～～～～～
+```
+
+#### Southwest / Texas (AZ, NM, TX) - SSI, AMTEX
+```
+🌵 Saguaro Cactus              🏜️ Mesa/Butte              🦎 Lizard
+     │                            ▓▓▓▓▓                       ╱╲
+    ╱│╲                          ▓▓▓▓▓▓▓                     ╱──╲
+     │                          ▓▓▓▓▓▓▓▓▓                   ╱    ╲
+     │                         ▓▓▓▓▓▓▓▓▓▓▓
+    ╱│╲
+                               🛢️ Oil Derrick              🤠 Cowboy Hat
+🌾 Tumbleweed                      ▲                          ───
+   ○○○                            ╱╲                        ╱     ╲
+  ○○○○○                          ╱  ╲                      ╱       ╲
+   ○○○                          ╱    ╲
+                                │    │
+```
+
+#### Midwest (MO, OH, IN) - MRS, IND
+```
+🌽 Corn Field                  🚜 Tractor                  🐄 Cow
+   │││││                         ┌───┐                        ╱╲
+   │││││                        ┌┴───┴┐                     ╱    ╲
+   │││││                        │     │○○                   │    │
+  ▓▓▓▓▓▓▓                       └─────┘                     └────┘
+
+🌻 Sunflower                   🏠 Farmhouse                🌾 Wheat
+    ●●●                          ▲                          │││││
+   ●●●●●                        ╱ ╲                         │││││
+    │                          ╱   ╲                        ▓▓▓▓▓
+    │                         └─────┘
+```
+
+#### Southeast (GA, TN, NC) - SEMO, CB, WM-EAST
+```
+🌳 Oak/Pine Trees              🍑 Peach Tree               🦀 Crab
+    ●●●                           ●●                         ╱╲
+   ●●●●●                         ●●●                       ╱    ╲
+   ●●●●●                          │                       ╱  ╱╲  ╲
+    ███                          ███                      ────────
+
+🌡️ Humidity Haze              🎸 Guitar (Nashville)       🌳 Spanish Moss
+   ░░░░░░░                        │                          ●●●
+  ░░░░░░░░░                      ╱ ╲                       ●│││●
+ ░░░░░░░░░░░                    ╱   ╲                     │││││││
+                               └─────┘                      ███
+```
+
+#### Northeast (PA, MD) - MS, MG
+```
+🏙️ City Skyline               🍂 Fall Foliage             🏛️ Historical
+    ▓▓▓▓▓                         ●●●                        ═══
+   ▓▓▓▓▓▓▓                       ●●●●●                       │││
+  ▓▓▓▓▓▓▓▓▓                     ●●●●●●●                     ─────
+ ▓▓▓▓▓▓▓▓▓▓▓                      ███                      │     │
+
+🏭 Industrial                  🦌 White-tail Deer          🍁 Maple
+   ▓▓▓  ▓▓▓                        ╱╲                        ●●●
+   █████████                      ╱  ╲                      ●●●●●
+   │  │  │                        │  │                       ███
+```
+
+### Terrain Tile System (16x16 pixel tiles)
+
+```javascript
+const TERRAIN_TILES = {
+  // Base terrain
+  grass_light: 'tile_001',
+  grass_dark: 'tile_002',
+  dirt: 'tile_003',
+  sand: 'tile_004',
+  desert: 'tile_005',
+  snow: 'tile_006',
+  water_shallow: 'tile_007',
+  water_deep: 'tile_008',
+
+  // Roads
+  road_horizontal: 'tile_020',
+  road_vertical: 'tile_021',
+  road_intersection: 'tile_022',
+  highway_horizontal: 'tile_023',
+  highway_vertical: 'tile_024',
+
+  // Transitions (for smooth region blending)
+  grass_to_desert: 'tile_040',
+  grass_to_sand: 'tile_041',
+  land_to_water: 'tile_042',
+};
+
+const DECORATION_SPRITES = {
+  // Trees (multiple sizes)
+  tree_evergreen_sm: { w: 8, h: 12 },
+  tree_evergreen_md: { w: 12, h: 20 },
+  tree_evergreen_lg: { w: 16, h: 28 },
+  tree_palm_sm: { w: 8, h: 16 },
+  tree_palm_lg: { w: 12, h: 24 },
+  tree_oak_sm: { w: 12, h: 14 },
+  tree_oak_lg: { w: 18, h: 22 },
+  tree_pine_sm: { w: 10, h: 16 },
+  cactus_saguaro: { w: 8, h: 20 },
+  cactus_small: { w: 6, h: 8 },
+
+  // Terrain features
+  mountain_sm: { w: 32, h: 24 },
+  mountain_lg: { w: 64, h: 40 },
+  mesa: { w: 48, h: 28 },
+  rock_pile: { w: 12, h: 8 },
+
+  // Water features
+  lake: { w: 48, h: 32 },
+  river_segment: { w: 16, h: 64 },
+
+  // Regional decorations
+  farmhouse: { w: 24, h: 20 },
+  barn: { w: 28, h: 22 },
+  oil_derrick: { w: 16, h: 32 },
+  windmill: { w: 12, h: 28 },
+  city_building_sm: { w: 16, h: 24 },
+  city_building_lg: { w: 24, h: 40 },
+};
+```
+
+### Region Boundaries & Factory Placement
+
+```javascript
+const REGION_BOUNDARIES = {
+  pacificNorthwest: {
+    bounds: { x1: 0, y1: 0, x2: 20, y2: 30 },
+    factories: ['NWBS', 'BRIT'],
+    density: { trees: 'very_high', mountains: 'high', buildings: 'low' }
+  },
+  california: {
+    bounds: { x1: 0, y1: 30, x2: 15, y2: 65 },
+    factories: ['MM', 'WM-WEST', 'PMI'],
+    density: { trees: 'medium', palm_trees: 'high', urban: 'medium' }
+  },
+  southwest: {
+    bounds: { x1: 15, y1: 55, x2: 35, y2: 80 },
+    factories: [],
+    density: { cacti: 'high', mesas: 'medium', buildings: 'very_low' }
+  },
+  texas: {
+    bounds: { x1: 35, y1: 55, x2: 55, y2: 85 },
+    factories: ['SSI', 'AMTEX'],
+    density: { cacti: 'medium', oil_derricks: 'medium', ranches: 'medium' }
+  },
+  midwest: {
+    bounds: { x1: 45, y1: 35, x2: 70, y2: 55 },
+    factories: ['MRS', 'IND', 'CB'],
+    density: { farms: 'very_high', trees: 'medium', urban: 'low' }
+  },
+  southeast: {
+    bounds: { x1: 70, y1: 50, x2: 100, y2: 80 },
+    factories: ['SEMO'],
+    density: { trees: 'high', farms: 'medium', humidity_effects: true }
+  },
+  northeast: {
+    bounds: { x1: 70, y1: 25, x2: 100, y2: 50 },
+    factories: ['MS', 'MG', 'WM-EAST'],
+    density: { urban: 'high', trees: 'medium', industrial: 'high' }
+  }
+};
+```
+
+### Animated Environmental Elements
+
+#### Weather Effects (Subtle, Per-Region)
+```javascript
+const WEATHER_EFFECTS = {
+  pacificNorthwest: {
+    rain: { frequency: 0.3, particles: 50 },
+    clouds: { speed: 'slow', density: 'high' }
+  },
+  california: {
+    sun_rays: { frequency: 0.8, intensity: 'bright' },
+    haze: { frequency: 0.2, coastal: true }
+  },
+  southwest: {
+    heat_shimmer: { frequency: 0.9 },
+    dust_devils: { frequency: 0.1, size: 'small' }
+  },
+  texas: {
+    heat_shimmer: { frequency: 0.6 },
+    tumbleweeds: { frequency: 0.15, speed: 'medium' }
+  },
+  midwest: {
+    clouds: { speed: 'medium', density: 'low' },
+    wind: { grass_sway: true }
+  },
+  southeast: {
+    humidity: { haze_level: 0.3 },
+    fireflies: { night_only: true, frequency: 0.4 }
+  },
+  northeast: {
+    clouds: { speed: 'fast', density: 'medium' },
+    fall_leaves: { seasonal: true, frequency: 0.2 }
+  }
+};
+```
+
+#### Wildlife (Rare, Ambient)
+```javascript
+const WILDLIFE = {
+  deer: { regions: ['pacificNorthwest', 'northeast', 'midwest'], rarity: 0.05 },
+  coyote: { regions: ['southwest', 'texas'], rarity: 0.03 },
+  eagle: { regions: ['all'], rarity: 0.02, flight_path: true },
+  cattle: { regions: ['texas', 'midwest'], rarity: 0.15, herds: true },
+  seagulls: { regions: ['california'], rarity: 0.1, coastal: true }
+};
+```
+
+### Level of Detail (LOD) System
+
+```javascript
+const LOD_SETTINGS = {
+  zoom_25: {
+    // Zoomed way out - minimal detail
+    show_terrain_colors: true,
+    show_terrain_tiles: false,
+    show_decorations: false,
+    show_factories: 'dots',
+    show_roads: 'major_only',
+    show_trucks: 'dots',
+    show_weather: false,
+    show_wildlife: false
+  },
+  zoom_50: {
+    // Half zoom - region overview
+    show_terrain_colors: true,
+    show_terrain_tiles: false,
+    show_decorations: 'large_only',  // Mountains, mesas
+    show_factories: 'small_sprites',
+    show_roads: 'all',
+    show_trucks: 'small_sprites',
+    show_weather: 'subtle',
+    show_wildlife: false
+  },
+  zoom_100: {
+    // Default - balanced detail
+    show_terrain_colors: true,
+    show_terrain_tiles: true,
+    show_decorations: 'medium_and_large',
+    show_factories: 'full_sprites',
+    show_roads: 'all_with_texture',
+    show_trucks: 'full_sprites',
+    show_weather: true,
+    show_wildlife: 'rare'
+  },
+  zoom_150: {
+    // Zoomed in - high detail
+    show_terrain_colors: true,
+    show_terrain_tiles: true,
+    show_decorations: 'all',
+    show_factories: 'full_animated',
+    show_roads: 'all_with_texture',
+    show_trucks: 'full_animated',
+    show_weather: true,
+    show_wildlife: 'occasional'
+  },
+  zoom_200: {
+    // Max zoom - full detail
+    show_terrain_colors: true,
+    show_terrain_tiles: true,
+    show_decorations: 'all_with_shadows',
+    show_factories: 'full_animated_detailed',
+    show_roads: 'all_detailed',
+    show_trucks: 'full_animated_detailed',
+    show_weather: 'full',
+    show_wildlife: 'normal'
+  }
+};
+```
+
+---
+
 ## 🔧 Technical Architecture
 
-### Option A: CSS + SVG (Recommended for MVP)
-**Pros:** Simpler, performant, easier to maintain
-**Cons:** Limited pixel-perfect control
+### Revised Recommendation: Pixi.js (for full terrain system)
+
+Given the expanded scope with zoom, terrain, and regional sprites, **Pixi.js is now recommended** for the full implementation. However, we can still start with a simpler approach for MVP.
+
+### Option A: CSS + SVG (Simplified MVP Only)
+**Pros:** Simpler, faster to build initial version
+**Cons:** Won't scale well with terrain tiles and zoom levels
+**Best for:** Quick proof-of-concept with factory markers only
 
 ```
 Components:
@@ -183,13 +621,131 @@ Components:
 
 ### Option B: HTML5 Canvas
 **Pros:** Full pixel art control, game-like feel
-**Cons:** More complex, harder to integrate with React
+**Cons:** More complex, manual sprite management, no built-in optimization
+**Best for:** Mid-complexity with custom rendering needs
 
-### Option C: Pixi.js
-**Pros:** Professional 2D rendering, sprite sheets
-**Cons:** Additional dependency, steeper learning curve
+### Option C: Pixi.js ⭐ RECOMMENDED
+**Pros:** Professional 2D WebGL rendering, sprite sheets, built-in zoom/pan, excellent performance with thousands of sprites, particle systems for weather
+**Cons:** Additional dependency (~500KB), learning curve
+**Best for:** Full terrain system with LOD, animations, and zoom
 
-### Recommendation: **Option A for MVP**, upgrade to Canvas/Pixi if needed
+```
+Architecture with Pixi.js:
+├── FactoryMapPage.jsx           <- React container
+│   └── PixiMapCanvas.jsx        <- Pixi.js canvas wrapper
+│
+├── pixi/
+│   ├── MapApplication.js        <- Main Pixi app setup
+│   ├── layers/
+│   │   ├── TerrainLayer.js      <- Ground tiles by region
+│   │   ├── DecorationsLayer.js  <- Trees, rocks, buildings
+│   │   ├── RoadsLayer.js        <- Highways and routes
+│   │   ├── FactoriesLayer.js    <- Factory sprites
+│   │   ├── TrucksLayer.js       <- Animated delivery trucks
+│   │   ├── WeatherLayer.js      <- Rain, clouds, effects
+│   │   └── UILayer.js           <- Labels, tooltips
+│   │
+│   ├── sprites/
+│   │   ├── FactorySprite.js     <- Factory with smoke animation
+│   │   ├── TruckSprite.js       <- Truck with movement
+│   │   ├── TreeSprite.js        <- Various tree types
+│   │   └── ...
+│   │
+│   ├── systems/
+│   │   ├── ZoomController.js    <- Handle zoom levels & LOD
+│   │   ├── PanController.js     <- Mouse/touch panning
+│   │   ├── CullingSystem.js     <- Only render visible sprites
+│   │   └── LODManager.js        <- Level of detail switching
+│   │
+│   └── utils/
+│       ├── spritesheet.js       <- Load sprite atlases
+│       └── regionUtils.js       <- Region boundary checks
+│
+├── assets/
+│   ├── spritesheets/
+│   │   ├── terrain.json         <- Terrain tiles atlas
+│   │   ├── decorations.json     <- Trees, rocks, buildings
+│   │   ├── factories.json       <- Factory sprites
+│   │   ├── vehicles.json        <- Trucks, animations
+│   │   └── weather.json         <- Particles, effects
+│   └── images/
+│       └── (source PNGs)
+│
+└── components/
+    ├── MapControls.jsx          <- React zoom/filter controls
+    ├── MiniMap.jsx              <- Overview navigator
+    ├── FactoryTooltip.jsx       <- Hover info popups
+    └── PMStatusPanel.jsx        <- Character health sidebar
+```
+
+### Performance Considerations
+
+```javascript
+const PERFORMANCE_CONFIG = {
+  // Sprite culling - don't render off-screen sprites
+  culling: {
+    enabled: true,
+    margin: 100  // px buffer around viewport
+  },
+
+  // Object pooling - reuse sprite instances
+  pooling: {
+    trucks: 50,      // Max concurrent truck sprites
+    particles: 500,  // Weather/smoke particles
+    trees: 2000      // Decoration sprites
+  },
+
+  // Level of Detail thresholds
+  lod: {
+    disableAnimations: 0.25,  // At 25% zoom, no animations
+    simplifySprites: 0.5,     // At 50%, use simpler sprites
+    fullDetail: 1.0           // At 100%+, full quality
+  },
+
+  // Render optimization
+  render: {
+    antialias: false,         // Pixel art doesn't need it
+    resolution: window.devicePixelRatio,
+    backgroundColor: 0x0a0a14,
+    preserveDrawingBuffer: false
+  }
+};
+```
+
+### Sprite Sheet Organization
+
+```
+terrain_atlas.png (1024x1024)
+┌────┬────┬────┬────┬────┬────┬────┬────┐
+│g_lt│g_dk│dirt│sand│dsrt│snow│w_sh│w_dp│  <- Base terrain (16x16 each)
+├────┼────┼────┼────┼────┼────┼────┼────┤
+│r_h │r_v │r_x │hw_h│hw_v│    │    │    │  <- Roads
+├────┼────┼────┼────┼────┼────┼────┼────┤
+│g2d │g2s │l2w │    │    │    │    │    │  <- Transitions
+└────┴────┴────┴────┴────┴────┴────┴────┘
+
+decorations_atlas.png (2048x2048)
+┌─────────┬─────────┬─────────┬─────────┐
+│ Trees   │ Cacti   │Mountains│ Farms   │
+│ (all    │ (all    │ (sm/lg) │ (houses │
+│  sizes) │  sizes) │         │  barns) │
+├─────────┼─────────┼─────────┼─────────┤
+│ Urban   │ Texas   │ Coastal │ Weather │
+│ (bldgs, │ (oil,   │ (beach, │ (clouds │
+│  indust)│  ranch) │  waves) │  rain)  │
+└─────────┴─────────┴─────────┴─────────┘
+
+factories_atlas.png (512x512)
+┌──────────────┬──────────────┐
+│ Factory      │ Factory      │
+│ (idle)       │ (active)     │
+│ 3 sizes      │ 3 sizes      │
+├──────────────┼──────────────┤
+│ Smoke        │ Truck        │
+│ (4 frames)   │ (8 directions│
+│              │  + wheel anim)│
+└──────────────┴──────────────┘
+```
 
 ---
 
