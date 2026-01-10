@@ -110,7 +110,8 @@ export class TrucksLayer extends PIXI.Container {
   setPaused(paused) {
     this.trucks.forEach(truck => {
       // Use truck's original speed when resuming to preserve varying speeds
-      truck.speed = paused ? 0 : (truck.originalSpeed || 0.002);
+      // Use nullish coalescing to preserve originalSpeed if it's 0 (a valid value)
+      truck.speed = paused ? 0 : (truck.originalSpeed ?? 0.002);
     });
   }
 }
