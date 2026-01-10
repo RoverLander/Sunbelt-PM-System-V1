@@ -135,9 +135,6 @@ export const STATUS_CONFIG = {
   'Approved': { color: '#22C55E', bgColor: 'rgba(34, 197, 94, 0.1)', isComplete: true },
   'Approved as Noted': { color: '#06B6D4', bgColor: 'rgba(6, 182, 212, 0.1)', isComplete: true },
   'Rejected': { color: '#EF4444', bgColor: 'rgba(239, 68, 68, 0.1)', isComplete: false },
-  
-  // Milestone statuses
-  'In Progress': { color: '#F59E0B', bgColor: 'rgba(245, 158, 11, 0.1)', isComplete: false },
 };
 
 /**

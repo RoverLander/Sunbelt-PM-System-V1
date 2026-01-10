@@ -27,7 +27,7 @@ import SoutheastLogo from '../../assets/logos/Southeast-Logo-Final.png';
 import ProModLogo from '../../assets/logos/proMOD-NEW-400x349.jpg';
 import ProBoxLogo from '../../assets/logos/probox-NEW-400x349.jpg';
 import WhitleyLogo from '../../assets/logos/logo.png';
-import SunbeltLogo from '../../assets/logos/Sunbelt Logo.jpg';
+import SunbeltLogo from '../../assets/logos/Sunbelt-Logo.jpg';
 
 // Factory data with logos
 const FACTORIES = [
