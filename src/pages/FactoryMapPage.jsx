@@ -4,6 +4,7 @@ import PixiMapCanvas from '../components/factoryMap/PixiMapCanvas';
 import MapControls from '../components/factoryMap/MapControls';
 import MapTooltip from '../components/factoryMap/MapTooltip';
 import MiniMap from '../components/factoryMap/MiniMap';
+import PMHealthPanel from '../components/factoryMap/PMHealthPanel';
 import { supabase } from '../utils/supabaseClient';
 import { FACTORY_LOCATIONS } from '../components/factoryMap/data/factoryLocations';
 
@@ -34,6 +35,10 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
     totalProjects: 0
   });
 
+  // Projects and deliveries for routes/trucks
+  const [projects, setProjects] = useState([]);
+  const [deliveries, setDeliveries] = useState([]);
+
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
 
@@ -41,6 +46,7 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
   useEffect(() => {
     fetchFactoryStats();
     fetchMapStats();
+    fetchProjectsAndDeliveries();
   }, []);
 
   const fetchFactoryStats = async () => {
@@ -116,6 +122,39 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
     }
   };
 
+  const fetchProjectsAndDeliveries = async () => {
+    try {
+      // Fetch projects with delivery locations
+      const { data: projectData, error } = await supabase
+        .from('projects')
+        .select('id, name, factory, status, delivery_city, delivery_state, contract_value')
+        .not('delivery_state', 'is', null)
+        .in('status', ['In Progress', 'Shipping', 'Installation']);
+
+      if (error) throw error;
+
+      const projectsList = projectData || [];
+      setProjects(projectsList);
+
+      // Create deliveries from shipping projects
+      const deliveriesList = projectsList
+        .filter(p => p.status === 'Shipping')
+        .map(p => ({
+          id: p.id,
+          name: p.name,
+          factory: p.factory,
+          status: p.status,
+          delivery_city: p.delivery_city,
+          delivery_state: p.delivery_state,
+          delivery_progress: Math.random() * 0.8 + 0.1 // Simulated progress for now
+        }));
+
+      setDeliveries(deliveriesList);
+    } catch (err) {
+      console.error('Error fetching projects and deliveries:', err);
+    }
+  };
+
   // Handlers
   const handleZoomChange = useCallback((zoom) => {
     setCurrentZoom(zoom);
@@ -157,6 +196,48 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
     // TODO: Integrate with App.jsx navigation to filter projects by factory
     // onNavigateToProject could be extended to support factory filter
   }, []);
+
+  // Job site handlers
+  const handleJobSiteHover = useCallback((data) => {
+    setTooltip({
+      visible: true,
+      type: 'jobsite',
+      data: data,
+      position: { x: data.screenX, y: data.screenY }
+    });
+  }, []);
+
+  const handleJobSiteHoverEnd = useCallback(() => {
+    setTooltip(prev => ({ ...prev, visible: false }));
+  }, []);
+
+  const handleJobSiteClick = useCallback((data) => {
+    console.log('Job site clicked:', data);
+    if (data.projectId && onNavigateToProject) {
+      onNavigateToProject(data.projectId);
+    }
+  }, [onNavigateToProject]);
+
+  // Truck handlers
+  const handleTruckHover = useCallback((data) => {
+    setTooltip({
+      visible: true,
+      type: 'truck',
+      data: data,
+      position: { x: data.screenX, y: data.screenY }
+    });
+  }, []);
+
+  const handleTruckHoverEnd = useCallback(() => {
+    setTooltip(prev => ({ ...prev, visible: false }));
+  }, []);
+
+  const handleTruckClick = useCallback((data) => {
+    console.log('Truck clicked:', data);
+    if (data.projectId && onNavigateToProject) {
+      onNavigateToProject(data.projectId);
+    }
+  }, [onNavigateToProject]);
 
   const handleMiniMapNavigate = useCallback((x, y) => {
     // Pan to clicked position on mini-map
@@ -232,8 +313,21 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
             onFactoryHover={handleFactoryHover}
             onFactoryHoverEnd={handleFactoryHoverEnd}
             onFactoryClick={handleFactoryClick}
+            onJobSiteHover={handleJobSiteHover}
+            onJobSiteHoverEnd={handleJobSiteHoverEnd}
+            onJobSiteClick={handleJobSiteClick}
+            onTruckHover={handleTruckHover}
+            onTruckHoverEnd={handleTruckHoverEnd}
+            onTruckClick={handleTruckClick}
             factoryStats={factoryStats}
+            projects={projects}
+            deliveries={deliveries}
           />
+        </div>
+
+        {/* PM Health Panel - Left sidebar */}
+        <div className="absolute top-4 left-4 z-20 w-64">
+          <PMHealthPanel expanded={true} showTeam={false} />
         </div>
 
         {/* Map Controls */}
