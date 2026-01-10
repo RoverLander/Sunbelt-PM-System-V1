@@ -8,7 +8,7 @@ export class TrucksLayer extends PIXI.Container {
   constructor(mapDimensions) {
     super();
 
-    this.name = 'trucksLayer';
+    this.label = 'trucksLayer';
     this.mapWidth = mapDimensions.width;
     this.mapHeight = mapDimensions.height;
     this.trucks = new Map();

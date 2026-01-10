@@ -9,7 +9,7 @@ export class JobSitesLayer extends PIXI.Container {
   constructor(mapDimensions) {
     super();
 
-    this.name = 'jobSitesLayer';
+    this.label = 'jobSitesLayer';
     this.mapWidth = mapDimensions.width;
     this.mapHeight = mapDimensions.height;
     this.jobSites = new Map();

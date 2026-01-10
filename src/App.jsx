@@ -34,6 +34,7 @@ import TeamPage from './components/pages/TeamPage';
 import AnalyticsPage from './components/pages/AnalyticsPage';
 import ClientsPage from './components/pages/ClientsPage';
 import FactoryMapPage from './pages/FactoryMapPage';
+import FactoryMapFullscreen from './pages/FactoryMapFullscreen';
 
 // Project Details
 import ProjectDetails from './components/projects/ProjectDetails';
@@ -289,7 +290,12 @@ function AppContent() {
     }
 
     if (currentView === 'factory-map') {
-      return <FactoryMapPage />;
+      return (
+        <FactoryMapPage
+          onNavigateToProject={handleNavigateToProject}
+          onOpenFullscreen={() => setCurrentView('factory-map-fullscreen')}
+        />
+      );
     }
 
     // ========================================================================
@@ -425,6 +431,18 @@ function AppContent() {
         return <PMDashboard onNavigateToProject={handleNavigateToProject} />;
     }
   };
+
+  // ==========================================================================
+  // FULLSCREEN FACTORY MAP (no sidebar)
+  // ==========================================================================
+  if (currentView === 'factory-map-fullscreen') {
+    return (
+      <FactoryMapFullscreen
+        onBack={() => setCurrentView('factory-map')}
+        onNavigateToProject={handleNavigateToProject}
+      />
+    );
+  }
 
   // ==========================================================================
   // MAIN RENDER

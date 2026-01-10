@@ -89,7 +89,7 @@ const PixiMapCanvas = ({
 
       // Create main map container
       const mapContainer = new PIXI.Container();
-      mapContainer.name = 'mapContainer';
+      mapContainer.label = 'mapContainer';
       app.stage.addChild(mapContainer);
 
       // Initialize layers (order matters - bottom to top)

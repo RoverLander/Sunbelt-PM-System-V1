@@ -9,7 +9,7 @@ export class FactoriesLayer extends PIXI.Container {
   constructor(mapDimensions, options = {}) {
     super();
 
-    this.name = 'factoriesLayer';
+    this.label = 'factoriesLayer';
     this.mapWidth = mapDimensions.width;
     this.mapHeight = mapDimensions.height;
 

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Factory, Truck, Package, TrendingUp, Search, Filter, X, CheckCircle, HelpCircle } from 'lucide-react';
+import { Factory, Truck, Package, TrendingUp, Search, Filter, X, CheckCircle, HelpCircle, Maximize2 } from 'lucide-react';
 import PixiMapCanvas from '../components/factoryMap/PixiMapCanvas';
 import MapControls from '../components/factoryMap/MapControls';
 import MapTooltip from '../components/factoryMap/MapTooltip';
@@ -21,7 +21,7 @@ const getTimeOfDayTint = () => {
 /**
  * FactoryMapPage - Main page component for the interactive factory network map
  */
-const FactoryMapPage = ({ onNavigateToProject }) => {
+const FactoryMapPage = ({ onNavigateToProject, onOpenFullscreen, isFullscreen = false }) => {
   const canvasRef = useRef(null);
   const isMountedRef = useRef(true); // Track mount state for async operations
 
@@ -422,6 +422,17 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
               label="Active Projects"
               color="blue"
             />
+
+            {/* Fullscreen button - only show when not already fullscreen */}
+            {!isFullscreen && onOpenFullscreen && (
+              <button
+                onClick={onOpenFullscreen}
+                className="p-2.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg border border-slate-600 hover:border-orange-500 transition-colors group"
+                title="Open fullscreen (F11)"
+              >
+                <Maximize2 className="w-5 h-5 text-slate-400 group-hover:text-orange-400 transition-colors" />
+              </button>
+            )}
 
             {/* Help button */}
             <button

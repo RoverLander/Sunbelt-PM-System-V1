@@ -4,12 +4,13 @@ import { REGION_CONFIG } from '../data/factoryLocations';
 /**
  * USMapLayer - Renders the stylized US map background
  * Uses simplified polygon shapes with regional coloring
+ * Updated for PIXI v8 Graphics API
  */
 export class USMapLayer extends PIXI.Container {
   constructor(mapDimensions) {
     super();
 
-    this.name = 'usMapLayer';
+    this.label = 'usMapLayer';
     this.mapWidth = mapDimensions.width;
     this.mapHeight = mapDimensions.height;
 
@@ -23,9 +24,9 @@ export class USMapLayer extends PIXI.Container {
   createBackground() {
     // Ocean/background
     const bg = new PIXI.Graphics();
-    bg.beginFill(0x0d1929);
-    bg.drawRect(0, 0, this.mapWidth, this.mapHeight);
-    bg.endFill();
+    bg
+      .rect(0, 0, this.mapWidth, this.mapHeight)
+      .fill(0x0d1929);
     this.addChild(bg);
   }
 
@@ -90,7 +91,7 @@ export class USMapLayer extends PIXI.Container {
       { x: 5, y: 5 }
     ];
 
-    // Convert percentages to pixels
+    // Convert percentages to pixels - flat array for PIXI v8 poly()
     const points = outline.flatMap(p => [
       (p.x / 100) * this.mapWidth,
       (p.y / 100) * this.mapHeight
@@ -98,13 +99,10 @@ export class USMapLayer extends PIXI.Container {
 
     // Base land mass
     const land = new PIXI.Graphics();
-    land.beginFill(0x1a2a3a);
-    land.drawPolygon(points);
-    land.endFill();
-
-    // Border
-    land.lineStyle(2, 0x3a4a5a, 0.5);
-    land.drawPolygon(points);
+    land
+      .poly(points)
+      .fill(0x1a2a3a)
+      .stroke({ color: 0x3a4a5a, width: 2, alpha: 0.5 });
 
     this.addChild(land);
   }
@@ -127,9 +125,9 @@ export class USMapLayer extends PIXI.Container {
       const width = ((bounds.x2 - bounds.x1) / 100) * this.mapWidth;
       const height = ((bounds.y2 - bounds.y1) / 100) * this.mapHeight;
 
-      region.beginFill(colorHex, 0.3);
-      region.drawRoundedRect(x, y, width, height, 20);
-      region.endFill();
+      region
+        .roundRect(x, y, width, height, 20)
+        .fill({ color: colorHex, alpha: 0.3 });
 
       this.addChild(region);
     });
@@ -138,23 +136,26 @@ export class USMapLayer extends PIXI.Container {
   createCoastlines() {
     // Add subtle coastline details
     const coastline = new PIXI.Graphics();
-    coastline.lineStyle(1, 0x2a4a6a, 0.4);
 
     // West coast waves
     for (let y = 20; y < 70; y += 5) {
       const x = (3 / 100) * this.mapWidth;
       const yPos = (y / 100) * this.mapHeight;
-      coastline.moveTo(x - 10, yPos);
-      coastline.quadraticCurveTo(x - 5, yPos + 10, x - 10, yPos + 20);
+      coastline
+        .moveTo(x - 10, yPos)
+        .quadraticCurveTo(x - 5, yPos + 10, x - 10, yPos + 20);
     }
 
     // East coast waves
     for (let y = 30; y < 65; y += 5) {
       const x = (92 / 100) * this.mapWidth;
       const yPos = (y / 100) * this.mapHeight;
-      coastline.moveTo(x + 10, yPos);
-      coastline.quadraticCurveTo(x + 5, yPos + 10, x + 10, yPos + 20);
+      coastline
+        .moveTo(x + 10, yPos)
+        .quadraticCurveTo(x + 5, yPos + 10, x + 10, yPos + 20);
     }
+
+    coastline.stroke({ color: 0x2a4a6a, width: 1, alpha: 0.4 });
 
     this.addChild(coastline);
   }
@@ -162,7 +163,6 @@ export class USMapLayer extends PIXI.Container {
   createGrid() {
     // Subtle grid overlay for that retro map feel
     const grid = new PIXI.Graphics();
-    grid.lineStyle(1, 0x2a3a4a, 0.15);
 
     // Vertical lines
     for (let x = 0; x <= 100; x += 10) {
@@ -177,6 +177,8 @@ export class USMapLayer extends PIXI.Container {
       grid.moveTo(0, yPos);
       grid.lineTo(this.mapWidth, yPos);
     }
+
+    grid.stroke({ color: 0x2a3a4a, width: 1, alpha: 0.15 });
 
     this.addChild(grid);
   }

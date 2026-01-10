@@ -3,6 +3,7 @@ import * as PIXI from 'pixi.js';
 /**
  * TruckSprite - Animated delivery truck traveling along route
  * Follows bezier curve path with rotation and wheel animation
+ * Updated for PIXI v8 Graphics API
  */
 export class TruckSprite extends PIXI.Container {
   constructor(deliveryData, routePath, options = {}) {
@@ -27,27 +28,27 @@ export class TruckSprite extends PIXI.Container {
 
     // Trailer (tan/beige modular unit)
     const trailer = new PIXI.Graphics();
-    trailer.beginFill(0xd4a574);
-    trailer.drawRoundedRect(-28, -8, 24, 14, 2);
-    trailer.endFill();
+    trailer
+      .roundRect(-28, -8, 24, 14, 2)
+      .fill(0xd4a574);
 
     // Trailer details (windows)
-    trailer.beginFill(0x8b7355);
-    trailer.drawRect(-26, -6, 4, 4);
-    trailer.drawRect(-20, -6, 4, 4);
-    trailer.drawRect(-14, -6, 4, 4);
-    trailer.endFill();
+    trailer
+      .rect(-26, -6, 4, 4)
+      .rect(-20, -6, 4, 4)
+      .rect(-14, -6, 4, 4)
+      .fill(0x8b7355);
 
     // Cab (Sunbelt orange)
     const cab = new PIXI.Graphics();
-    cab.beginFill(0xf97316);
-    cab.drawRoundedRect(-4, -7, 12, 12, 3);
-    cab.endFill();
+    cab
+      .roundRect(-4, -7, 12, 12, 3)
+      .fill(0xf97316);
 
     // Cab window
-    cab.beginFill(0x87CEEB);
-    cab.drawRect(-2, -5, 6, 5);
-    cab.endFill();
+    cab
+      .rect(-2, -5, 6, 5)
+      .fill(0x87CEEB);
 
     // Wheels
     this.wheels = [];
@@ -55,14 +56,14 @@ export class TruckSprite extends PIXI.Container {
 
     wheelPositions.forEach(x => {
       const wheel = new PIXI.Graphics();
-      wheel.beginFill(0x1a1a1a);
-      wheel.drawCircle(0, 0, 4);
-      wheel.endFill();
+      wheel
+        .circle(0, 0, 4)
+        .fill(0x1a1a1a);
 
       // Wheel detail
-      wheel.beginFill(0x3a3a3a);
-      wheel.drawCircle(0, 0, 2);
-      wheel.endFill();
+      wheel
+        .circle(0, 0, 2)
+        .fill(0x3a3a3a);
 
       wheel.position.set(x, 6);
       this.wheels.push(wheel);
@@ -79,9 +80,9 @@ export class TruckSprite extends PIXI.Container {
     // Create dust particles
     for (let i = 0; i < 5; i++) {
       const dust = new PIXI.Graphics();
-      dust.beginFill(0xc4956a, 0.4);
-      dust.drawCircle(0, 0, 3);
-      dust.endFill();
+      dust
+        .circle(0, 0, 3)
+        .fill({ color: 0xc4956a, alpha: 0.4 });
       dust.alpha = 0;
       dust.particleLife = 0;
       this.dustParticles.push(dust);
