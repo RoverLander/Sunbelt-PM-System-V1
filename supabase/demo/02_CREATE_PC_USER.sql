@@ -8,32 +8,17 @@
 -- First check if user already exists
 SELECT id, email, name, role FROM users WHERE email = 'juanita.earnest@phoenixmodular.com';
 
--- Insert the PC user (will fail silently if already exists)
-INSERT INTO users (
-  id,
-  email,
-  name,
-  role,
-  is_active,
-  factory_code,
-  created_at
-)
-VALUES (
-  uuid_generate_v4(),
-  'juanita.earnest@phoenixmodular.com',
-  'Juanita Earnest',
-  'PC',
-  true,
-  'PMI',  -- Phoenix factory code
-  NOW()
-)
-ON CONFLICT (email) DO UPDATE SET
+-- Insert the PC user from auth.users (must exist in Supabase Auth first!)
+INSERT INTO users (id, email, name, role, is_active, created_at)
+SELECT id, 'juanita.earnest@phoenixmodular.com', 'Juanita Earnest', 'PC', true, NOW()
+FROM auth.users WHERE email = 'juanita.earnest@phoenixmodular.com'
+ON CONFLICT (id) DO UPDATE SET
   name = 'Juanita Earnest',
   role = 'PC',
   is_active = true;
 
 -- Verify
-SELECT id, email, name, role, factory_code FROM users WHERE email = 'juanita.earnest@phoenixmodular.com';
+SELECT id, email, name, role FROM users WHERE email = 'juanita.earnest@phoenixmodular.com';
 
 -- ============================================================================
 -- IMPORTANT: After running this, you need to:

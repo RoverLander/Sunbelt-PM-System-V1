@@ -4,38 +4,43 @@
 -- Imports 20 real projects from Excel and generates realistic sample data
 -- ============================================================================
 
--- First, let's ensure we have PM users (get existing or create placeholders)
+-- First, let's ensure we have PM users (get existing or create from auth.users)
 -- Check existing users
 SELECT id, name, email, role FROM users WHERE role IN ('PM', 'Director', 'VP', 'IT', 'PC', 'Admin');
 
 -- ============================================================================
--- Create placeholder PM users if they don't exist
+-- Create PM users from auth.users (they must exist in Supabase Auth first!)
 -- ============================================================================
 
 -- Candy Juhnke
 INSERT INTO users (id, email, name, role, is_active, created_at)
-VALUES (uuid_generate_v4(), 'candy.juhnke@sunbeltmodular.com', 'Candy Juhnke', 'PM', true, NOW())
-ON CONFLICT (email) DO NOTHING;
+SELECT id, 'candy.juhnke@sunbeltmodular.com', 'Candy Juhnke', 'PM', true, NOW()
+FROM auth.users WHERE email = 'candy.juhnke@sunbeltmodular.com'
+ON CONFLICT (id) DO UPDATE SET name = 'Candy Juhnke', role = 'PM', is_active = true;
 
--- Crystal Myers
+-- Crystal Meyers (note: auth user may be crystal.meyers)
 INSERT INTO users (id, email, name, role, is_active, created_at)
-VALUES (uuid_generate_v4(), 'crystal.myers@sunbeltmodular.com', 'Crystal Myers', 'PM', true, NOW())
-ON CONFLICT (email) DO NOTHING;
+SELECT id, email, 'Crystal Meyers', 'PM', true, NOW()
+FROM auth.users WHERE email LIKE 'crystal.me%@sunbeltmodular.com'
+ON CONFLICT (id) DO UPDATE SET name = 'Crystal Meyers', role = 'PM', is_active = true;
 
 -- Matthew McDaniel
 INSERT INTO users (id, email, name, role, is_active, created_at)
-VALUES (uuid_generate_v4(), 'matthew.mcdaniel@sunbeltmodular.com', 'Matthew McDaniel', 'PM', true, NOW())
-ON CONFLICT (email) DO NOTHING;
+SELECT id, 'matthew.mcdaniel@sunbeltmodular.com', 'Matthew McDaniel', 'PM', true, NOW()
+FROM auth.users WHERE email = 'matthew.mcdaniel@sunbeltmodular.com'
+ON CONFLICT (id) DO UPDATE SET name = 'Matthew McDaniel', role = 'PM', is_active = true;
 
 -- Hector Vazquez
 INSERT INTO users (id, email, name, role, is_active, created_at)
-VALUES (uuid_generate_v4(), 'hector.vazquez@sunbeltmodular.com', 'Hector Vazquez', 'PM', true, NOW())
-ON CONFLICT (email) DO NOTHING;
+SELECT id, 'hector.vazquez@sunbeltmodular.com', 'Hector Vazquez', 'PM', true, NOW()
+FROM auth.users WHERE email = 'hector.vazquez@sunbeltmodular.com'
+ON CONFLICT (id) DO UPDATE SET name = 'Hector Vazquez', role = 'PM', is_active = true;
 
 -- Michael Caracciolo
 INSERT INTO users (id, email, name, role, is_active, created_at)
-VALUES (uuid_generate_v4(), 'michael.caracciolo@sunbeltmodular.com', 'Michael Caracciolo', 'PM', true, NOW())
-ON CONFLICT (email) DO NOTHING;
+SELECT id, 'michael.caracciolo@sunbeltmodular.com', 'Michael Caracciolo', 'PM', true, NOW()
+FROM auth.users WHERE email = 'michael.caracciolo@sunbeltmodular.com'
+ON CONFLICT (id) DO UPDATE SET name = 'Michael Caracciolo', role = 'PM', is_active = true;
 
 -- ============================================================================
 -- Import the 20 Projects
@@ -53,7 +58,7 @@ DECLARE
 BEGIN
   -- Get PM IDs
   SELECT id INTO v_candy_id FROM users WHERE name = 'Candy Juhnke' LIMIT 1;
-  SELECT id INTO v_crystal_id FROM users WHERE name = 'Crystal Myers' LIMIT 1;
+  SELECT id INTO v_crystal_id FROM users WHERE name = 'Crystal Meyers' LIMIT 1;
   SELECT id INTO v_matthew_id FROM users WHERE name = 'Matthew McDaniel' LIMIT 1;
   SELECT id INTO v_hector_id FROM users WHERE name = 'Hector Vazquez' LIMIT 1;
   SELECT id INTO v_michael_id FROM users WHERE name = 'Michael Caracciolo' LIMIT 1;
