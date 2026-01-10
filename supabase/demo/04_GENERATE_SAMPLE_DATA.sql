@@ -159,7 +159,7 @@ BEGIN
     -- ======================================================================
 
     -- RFI 1: Site Conditions
-    INSERT INTO rfis (project_id, rfi_number, subject, question, status, priority, date_submitted, date_required, created_by, created_at)
+    INSERT INTO rfis (project_id, rfi_number, subject, question, status, priority, date_sent, due_date, created_by, created_at)
     VALUES (
       v_project.id,
       'RFI-' || LPAD(v_rfi_count::TEXT, 3, '0'),
@@ -179,7 +179,7 @@ BEGIN
     v_rfi_count := v_rfi_count + 1;
 
     -- RFI 2: Technical Question
-    INSERT INTO rfis (project_id, rfi_number, subject, question, status, priority, date_submitted, date_required, created_by, created_at)
+    INSERT INTO rfis (project_id, rfi_number, subject, question, status, priority, date_sent, due_date, created_by, created_at)
     VALUES (
       v_project.id,
       'RFI-' || LPAD(v_rfi_count::TEXT, 3, '0'),
@@ -200,7 +200,7 @@ BEGIN
 
     -- RFI 3: Open/Overdue for problem projects
     IF v_project.health_status IN ('At Risk', 'Critical') THEN
-      INSERT INTO rfis (project_id, rfi_number, subject, question, status, priority, date_submitted, date_required, created_by, created_at)
+      INSERT INTO rfis (project_id, rfi_number, subject, question, status, priority, date_sent, due_date, created_by, created_at)
       VALUES (
         v_project.id,
         'RFI-' || LPAD(v_rfi_count::TEXT, 3, '0'),
@@ -221,7 +221,7 @@ BEGIN
     -- ======================================================================
 
     -- Submittal 1: HVAC Equipment
-    INSERT INTO submittals (project_id, submittal_number, title, description, status, date_submitted, date_required, created_by, created_at)
+    INSERT INTO submittals (project_id, submittal_number, title, description, status, date_sent, due_date, created_by, created_at)
     VALUES (
       v_project.id,
       'SUB-' || LPAD(v_submittal_count::TEXT, 3, '0'),
@@ -240,7 +240,7 @@ BEGIN
     v_submittal_count := v_submittal_count + 1;
 
     -- Submittal 2: Electrical
-    INSERT INTO submittals (project_id, submittal_number, title, description, status, date_submitted, date_required, created_by, created_at)
+    INSERT INTO submittals (project_id, submittal_number, title, description, status, date_sent, due_date, created_by, created_at)
     VALUES (
       v_project.id,
       'SUB-' || LPAD(v_submittal_count::TEXT, 3, '0'),
@@ -259,7 +259,7 @@ BEGIN
 
     -- Submittal 3: Rejected for problem projects
     IF v_project.health_status = 'Critical' THEN
-      INSERT INTO submittals (project_id, submittal_number, title, description, status, date_submitted, date_required, created_by, created_at)
+      INSERT INTO submittals (project_id, submittal_number, title, description, status, date_sent, due_date, created_by, created_at)
       VALUES (
         v_project.id,
         'SUB-' || LPAD(v_submittal_count::TEXT, 3, '0'),
