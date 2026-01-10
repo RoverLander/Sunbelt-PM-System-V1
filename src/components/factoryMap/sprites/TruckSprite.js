@@ -10,7 +10,8 @@ export class TruckSprite extends PIXI.Container {
 
     this.deliveryData = deliveryData;
     this.routePath = routePath;
-    this.progress = deliveryData.progress || 0;
+    // Use nullish coalescing to preserve progress of 0 (a valid value)
+    this.progress = deliveryData.progress ?? 0;
     this.speed = options.speed || 0.002; // Progress per frame
     this.originalSpeed = this.speed; // Store original speed for pause/resume
     this.animationTime = 0;
@@ -168,14 +169,21 @@ export class TruckSprite extends PIXI.Container {
   // Animation update
   update(deltaTime) {
     this.animationTime += deltaTime;
+    // Prevent overflow
+    if (this.animationTime > 10000) {
+      this.animationTime = 0;
+    }
 
     // Auto-advance progress (simulated movement)
     if (this.progress < 1) {
       this.updatePosition(this.progress + this.speed * deltaTime);
     }
 
-    // Wheel rotation
+    // Wheel rotation - use modulo to prevent overflow
     this.wheelRotation += deltaTime * 0.3;
+    if (this.wheelRotation > Math.PI * 200) {
+      this.wheelRotation = this.wheelRotation % (Math.PI * 2);
+    }
     this.wheels.forEach(wheel => {
       wheel.rotation = this.wheelRotation;
     });

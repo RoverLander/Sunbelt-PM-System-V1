@@ -188,11 +188,19 @@ export class RoutesLayer extends PIXI.Container {
   // Animation update
   update(deltaTime) {
     this.animationTime += deltaTime;
+    // Prevent overflow by resetting when too large
+    if (this.animationTime > 10000) {
+      this.animationTime = 0;
+    }
 
     // Animate active routes
     this.routes.forEach(route => {
       if (route.animated && route.status === 'active') {
         route.dashOffset += deltaTime * 0.5;
+        // Prevent dashOffset overflow - dash cycle is dashLength(12) + gapLength(8) = 20
+        if (route.dashOffset > 1000) {
+          route.dashOffset = route.dashOffset % 20;
+        }
         this.drawRoute(route.graphics, route);
       }
     });

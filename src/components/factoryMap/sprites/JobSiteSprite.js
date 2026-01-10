@@ -125,6 +125,10 @@ export class JobSiteSprite extends PIXI.Container {
   // Animation update
   update(deltaTime) {
     this.animationTime += deltaTime * 0.1;
+    // Prevent overflow - pulse uses sin() so 2π period is fine
+    if (this.animationTime > 1000) {
+      this.animationTime = this.animationTime % (Math.PI * 2);
+    }
 
     // Pulse animation for active sites
     if (this.status === 'Installation' || this.status === 'Shipping') {

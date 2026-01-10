@@ -291,6 +291,11 @@ export class FactorySprite extends PIXI.Container {
   // Called every frame by parent
   update(deltaTime) {
     this.animationTime += deltaTime * 0.05;
+    // Prevent overflow by keeping animationTime within a reasonable range
+    // Smoke animation cycles at 100, so use modulo to prevent unbounded growth
+    if (this.animationTime > 10000) {
+      this.animationTime = this.animationTime % 100;
+    }
 
     // Animate smoke particles
     this.smokeParticles.forEach((smoke, index) => {
