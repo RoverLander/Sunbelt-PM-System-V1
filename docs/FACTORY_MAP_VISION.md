@@ -189,11 +189,13 @@ const FACTORY_LOCATIONS = {
 ```
 
 ### Pan/Navigation
-- **Mouse drag:** Click and drag to pan
+- **Mouse drag:** Click and drag to pan **at ANY zoom level** (always enabled)
 - **Scroll wheel:** Zoom in/out at cursor position
 - **Keyboard:** Arrow keys to pan, +/- to zoom
 - **Touch:** Pinch to zoom, drag to pan
 - **Mini-map:** Small overview in corner showing current viewport
+- **Momentum scrolling:** Smooth deceleration after releasing drag
+- **Boundary constraints:** Soft edges prevent scrolling too far off-map
 
 ### Mini-Map Preview
 ```
@@ -783,21 +785,161 @@ factories_atlas.png (512x512)
 
 ## 🎮 Interactions
 
-### Hover States
-- **Factory:** Popup with name, active projects count, recent deliveries
-- **Truck:** Popup with project name, destination, ETA
-- **Delivery Point:** Project details
+### Hover Tooltips
+
+#### Factory Hover Tooltip
+```
+┌────────────────────────────────────────────┐
+│  🏭 NWBS - Northwest Building Systems      │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│                                            │
+│  📊 CURRENT STATUS                         │
+│  ┌──────────────┬──────────────┐          │
+│  │ ⚡ 8 Active  │ 🚚 3 Shipping│          │
+│  │   Projects   │   This Week  │          │
+│  └──────────────┴──────────────┘          │
+│                                            │
+│  📋 IN PRODUCTION                          │
+│  • Riverside Medical Center     [75%]     │
+│  • San Diego School District    [42%]     │
+│  • Portland Office Complex      [18%]     │
+│                                            │
+│  🚀 RECENT DELIVERIES                      │
+│  • Seattle Tech Campus    ✓ Jan 8         │
+│  • Tacoma Apartments      ✓ Jan 5         │
+│                                            │
+│  💰 $12.4M Active Contract Value          │
+│                                            │
+│  [Click to view all projects →]           │
+└────────────────────────────────────────────┘
+```
+
+**Factory Tooltip Data:**
+```javascript
+const factoryTooltipData = {
+  code: 'NWBS',
+  name: 'Northwest Building Systems',
+  state: 'WA',
+  stats: {
+    activeProjects: 8,
+    shippingThisWeek: 3,
+    totalContractValue: 12400000,
+    completedThisMonth: 5
+  },
+  inProduction: [
+    { name: 'Riverside Medical Center', progress: 75 },
+    { name: 'San Diego School District', progress: 42 },
+    { name: 'Portland Office Complex', progress: 18 }
+  ],
+  recentDeliveries: [
+    { name: 'Seattle Tech Campus', date: '2026-01-08' },
+    { name: 'Tacoma Apartments', date: '2026-01-05' }
+  ]
+};
+```
+
+#### Job Site / Delivery Destination Hover Tooltip
+```
+┌────────────────────────────────────────────┐
+│  📍 Seattle Tech Campus                    │
+│  Seattle, WA                               │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│                                            │
+│  📦 PROJECT STATUS                         │
+│  ┌────────────────────────────────────┐   │
+│  │  Status: 🟢 Installation           │   │
+│  │  Phase:  Module Setting (3 of 12)  │   │
+│  └────────────────────────────────────┘   │
+│                                            │
+│  🏭 Factory: NWBS                          │
+│  👤 PM: John Smith                         │
+│  💵 Contract: $2.4M                        │
+│                                            │
+│  📅 KEY DATES                              │
+│  • Modules Delivered:  ✓ Jan 8, 2026      │
+│  • Set Complete:       Jan 22, 2026       │
+│  • Final Completion:   Feb 15, 2026       │
+│                                            │
+│  ⚠️ 2 Open RFIs  •  1 Pending Submittal   │
+│                                            │
+│  [Click to view project →]                │
+└────────────────────────────────────────────┘
+```
+
+**Job Site Tooltip Data:**
+```javascript
+const jobSiteTooltipData = {
+  projectId: 'uuid',
+  projectName: 'Seattle Tech Campus',
+  projectNumber: 'NWBS-2026-042',
+  location: {
+    city: 'Seattle',
+    state: 'WA',
+    coordinates: { x: 12, y: 18 }
+  },
+  status: 'Installation',
+  currentPhase: 'Module Setting',
+  phaseProgress: { current: 3, total: 12 },
+  factory: 'NWBS',
+  pm: { name: 'John Smith', id: 'uuid' },
+  contractValue: 2400000,
+  dates: {
+    delivered: '2026-01-08',
+    setComplete: '2026-01-22',
+    finalCompletion: '2026-02-15'
+  },
+  openItems: {
+    rfis: 2,
+    submittals: 1,
+    tasks: 5
+  }
+};
+```
+
+#### Truck (In-Transit Delivery) Hover Tooltip
+```
+┌────────────────────────────────────────────┐
+│  🚚 IN TRANSIT                             │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│                                            │
+│  📦 Portland Office Complex                │
+│  Project #: NWBS-2026-051                  │
+│                                            │
+│  🏭 From: NWBS (Tacoma, WA)                │
+│  📍 To:   Portland, OR                     │
+│                                            │
+│  ████████████░░░░░░░░ 65%                  │
+│                                            │
+│  📅 Departed:  Jan 10, 8:00 AM             │
+│  ⏱️ ETA:       Jan 10, 2:30 PM             │
+│  📏 Distance:  145 miles remaining         │
+│                                            │
+│  🚛 Carrier: Pacific Transport             │
+│  📞 Driver: (555) 123-4567                 │
+│                                            │
+│  [Click to view project →]                │
+└────────────────────────────────────────────┘
+```
+
+### Tooltip Behavior
+- **Appear:** 200ms delay after hover (prevents flickering)
+- **Position:** Auto-adjust to stay within viewport
+- **Dismiss:** Fade out when mouse leaves (100ms)
+- **Persist:** Stays visible while hovering tooltip itself
+- **Mobile:** Tap to show, tap elsewhere to dismiss
 
 ### Click Actions
-- **Factory:** Navigate to filtered projects list
-- **Truck:** Navigate to project detail
-- **Delivery Point:** Navigate to project detail
+- **Factory:** Navigate to Projects page filtered by factory
+- **Truck:** Navigate to project detail page
+- **Job Site:** Navigate to project detail page
+- **Empty area:** Deselect current selection
 
 ### Controls
-- **Zoom:** Mouse wheel or +/- buttons
-- **Pan:** Click and drag (optional)
-- **Filter:** Toggle delivery status visibility
-- **Time Range:** Show deliveries from last week/month/all
+- **Zoom:** Mouse wheel or +/- buttons (zoom to cursor position)
+- **Pan:** Click and drag anywhere on map (always enabled)
+- **Filter:** Toggle delivery status visibility (in transit, delivered, scheduled)
+- **Time Range:** Show deliveries from last week/month/quarter/all
+- **Factory Toggle:** Show/hide specific factories
 
 ---
 
