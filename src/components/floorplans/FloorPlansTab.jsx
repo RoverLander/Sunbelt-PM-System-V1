@@ -31,7 +31,7 @@ import FloorPlanUploadModal from './FloorPlanUploadModal';
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], tasks = [], showToast, onDataRefresh }) {
+function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], tasks = [], showToast, onDataRefresh, onNavigateToItem }) {
   const { user } = useAuth();
   
   // ==========================================================================
@@ -637,6 +637,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], t
           showToast={showToast}
           onRefresh={fetchFloorPlans}
           onDataRefresh={onDataRefresh}
+          onNavigateToItem={onNavigateToItem}
         />
       )}
 

@@ -190,6 +190,28 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
   }, []);
 
   // ==========================================================================
+  // NAVIGATE TO ITEM (from floor plan viewer)
+  // ==========================================================================
+  const handleNavigateToItem = useCallback((tabName, itemId) => {
+    // Switch to the appropriate tab
+    setActiveTab(tabName);
+
+    // Find the item and open its edit modal
+    setTimeout(() => {
+      if (tabName === 'tasks') {
+        const task = tasks.find(t => t.id === itemId);
+        if (task) setEditTask(task);
+      } else if (tabName === 'rfis') {
+        const rfi = rfis.find(r => r.id === itemId);
+        if (rfi) setEditRFI(rfi);
+      } else if (tabName === 'submittals') {
+        const submittal = submittals.find(s => s.id === itemId);
+        if (submittal) setEditSubmittal(submittal);
+      }
+    }, 100); // Small delay to allow tab switch animation
+  }, [tasks, rfis, submittals]);
+
+  // ==========================================================================
   // DATA FETCHING
   // ==========================================================================
   const fetchProjectData = useCallback(async () => {
@@ -508,6 +530,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                   tasks={tasks}
                   showToast={showToast}
                   onDataRefresh={fetchProjectData}
+                  onNavigateToItem={handleNavigateToItem}
                 />
               )}
 
