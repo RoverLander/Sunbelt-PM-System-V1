@@ -1,0 +1,186 @@
+import * as PIXI from 'pixi.js';
+import { REGION_CONFIG } from '../data/factoryLocations';
+
+/**
+ * USMapLayer - Renders the stylized US map background
+ * Uses simplified polygon shapes with regional coloring
+ */
+export class USMapLayer extends PIXI.Container {
+  constructor(mapDimensions) {
+    super();
+
+    this.name = 'usMapLayer';
+    this.mapWidth = mapDimensions.width;
+    this.mapHeight = mapDimensions.height;
+
+    this.createBackground();
+    this.createUSOutline();
+    this.createRegions();
+    this.createCoastlines();
+    this.createGrid();
+  }
+
+  createBackground() {
+    // Ocean/background
+    const bg = new PIXI.Graphics();
+    bg.beginFill(0x0d1929);
+    bg.drawRect(0, 0, this.mapWidth, this.mapHeight);
+    bg.endFill();
+    this.addChild(bg);
+  }
+
+  createUSOutline() {
+    // Simplified US continental outline
+    // Coordinates are percentages of map dimensions
+    const outline = [
+      // Pacific Northwest
+      { x: 5, y: 5 },
+      { x: 8, y: 3 },
+      { x: 18, y: 5 },
+      // Northern border
+      { x: 25, y: 8 },
+      { x: 45, y: 6 },
+      { x: 55, y: 10 },
+      { x: 65, y: 12 },
+      // Great Lakes region
+      { x: 70, y: 15 },
+      { x: 75, y: 18 },
+      { x: 72, y: 22 },
+      { x: 78, y: 25 },
+      // Northeast
+      { x: 88, y: 22 },
+      { x: 95, y: 25 },
+      { x: 98, y: 28 },
+      // East coast
+      { x: 95, y: 35 },
+      { x: 90, y: 42 },
+      { x: 88, y: 50 },
+      { x: 85, y: 55 },
+      // Southeast
+      { x: 82, y: 60 },
+      { x: 78, y: 65 },
+      // Florida
+      { x: 82, y: 72 },
+      { x: 85, y: 82 },
+      { x: 80, y: 85 },
+      { x: 75, y: 78 },
+      // Gulf coast
+      { x: 68, y: 72 },
+      { x: 60, y: 70 },
+      { x: 55, y: 75 },
+      { x: 48, y: 78 },
+      // Texas
+      { x: 42, y: 80 },
+      { x: 35, y: 85 },
+      { x: 30, y: 78 },
+      { x: 32, y: 70 },
+      { x: 28, y: 65 },
+      // Southwest
+      { x: 22, y: 70 },
+      { x: 18, y: 68 },
+      { x: 15, y: 72 },
+      // California coast
+      { x: 8, y: 65 },
+      { x: 5, y: 55 },
+      { x: 3, y: 45 },
+      { x: 5, y: 35 },
+      // Pacific Northwest coast
+      { x: 3, y: 25 },
+      { x: 5, y: 15 },
+      { x: 5, y: 5 }
+    ];
+
+    // Convert percentages to pixels
+    const points = outline.flatMap(p => [
+      (p.x / 100) * this.mapWidth,
+      (p.y / 100) * this.mapHeight
+    ]);
+
+    // Base land mass
+    const land = new PIXI.Graphics();
+    land.beginFill(0x1a2a3a);
+    land.drawPolygon(points);
+    land.endFill();
+
+    // Border
+    land.lineStyle(2, 0x3a4a5a, 0.5);
+    land.drawPolygon(points);
+
+    this.addChild(land);
+  }
+
+  createRegions() {
+    // Draw colored regions based on REGION_CONFIG
+    Object.entries(REGION_CONFIG).forEach(([regionName, config]) => {
+      const { bounds, color } = config;
+
+      const region = new PIXI.Graphics();
+      const colorHex = parseInt(color.replace('#', ''), 16);
+
+      // Draw region rectangle with rounded corners
+      const x = (bounds.x1 / 100) * this.mapWidth;
+      const y = (bounds.y1 / 100) * this.mapHeight;
+      const width = ((bounds.x2 - bounds.x1) / 100) * this.mapWidth;
+      const height = ((bounds.y2 - bounds.y1) / 100) * this.mapHeight;
+
+      region.beginFill(colorHex, 0.3);
+      region.drawRoundedRect(x, y, width, height, 20);
+      region.endFill();
+
+      this.addChild(region);
+    });
+  }
+
+  createCoastlines() {
+    // Add subtle coastline details
+    const coastline = new PIXI.Graphics();
+    coastline.lineStyle(1, 0x2a4a6a, 0.4);
+
+    // West coast waves
+    for (let y = 20; y < 70; y += 5) {
+      const x = (3 / 100) * this.mapWidth;
+      const yPos = (y / 100) * this.mapHeight;
+      coastline.moveTo(x - 10, yPos);
+      coastline.quadraticCurveTo(x - 5, yPos + 10, x - 10, yPos + 20);
+    }
+
+    // East coast waves
+    for (let y = 30; y < 65; y += 5) {
+      const x = (92 / 100) * this.mapWidth;
+      const yPos = (y / 100) * this.mapHeight;
+      coastline.moveTo(x + 10, yPos);
+      coastline.quadraticCurveTo(x + 5, yPos + 10, x + 10, yPos + 20);
+    }
+
+    this.addChild(coastline);
+  }
+
+  createGrid() {
+    // Subtle grid overlay for that retro map feel
+    const grid = new PIXI.Graphics();
+    grid.lineStyle(1, 0x2a3a4a, 0.15);
+
+    // Vertical lines
+    for (let x = 0; x <= 100; x += 10) {
+      const xPos = (x / 100) * this.mapWidth;
+      grid.moveTo(xPos, 0);
+      grid.lineTo(xPos, this.mapHeight);
+    }
+
+    // Horizontal lines
+    for (let y = 0; y <= 100; y += 10) {
+      const yPos = (y / 100) * this.mapHeight;
+      grid.moveTo(0, yPos);
+      grid.lineTo(this.mapWidth, yPos);
+    }
+
+    this.addChild(grid);
+  }
+
+  // Add terrain decorations based on region
+  addDecoration(type, x, y) {
+    // Will be expanded in Phase 5
+  }
+}
+
+export default USMapLayer;
