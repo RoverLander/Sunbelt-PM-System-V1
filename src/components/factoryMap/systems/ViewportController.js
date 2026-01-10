@@ -8,10 +8,12 @@ export class ViewportController {
     this.container = mapContainer;
 
     // Zoom settings
-    this.zoom = options.initialZoom || 0.8;
     this.minZoom = options.minZoom || 0.25;
     this.maxZoom = options.maxZoom || 2.0;
     this.zoomStep = options.zoomStep || 0.1;
+    // Clamp initial zoom to valid bounds
+    const initialZoom = options.initialZoom || 0.6;
+    this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, initialZoom));
 
     // Position (map offset)
     this.position = { x: 0, y: 0 };
@@ -124,6 +126,8 @@ export class ViewportController {
   // Zoom at a specific point (keeps that point stationary)
   zoomAtPoint(newZoom, pivotX, pivotY) {
     if (newZoom === this.zoom) return;
+    // Guard against division by zero
+    if (this.zoom === 0) return;
 
     // Get world coordinates of pivot point before zoom
     const worldX = (pivotX - this.position.x) / this.zoom;
@@ -419,7 +423,17 @@ export class ViewportController {
   }
 
   resetView() {
-    this.zoom = 0.8;
+    // Cancel any pending animations before resetting
+    if (this.momentumAnimationId) {
+      cancelAnimationFrame(this.momentumAnimationId);
+      this.momentumAnimationId = null;
+    }
+    if (this.panAnimationId) {
+      cancelAnimationFrame(this.panAnimationId);
+      this.panAnimationId = null;
+    }
+
+    this.zoom = 0.6; // Match initial zoom from PixiMapCanvas
     this.centerMap();
     this.onZoomChange(this.zoom);
     this.onViewportChange(this.getViewportBounds());

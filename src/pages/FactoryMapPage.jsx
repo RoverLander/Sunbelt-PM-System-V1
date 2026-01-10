@@ -80,11 +80,23 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
   // Tutorial state
   const { showTutorial, closeTutorial, openTutorial } = useTutorial();
 
-  // Fetch factory stats from database
+  // Fetch factory stats from database with cleanup to prevent race conditions
   useEffect(() => {
-    fetchFactoryStats();
-    fetchMapStats();
-    fetchProjectsAndDeliveries();
+    let isMounted = true;
+
+    const fetchData = async () => {
+      await Promise.all([
+        fetchFactoryStats(isMounted),
+        fetchMapStats(isMounted),
+        fetchProjectsAndDeliveries(isMounted)
+      ]);
+    };
+
+    fetchData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Update time-of-day every minute
@@ -132,7 +144,7 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
     }
   }, [arrivalToast]);
 
-  const fetchFactoryStats = async () => {
+  const fetchFactoryStats = async (isMounted = true) => {
     try {
       // Get all projects grouped by factory
       const { data: projects, error } = await supabase
@@ -141,6 +153,7 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
         .not('factory', 'is', null);
 
       if (error) throw error;
+      if (!isMounted) return; // Prevent state update if unmounted
 
       // Group by factory code
       const stats = {};
@@ -177,13 +190,14 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
     }
   };
 
-  const fetchMapStats = async () => {
+  const fetchMapStats = async (isMounted = true) => {
     try {
       const { data: projects, error } = await supabase
         .from('projects')
         .select('id, status');
 
       if (error) throw error;
+      if (!isMounted) return; // Prevent state update if unmounted
 
       const active = (projects || []).filter(p =>
         !['Completed', 'Cancelled'].includes(p.status)
@@ -201,11 +215,11 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
       setIsLoading(false);
     } catch (err) {
       console.error('Error fetching map stats:', err);
-      setIsLoading(false);
+      if (isMounted) setIsLoading(false);
     }
   };
 
-  const fetchProjectsAndDeliveries = async () => {
+  const fetchProjectsAndDeliveries = async (isMounted = true) => {
     try {
       // Fetch projects with delivery locations
       const { data: projectData, error } = await supabase
@@ -215,6 +229,7 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
         .in('status', ['In Progress', 'Shipping', 'Installation']);
 
       if (error) throw error;
+      if (!isMounted) return; // Prevent state update if unmounted
 
       const projectsList = projectData || [];
       setProjects(projectsList);
@@ -227,8 +242,8 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
           name: p.name,
           factory: p.factory,
           status: p.status,
-          delivery_city: p.delivery_city,
-          delivery_state: p.delivery_state,
+          delivery_city: p.delivery_city || 'Unknown',
+          delivery_state: p.delivery_state || 'Unknown',
           delivery_progress: Math.random() * 0.8 + 0.1 // Simulated progress for now
         }));
 

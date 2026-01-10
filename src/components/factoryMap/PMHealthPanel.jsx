@@ -162,7 +162,11 @@ const PMHealthPanel = ({ expanded = false, showTeam = false }) => {
         };
       });
 
-      const teamData = await Promise.all(healthPromises);
+      // Use Promise.allSettled to handle partial failures gracefully
+      const results = await Promise.allSettled(healthPromises);
+      const teamData = results
+        .filter(result => result.status === 'fulfilled')
+        .map(result => result.value);
       setTeamHealth(teamData.sort((a, b) => a.health - b.health)); // Sort by health (worst first)
     } catch (err) {
       console.error('Error fetching team health:', err);

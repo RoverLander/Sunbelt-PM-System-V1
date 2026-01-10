@@ -1,7 +1,7 @@
 import React from 'react';
 import { FACTORY_LOCATIONS } from './data/factoryLocations';
 
-// Map dimensions for coordinate conversion
+// Map dimensions for coordinate conversion (must match PixiMapCanvas)
 const MAP_WIDTH = 4000;
 const MAP_HEIGHT = 2500;
 
@@ -9,21 +9,25 @@ const MAP_HEIGHT = 2500;
  * MiniMap - Small overview map showing current viewport, factory locations, and truck positions
  */
 const MiniMap = ({ viewport, onNavigate, truckPositions = [] }) => {
-  // Calculate viewport rectangle position (normalized 0-1)
+  // Calculate viewport rectangle position (normalized 0-100 for SVG viewBox)
   const viewportRect = viewport ? {
-    left: (viewport.left / 4000) * 100,
-    top: (viewport.top / 2500) * 100,
-    width: (viewport.width / 4000) * 100,
-    height: (viewport.height / 2500) * 100
+    left: (viewport.left / MAP_WIDTH) * 100,
+    top: (viewport.top / MAP_HEIGHT) * 100,
+    width: (viewport.width / MAP_WIDTH) * 100,
+    height: (viewport.height / MAP_HEIGHT) * 100
   } : { left: 0, top: 0, width: 100, height: 100 };
 
-  // Clamp values
-  const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+  // Clamp values to prevent NaN or Infinity
+  const clamp = (val, min, max) => {
+    if (!Number.isFinite(val)) return min;
+    return Math.max(min, Math.min(max, val));
+  };
 
   const handleClick = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 4000;
-    const y = ((e.clientY - rect.top) / rect.height) * 2500;
+    if (rect.width === 0 || rect.height === 0) return;
+    const x = ((e.clientX - rect.left) / rect.width) * MAP_WIDTH;
+    const y = ((e.clientY - rect.top) / rect.height) * MAP_HEIGHT;
     onNavigate?.(x, y);
   };
 

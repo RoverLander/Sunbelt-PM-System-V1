@@ -111,7 +111,11 @@ const TutorialModal = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
-  const step = tutorialSteps[currentStep];
+  // Guard against out-of-bounds step index
+  const safeStepIndex = Math.max(0, Math.min(currentStep, tutorialSteps.length - 1));
+  const step = tutorialSteps[safeStepIndex];
+  if (!step) return null;
+
   const Icon = step.icon;
   const isFirstStep = currentStep === 0;
   const isLastStep = currentStep === tutorialSteps.length - 1;
