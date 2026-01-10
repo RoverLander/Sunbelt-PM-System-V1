@@ -31,13 +31,18 @@ import {
   AlertTriangle,
   Server,
   Key,
-  Eye
+  Eye,
+  Lock,
+  Wrench
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import UserManagement from './UserManagement';
 import SystemHealth from './SystemHealth';
 import AuditLogViewer from './AuditLogViewer';
+import SecurityCenter from './SecurityCenter';
+import DatabaseTools from './DatabaseTools';
+import SystemConfiguration from './SystemConfiguration';
 
 // ============================================================================
 // CONSTANTS
@@ -54,7 +59,7 @@ function ITDashboard() {
   // STATE
   // ==========================================================================
   const [loading, setLoading] = useState(true);
-  const [activePanel, setActivePanel] = useState('overview'); // overview, users, health, audit, settings
+  const [activePanel, setActivePanel] = useState('overview'); // overview, users, health, audit, security, database, settings
   const [toast, setToast] = useState(null);
 
   // Stats
@@ -210,8 +215,12 @@ function ITDashboard() {
         return <SystemHealth showToast={showToast} />;
       case 'audit':
         return <AuditLogViewer showToast={showToast} />;
+      case 'security':
+        return <SecurityCenter />;
+      case 'database':
+        return <DatabaseTools />;
       case 'settings':
-        return <SettingsPlaceholder />;
+        return <SystemConfiguration />;
       default:
         return renderOverview();
     }
@@ -321,6 +330,16 @@ function ITDashboard() {
               onClick={() => setActivePanel('users')}
             />
             <QuickActionButton
+              icon={Shield}
+              label="Security Center"
+              onClick={() => setActivePanel('security')}
+            />
+            <QuickActionButton
+              icon={Database}
+              label="Database Tools"
+              onClick={() => setActivePanel('database')}
+            />
+            <QuickActionButton
               icon={Eye}
               label="View Audit Log"
               onClick={() => setActivePanel('audit')}
@@ -331,9 +350,9 @@ function ITDashboard() {
               onClick={() => setActivePanel('health')}
             />
             <QuickActionButton
-              icon={Key}
-              label="Manage Permissions"
-              onClick={() => showToast('Permission management coming soon', 'info')}
+              icon={Settings}
+              label="System Settings"
+              onClick={() => setActivePanel('settings')}
             />
             <QuickActionButton
               icon={RefreshCw}
@@ -487,7 +506,8 @@ function ITDashboard() {
         gap: 'var(--space-xs)',
         marginBottom: 'var(--space-lg)',
         borderBottom: '1px solid var(--border-color)',
-        paddingBottom: 'var(--space-sm)'
+        paddingBottom: 'var(--space-sm)',
+        overflowX: 'auto'
       }}>
         <NavTab
           active={activePanel === 'overview'}
@@ -506,6 +526,18 @@ function ITDashboard() {
           onClick={() => setActivePanel('health')}
           icon={Server}
           label="System Health"
+        />
+        <NavTab
+          active={activePanel === 'security'}
+          onClick={() => setActivePanel('security')}
+          icon={Shield}
+          label="Security"
+        />
+        <NavTab
+          active={activePanel === 'database'}
+          onClick={() => setActivePanel('database')}
+          icon={Database}
+          label="Database"
         />
         <NavTab
           active={activePanel === 'audit'}
@@ -721,26 +753,6 @@ function TableStat({ table, count }) {
       <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)' }}>
         {count.toLocaleString()}
       </div>
-    </div>
-  );
-}
-
-// Settings Placeholder
-function SettingsPlaceholder() {
-  return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 'var(--space-2xl)',
-      background: 'var(--bg-secondary)',
-      borderRadius: 'var(--radius-lg)',
-      border: '1px solid var(--border-color)'
-    }}>
-      <Settings size={48} style={{ color: 'var(--text-tertiary)', marginBottom: 'var(--space-md)' }} />
-      <h3 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)' }}>System Settings</h3>
-      <p style={{ color: 'var(--text-secondary)' }}>Coming soon - Configure system-wide settings</p>
     </div>
   );
 }

@@ -60,6 +60,9 @@ import ProjectCalendarWeek from './ProjectCalendarWeek';
 // ✅ ADDED: Workflow imports
 import WorkflowTracker from './WorkflowTracker';
 
+// ✅ ADDED: Files tab
+import ProjectFiles from './ProjectFiles';
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -483,7 +486,10 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
 
               {/* FILES TAB */}
               {activeTab === 'files' && (
-                <PlaceholderTab icon={FolderOpen} message="File management coming soon" />
+                <ProjectFiles
+                  projectId={project.id}
+                  onUpdate={fetchProjectData}
+                />
               )}
 
               {/* FLOORPLAN TAB */}
@@ -792,7 +798,8 @@ function SearchInput({ value, onChange, placeholder }) {
 // TASKS TAB
 // ============================================================================
 function TasksTab({ tasks, allTasks, search, setSearch, statusFilter, setStatusFilter, view, setView, onAdd, onEdit, onDragStart, onDragOver, onDrop, draggedTask }) {
-  kanbanStatuses = ['Not Started', 'In Progress', 'Awaiting Response', 'Completed'];
+  // Use the task statuses from TASK_STATUS_OPTIONS (excluding 'All')
+  const kanbanStatuses = TASK_STATUS_OPTIONS.filter(s => s !== 'All');
 
   return (
     <div>

@@ -357,7 +357,7 @@ function ProjectCalendarMonth({
   const getStatusColor = (status) => {
     const colors = {
       'Not Started': 'var(--text-tertiary)', 'In Progress': 'var(--sunbelt-orange)',
-      'Blocked': 'var(--danger)', 'Completed': 'var(--success)', 'Cancelled': 'var(--text-tertiary)',
+      'Awaiting Response': 'var(--warning)', 'Completed': 'var(--success)', 'Cancelled': 'var(--text-tertiary)',
       'Open': 'var(--sunbelt-orange)', 'Answered': 'var(--success)', 'Closed': 'var(--text-tertiary)',
       'Pending': 'var(--text-tertiary)', 'Submitted': 'var(--sunbelt-orange)',
       'Under Review': 'var(--warning)', 'Approved': 'var(--success)', 'Rejected': 'var(--danger)',

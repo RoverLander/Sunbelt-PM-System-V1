@@ -119,7 +119,7 @@ export const STATUS_CONFIG = {
   // Task statuses
   'Not Started': { color: '#64748B', bgColor: 'rgba(100, 116, 139, 0.1)', isComplete: false },
   'In Progress': { color: '#F59E0B', bgColor: 'rgba(245, 158, 11, 0.1)', isComplete: false },
-  'Blocked': { color: '#EF4444', bgColor: 'rgba(239, 68, 68, 0.1)', isComplete: false },
+  'Awaiting Response': { color: '#F59E0B', bgColor: 'rgba(245, 158, 11, 0.1)', isComplete: false },
   'Completed': { color: '#22C55E', bgColor: 'rgba(34, 197, 94, 0.1)', isComplete: true },
   'Cancelled': { color: '#64748B', bgColor: 'rgba(100, 116, 139, 0.1)', isComplete: true },
   

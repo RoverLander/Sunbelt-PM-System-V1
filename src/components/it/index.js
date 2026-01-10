@@ -10,3 +10,6 @@ export { default as CreateUserModal } from './CreateUserModal';
 export { default as EditUserModal } from './EditUserModal';
 export { default as SystemHealth } from './SystemHealth';
 export { default as AuditLogViewer } from './AuditLogViewer';
+export { default as SecurityCenter } from './SecurityCenter';
+export { default as DatabaseTools } from './DatabaseTools';
+export { default as SystemConfiguration } from './SystemConfiguration';

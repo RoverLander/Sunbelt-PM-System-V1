@@ -104,7 +104,8 @@ const getStatusColor = (status, type) => {
     switch (status) {
       case 'Completed': return '#22c55e';
       case 'In Progress': return '#3b82f6';
-      case 'Blocked': return '#ef4444';
+      case 'Awaiting Response': return '#f59e0b';
+      case 'Cancelled': return '#94a3b8';
       default: return '#64748b';
     }
   }

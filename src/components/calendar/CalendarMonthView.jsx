@@ -131,7 +131,7 @@ function CalendarMonthView({
     const colors = {
       'Not Started': 'var(--text-tertiary)',
       'In Progress': 'var(--sunbelt-orange)',
-      'Blocked': 'var(--danger)',
+      'Awaiting Response': 'var(--warning)',
       'Completed': 'var(--success)',
       'Cancelled': 'var(--text-tertiary)',
       'Open': 'var(--sunbelt-orange)',
