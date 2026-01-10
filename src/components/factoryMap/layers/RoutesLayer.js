@@ -218,6 +218,43 @@ export class RoutesLayer extends PIXI.Container {
       controlPoint: route.controlPoint
     };
   }
+
+  // Highlight routes from a specific factory
+  highlightByFactory(factoryCode) {
+    this.routes.forEach(route => {
+      const routeFactory = route.factoryCode;
+      if (routeFactory === factoryCode) {
+        // Highlight this route
+        route.originalAlpha = route.graphics.alpha;
+        route.graphics.alpha = 1;
+        route.graphics.scale.set(1.2);
+        route.highlighted = true;
+      } else {
+        // Dim other routes
+        route.originalAlpha = route.graphics.alpha;
+        route.graphics.alpha = 0.2;
+        route.highlighted = false;
+      }
+    });
+  }
+
+  // Clear all route highlights
+  clearHighlights() {
+    this.routes.forEach(route => {
+      route.graphics.alpha = route.originalAlpha || 1;
+      route.graphics.scale.set(1);
+      route.highlighted = false;
+    });
+  }
+
+  // Store factory code when creating route
+  createRouteWithFactory(routeId, fromPos, toPos, factoryCode, options = {}) {
+    const route = this.createRoute(routeId, fromPos, toPos, options);
+    if (route) {
+      route.factoryCode = factoryCode;
+    }
+    return route;
+  }
 }
 
 export default RoutesLayer;

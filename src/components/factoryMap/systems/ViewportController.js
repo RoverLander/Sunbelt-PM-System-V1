@@ -24,6 +24,7 @@ export class ViewportController {
     // Momentum
     this.momentum = { x: 0, y: 0 };
     this.momentumAnimationId = null;
+    this.panAnimationId = null;
     this.friction = 0.92;
     this.minVelocity = 0.5;
 
@@ -34,6 +35,10 @@ export class ViewportController {
     // Callbacks
     this.onZoomChange = options.onZoomChange || (() => {});
     this.onViewportChange = options.onViewportChange || (() => {});
+    this.onFactoryJump = options.onFactoryJump || (() => {});
+
+    // Factory positions for keyboard shortcuts (will be set externally)
+    this.factoryPositions = [];
 
     // Bind methods
     this.handleWheel = this.handleWheel.bind(this);
@@ -85,6 +90,9 @@ export class ViewportController {
 
     if (this.momentumAnimationId) {
       cancelAnimationFrame(this.momentumAnimationId);
+    }
+    if (this.panAnimationId) {
+      cancelAnimationFrame(this.panAnimationId);
     }
   }
 
@@ -213,8 +221,12 @@ export class ViewportController {
 
   // Keyboard controls
   handleKeyDown(e) {
+    // Don't handle if user is typing in an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+      return;
+    }
+
     const panAmount = 50;
-    const handled = true;
 
     switch (e.key) {
       case 'ArrowUp':
@@ -234,13 +246,40 @@ export class ViewportController {
         this.setZoom(this.zoom + this.zoomStep);
         break;
       case '-':
+      case '_':
         this.setZoom(this.zoom - this.zoomStep);
+        break;
+      case '0':
+        // Reset view
+        this.resetView();
+        break;
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+        // Jump to factory by index
+        const index = parseInt(e.key) - 1;
+        if (this.factoryPositions[index]) {
+          const pos = this.factoryPositions[index];
+          this.panTo(pos.x, pos.y, true);
+          this.onFactoryJump(pos.code, index);
+        }
         break;
       default:
         return; // Don't prevent default for unhandled keys
     }
 
     e.preventDefault();
+  }
+
+  // Set factory positions for keyboard shortcuts
+  setFactoryPositions(positions) {
+    this.factoryPositions = positions;
   }
 
   // Momentum scrolling animation
@@ -346,6 +385,12 @@ export class ViewportController {
   }
 
   animatePanTo(targetX, targetY, duration = 500) {
+    // Cancel any existing pan animation to prevent stacking
+    if (this.panAnimationId) {
+      cancelAnimationFrame(this.panAnimationId);
+      this.panAnimationId = null;
+    }
+
     const startX = this.position.x;
     const startY = this.position.y;
     const startTime = performance.now();
@@ -364,11 +409,13 @@ export class ViewportController {
       this.onViewportChange(this.getViewportBounds());
 
       if (progress < 1) {
-        requestAnimationFrame(animate);
+        this.panAnimationId = requestAnimationFrame(animate);
+      } else {
+        this.panAnimationId = null;
       }
     };
 
-    requestAnimationFrame(animate);
+    this.panAnimationId = requestAnimationFrame(animate);
   }
 
   resetView() {

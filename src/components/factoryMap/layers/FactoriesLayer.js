@@ -67,10 +67,11 @@ export class FactoriesLayer extends PIXI.Container {
     Object.entries(statsData).forEach(([code, stats]) => {
       this.factoryStats.set(code, stats);
 
-      // Update factory active state based on projects
+      // Update factory active state and stats badge
       const factory = this.factories.get(code);
       if (factory) {
         factory.setActive(stats.activeProjects > 0);
+        factory.setStats(stats);
       }
     });
   }

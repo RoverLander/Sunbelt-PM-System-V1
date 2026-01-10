@@ -277,12 +277,12 @@ const TruckTooltipContent = ({ data }) => {
       <div className="mb-3">
         <div className="flex justify-between text-xs text-slate-400 mb-1">
           <span>Progress</span>
-          <span>{deliveryData?.progress || 0}%</span>
+          <span>{Math.round((data.progress || deliveryData?.progress || 0) * 100)}%</span>
         </div>
         <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all"
-            style={{ width: `${deliveryData?.progress || 0}%` }}
+            style={{ width: `${(data.progress || deliveryData?.progress || 0) * 100}%` }}
           />
         </div>
       </div>
