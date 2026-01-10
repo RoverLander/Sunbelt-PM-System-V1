@@ -6,7 +6,8 @@ import { Factory, Package, Truck, TrendingUp, AlertCircle, Calendar, User, Dolla
  */
 const MapTooltip = ({ data, type, position, visible, onClose }) => {
   const [show, setShow] = useState(false);
-  const [adjustedPosition, setAdjustedPosition] = useState(position);
+  // Initialize with safe defaults to prevent undefined position errors
+  const [adjustedPosition, setAdjustedPosition] = useState({ x: 0, y: 0 });
   const tooltipRef = useRef(null);
 
   // Delay showing tooltip to prevent flickering
@@ -22,6 +23,8 @@ const MapTooltip = ({ data, type, position, visible, onClose }) => {
   // Adjust position to stay within viewport
   useEffect(() => {
     if (!tooltipRef.current || !position) return;
+    // Validate position has valid numeric coordinates
+    if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) return;
 
     const tooltip = tooltipRef.current;
     const rect = tooltip.getBoundingClientRect();

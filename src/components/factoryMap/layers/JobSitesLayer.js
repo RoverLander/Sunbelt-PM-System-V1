@@ -29,11 +29,12 @@ export class JobSitesLayer extends PIXI.Container {
   addJobSite(project) {
     if (!project.delivery_state) return null;
 
-    // Get position from state
+    // Get position from state (use project.id as seed for consistent positioning)
     const position = getStatePixelPosition(
       project.delivery_state,
       this.mapWidth,
-      this.mapHeight
+      this.mapHeight,
+      project.id // Seed ensures consistent position across re-renders
     );
 
     if (!position) return null;

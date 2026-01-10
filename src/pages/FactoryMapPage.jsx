@@ -23,6 +23,7 @@ const getTimeOfDayTint = () => {
  */
 const FactoryMapPage = ({ onNavigateToProject }) => {
   const canvasRef = useRef(null);
+  const isMountedRef = useRef(true); // Track mount state for async operations
 
   // Viewport state
   const [currentZoom, setCurrentZoom] = useState(0.6);
@@ -82,20 +83,20 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
 
   // Fetch factory stats from database with cleanup to prevent race conditions
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
 
     const fetchData = async () => {
       await Promise.all([
-        fetchFactoryStats(isMounted),
-        fetchMapStats(isMounted),
-        fetchProjectsAndDeliveries(isMounted)
+        fetchFactoryStats(),
+        fetchMapStats(),
+        fetchProjectsAndDeliveries()
       ]);
     };
 
     fetchData();
 
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
     };
   }, []);
 
@@ -144,7 +145,7 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
     }
   }, [arrivalToast]);
 
-  const fetchFactoryStats = async (isMounted = true) => {
+  const fetchFactoryStats = async () => {
     try {
       // Get all projects grouped by factory
       const { data: projects, error } = await supabase
@@ -153,7 +154,7 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
         .not('factory', 'is', null);
 
       if (error) throw error;
-      if (!isMounted) return; // Prevent state update if unmounted
+      if (!isMountedRef.current) return; // Prevent state update if unmounted
 
       // Group by factory code
       const stats = {};
@@ -190,14 +191,14 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
     }
   };
 
-  const fetchMapStats = async (isMounted = true) => {
+  const fetchMapStats = async () => {
     try {
       const { data: projects, error } = await supabase
         .from('projects')
         .select('id, status');
 
       if (error) throw error;
-      if (!isMounted) return; // Prevent state update if unmounted
+      if (!isMountedRef.current) return; // Prevent state update if unmounted
 
       const active = (projects || []).filter(p =>
         !['Completed', 'Cancelled'].includes(p.status)
@@ -215,11 +216,11 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
       setIsLoading(false);
     } catch (err) {
       console.error('Error fetching map stats:', err);
-      if (isMounted) setIsLoading(false);
+      if (isMountedRef.current) setIsLoading(false);
     }
   };
 
-  const fetchProjectsAndDeliveries = async (isMounted = true) => {
+  const fetchProjectsAndDeliveries = async () => {
     try {
       // Fetch projects with delivery locations
       const { data: projectData, error } = await supabase
@@ -229,7 +230,7 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
         .in('status', ['In Progress', 'Shipping', 'Installation']);
 
       if (error) throw error;
-      if (!isMounted) return; // Prevent state update if unmounted
+      if (!isMountedRef.current) return; // Prevent state update if unmounted
 
       const projectsList = projectData || [];
       setProjects(projectsList);

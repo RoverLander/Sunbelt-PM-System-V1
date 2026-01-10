@@ -73,6 +73,9 @@ export class CelebrationParticles extends PIXI.Container {
    * @param {number} deltaTime - Time since last frame
    */
   update(deltaTime) {
+    // Guard against updates after destruction
+    if (this.destroyed) return;
+
     const now = Date.now();
     const toRemove = [];
 
