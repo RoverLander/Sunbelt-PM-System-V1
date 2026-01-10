@@ -1116,7 +1116,8 @@ function ExecutiveReports() {
         marginBottom: '24px'
       }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <BarChart3 size={28} style={{ color: 'var(--sunbelt-orange)' }} />
             Executive Reports
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>

@@ -582,7 +582,16 @@ function PMDashboard({ onNavigateToProject }) {
         marginBottom: 'var(--space-lg)'
       }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+          <h1 style={{
+            margin: 0,
+            fontSize: '1.75rem',
+            fontWeight: '700',
+            color: 'var(--text-primary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <FolderKanban size={28} style={{ color: 'var(--sunbelt-orange)' }} />
             My Dashboard
           </h1>
           <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
