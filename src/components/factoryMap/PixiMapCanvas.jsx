@@ -47,6 +47,24 @@ const PixiMapCanvas = ({
   const layersRef = useRef({});
   const [isReady, setIsReady] = useState(false);
 
+  // Store callbacks in refs to avoid stale closures in Pixi event handlers
+  const callbacksRef = useRef({});
+  callbacksRef.current = {
+    onZoomChange,
+    onViewportChange,
+    onFactoryHover,
+    onFactoryClick,
+    onFactoryHoverEnd,
+    onJobSiteHover,
+    onJobSiteClick,
+    onJobSiteHoverEnd,
+    onTruckHover,
+    onTruckClick,
+    onTruckHoverEnd,
+    onTruckArrived,
+    onFactoryJump
+  };
+
   // Initialize Pixi application
   useEffect(() => {
     if (!containerRef.current || appRef.current) return;
@@ -127,14 +145,14 @@ const PixiMapCanvas = ({
         mapWidth: MAP_WIDTH,
         mapHeight: MAP_HEIGHT,
         onZoomChange: (zoom) => {
-          onZoomChange?.(zoom);
+          callbacksRef.current.onZoomChange?.(zoom);
           lodManager.update(zoom);
         },
         onViewportChange: (bounds) => {
-          onViewportChange?.(bounds);
+          callbacksRef.current.onViewportChange?.(bounds);
         },
         onFactoryJump: (code, index) => {
-          onFactoryJump?.(code, index);
+          callbacksRef.current.onFactoryJump?.(code, index);
         }
       });
       viewportRef.current = viewport;
@@ -170,20 +188,20 @@ const PixiMapCanvas = ({
     const setupEventHandlers = () => {
       const layers = layersRef.current;
 
-      // Factory events
-      layers.factories.on('factory:hover', (data) => onFactoryHover?.(data));
-      layers.factories.on('factory:hoverend', () => onFactoryHoverEnd?.());
-      layers.factories.on('factory:click', (data) => onFactoryClick?.(data));
+      // Factory events - use callbacksRef to avoid stale closures
+      layers.factories.on('factory:hover', (data) => callbacksRef.current.onFactoryHover?.(data));
+      layers.factories.on('factory:hoverend', () => callbacksRef.current.onFactoryHoverEnd?.());
+      layers.factories.on('factory:click', (data) => callbacksRef.current.onFactoryClick?.(data));
 
       // Job site events
-      layers.jobSites.on('jobsite:hover', (data) => onJobSiteHover?.(data));
-      layers.jobSites.on('jobsite:hoverend', () => onJobSiteHoverEnd?.());
-      layers.jobSites.on('jobsite:click', (data) => onJobSiteClick?.(data));
+      layers.jobSites.on('jobsite:hover', (data) => callbacksRef.current.onJobSiteHover?.(data));
+      layers.jobSites.on('jobsite:hoverend', () => callbacksRef.current.onJobSiteHoverEnd?.());
+      layers.jobSites.on('jobsite:click', (data) => callbacksRef.current.onJobSiteClick?.(data));
 
       // Truck events
-      layers.trucks.on('truck:hover', (data) => onTruckHover?.(data));
-      layers.trucks.on('truck:hoverend', () => onTruckHoverEnd?.());
-      layers.trucks.on('truck:click', (data) => onTruckClick?.(data));
+      layers.trucks.on('truck:hover', (data) => callbacksRef.current.onTruckHover?.(data));
+      layers.trucks.on('truck:hoverend', () => callbacksRef.current.onTruckHoverEnd?.());
+      layers.trucks.on('truck:click', (data) => callbacksRef.current.onTruckClick?.(data));
       layers.trucks.on('truck:arrived', (data) => {
         // Trigger celebration particles at arrival location
         const truck = layers.trucks.trucks.get(data.deliveryId);
@@ -194,7 +212,7 @@ const PixiMapCanvas = ({
             duration: 2500
           });
         }
-        onTruckArrived?.(data);
+        callbacksRef.current.onTruckArrived?.(data);
       });
     };
 
