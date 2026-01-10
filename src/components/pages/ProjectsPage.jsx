@@ -19,7 +19,8 @@ import {
   Calendar,
   User,
   Building2,
-  Filter
+  Filter,
+  ArrowUpDown
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -55,6 +56,11 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
   const [filterPM, setFilterPM] = useState('all');
   const [filterFactory, setFilterFactory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // ==========================================================================
+  // STATE - SORTING
+  // ==========================================================================
+  const [sortBy, setSortBy] = useState('updated_at_desc'); // Default: recently updated first
 
   // ==========================================================================
   // EFFECTS
@@ -151,6 +157,62 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
 
     return true;
   });
+
+  // ==========================================================================
+  // SORT PROJECTS
+  // ==========================================================================
+  const STATUS_ORDER = {
+    'Planning': 1,
+    'Pre-PM': 2,
+    'PM Handoff': 3,
+    'In Progress': 4,
+    'Warranty': 5,
+    'On Hold': 6,
+    'Completed': 7,
+    'Cancelled': 8
+  };
+
+  const sortProjects = (a, b) => {
+    switch (sortBy) {
+      case 'project_number_asc':
+        return (a.project_number || '').localeCompare(b.project_number || '');
+      case 'project_number_desc':
+        return (b.project_number || '').localeCompare(a.project_number || '');
+      case 'name_asc':
+        return (a.name || '').localeCompare(b.name || '');
+      case 'name_desc':
+        return (b.name || '').localeCompare(a.name || '');
+      case 'client_asc':
+        return (a.client_name || '').localeCompare(b.client_name || '');
+      case 'client_desc':
+        return (b.client_name || '').localeCompare(a.client_name || '');
+      case 'pm_asc':
+        return (a.pm?.name || '').localeCompare(b.pm?.name || '');
+      case 'pm_desc':
+        return (b.pm?.name || '').localeCompare(a.pm?.name || '');
+      case 'delivery_date_asc':
+        if (!a.delivery_date && !b.delivery_date) return 0;
+        if (!a.delivery_date) return 1;
+        if (!b.delivery_date) return -1;
+        return new Date(a.delivery_date).getTime() - new Date(b.delivery_date).getTime();
+      case 'delivery_date_desc':
+        if (!a.delivery_date && !b.delivery_date) return 0;
+        if (!a.delivery_date) return 1;
+        if (!b.delivery_date) return -1;
+        return new Date(b.delivery_date).getTime() - new Date(a.delivery_date).getTime();
+      case 'status_asc':
+        return (STATUS_ORDER[a.status] || 99) - (STATUS_ORDER[b.status] || 99);
+      case 'status_desc':
+        return (STATUS_ORDER[b.status] || 99) - (STATUS_ORDER[a.status] || 99);
+      case 'updated_at_asc':
+        return new Date(a.updated_at || 0).getTime() - new Date(b.updated_at || 0).getTime();
+      case 'updated_at_desc':
+      default:
+        return new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime();
+    }
+  };
+
+  const sortedProjects = [...filteredProjects].sort(sortProjects);
 
   // ==========================================================================
   // DERIVED VALUES
@@ -413,31 +475,75 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
           ))}
         </select>
 
+        {/* Sort Dropdown */}
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          style={{
+            padding: '8px 12px',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--text-primary)',
+            fontSize: '0.8125rem',
+            cursor: 'pointer'
+          }}
+        >
+          <optgroup label="Recently Updated">
+            <option value="updated_at_desc">Recently Updated (Newest)</option>
+            <option value="updated_at_asc">Recently Updated (Oldest)</option>
+          </optgroup>
+          <optgroup label="Project Number">
+            <option value="project_number_asc">Project # (A-Z)</option>
+            <option value="project_number_desc">Project # (Z-A)</option>
+          </optgroup>
+          <optgroup label="Project Name">
+            <option value="name_asc">Name (A-Z)</option>
+            <option value="name_desc">Name (Z-A)</option>
+          </optgroup>
+          <optgroup label="Client">
+            <option value="client_asc">Client (A-Z)</option>
+            <option value="client_desc">Client (Z-A)</option>
+          </optgroup>
+          <optgroup label="PM">
+            <option value="pm_asc">PM (A-Z)</option>
+            <option value="pm_desc">PM (Z-A)</option>
+          </optgroup>
+          <optgroup label="Delivery Date">
+            <option value="delivery_date_asc">Delivery Date (Soonest)</option>
+            <option value="delivery_date_desc">Delivery Date (Latest)</option>
+          </optgroup>
+          <optgroup label="Status">
+            <option value="status_asc">Status (Early → Late)</option>
+            <option value="status_desc">Status (Late → Early)</option>
+          </optgroup>
+        </select>
+
         {/* Search */}
         <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-          <Search 
-            size={16} 
-            style={{ 
-              position: 'absolute', 
-              left: '10px', 
-              top: '50%', 
-              transform: 'translateY(-50%)', 
-              color: 'var(--text-tertiary)' 
-            }} 
+          <Search
+            size={16}
+            style={{
+              position: 'absolute',
+              left: '10px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--text-tertiary)'
+            }}
           />
           <input
             type="text"
             placeholder="Search projects..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ 
-              width: '100%', 
-              padding: '8px 12px 8px 34px', 
-              background: 'var(--bg-secondary)', 
-              border: '1px solid var(--border-color)', 
-              borderRadius: 'var(--radius-md)', 
-              color: 'var(--text-primary)', 
-              fontSize: '0.8125rem' 
+            style={{
+              width: '100%',
+              padding: '8px 12px 8px 34px',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-primary)',
+              fontSize: '0.8125rem'
             }}
           />
         </div>
@@ -446,7 +552,7 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
       {/* ================================================================== */}
       {/* PROJECTS GRID                                                     */}
       {/* ================================================================== */}
-      {filteredProjects.length === 0 ? (
+      {sortedProjects.length === 0 ? (
         // Empty State
         <div style={{ 
           padding: '60px 40px', 
@@ -483,12 +589,12 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
         </div>
       ) : (
         // Projects Grid
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', 
-          gap: '16px' 
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gap: '16px'
         }}>
-          {filteredProjects.map(project => (
+          {sortedProjects.map(project => (
             <div
               key={project.id}
               onClick={() => onNavigateToProject 

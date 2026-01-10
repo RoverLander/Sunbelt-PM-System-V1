@@ -29,7 +29,12 @@ import {
   ClipboardList,
   Search,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  ToggleLeft,
+  ToggleRight,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -49,10 +54,69 @@ const STATUS_COLORS = {
   'Closed': 'var(--text-tertiary)'
 };
 
+// Status ordering for sorting (lower number = earlier in workflow)
+const STATUS_ORDER = {
+  'Draft': 1,
+  'Submitted': 2,
+  'Pending': 3,
+  'Under Review': 4,
+  'Approved': 5,
+  'Approved as Noted': 6,
+  'Rejected': 7,
+  'Revise and Resubmit': 8,
+  'Closed': 9
+};
+
+// ============================================================================
+// SORTABLE TABLE HEADER COMPONENT
+// ============================================================================
+function SortableHeader({ label, column, currentSort, onSort, width }) {
+  const isActive = currentSort.column === column;
+  const direction = isActive ? currentSort.direction : null;
+
+  return (
+    <th
+      onClick={() => onSort(column)}
+      style={{
+        padding: '12px 16px',
+        textAlign: 'left',
+        fontSize: '0.75rem',
+        fontWeight: '600',
+        color: isActive ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+        textTransform: 'uppercase',
+        letterSpacing: '0.05em',
+        cursor: 'pointer',
+        userSelect: 'none',
+        width: width || 'auto',
+        transition: 'color 0.15s'
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--sunbelt-orange)'}
+      onMouseLeave={(e) => e.currentTarget.style.color = isActive ? 'var(--sunbelt-orange)' : 'var(--text-secondary)'}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {label}
+        {direction === 'asc' ? (
+          <ChevronUp size={14} />
+        ) : direction === 'desc' ? (
+          <ChevronDown size={14} />
+        ) : (
+          <ChevronsUpDown size={14} style={{ opacity: 0.4 }} />
+        )}
+      </div>
+    </th>
+  );
+}
+
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-function SubmittalsPage({ isDirectorView = false, onNavigateToProject }) {
+function SubmittalsPage({
+  isDirectorView = false,
+  onNavigateToProject,
+  includeBackupProjects = false,
+  onToggleBackupProjects,
+  initialFilter = null
+}) {
   const { user } = useAuth();
 
   // ==========================================================================
@@ -66,16 +130,66 @@ function SubmittalsPage({ isDirectorView = false, onNavigateToProject }) {
   // ==========================================================================
   // STATE - FILTERS (Default to 'all')
   // ==========================================================================
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterStatus, setFilterStatus] = useState(initialFilter || 'all');
   const [filterProject, setFilterProject] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // ==========================================================================
+  // STATE - SORTING (Default to due_date ascending - most urgent first)
+  // ==========================================================================
+  const [sort, setSort] = useState({ column: 'due_date', direction: 'asc' });
+
+  // ==========================================================================
+  // SORT HANDLER
+  // ==========================================================================
+  const handleSort = (column) => {
+    setSort(prev => ({
+      column,
+      direction: prev.column === column && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  // ==========================================================================
+  // SORT COMPARATOR
+  // ==========================================================================
+  const sortSubmittals = (a, b) => {
+    const { column, direction } = sort;
+    const multiplier = direction === 'asc' ? 1 : -1;
+
+    switch (column) {
+      case 'title':
+        return multiplier * (a.title || '').localeCompare(b.title || '');
+      case 'project':
+        return multiplier * (a.project?.project_number || '').localeCompare(b.project?.project_number || '');
+      case 'sent_to':
+        const aTo = a.sent_to || a.external_assignee_email || '';
+        const bTo = b.sent_to || b.external_assignee_email || '';
+        return multiplier * aTo.localeCompare(bTo);
+      case 'status':
+        return multiplier * ((STATUS_ORDER[a.status] || 99) - (STATUS_ORDER[b.status] || 99));
+      case 'due_date':
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return multiplier * 1;
+        if (!b.due_date) return multiplier * -1;
+        return multiplier * (new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+      default:
+        return 0;
+    }
+  };
+
+  // Update filter when initialFilter prop changes
+  useEffect(() => {
+    if (initialFilter) {
+      setFilterStatus(initialFilter);
+    }
+  }, [initialFilter]);
 
   // ==========================================================================
   // FETCH DATA
   // ==========================================================================
   useEffect(() => {
     if (user) fetchData();
-  }, [user, isDirectorView]);
+  }, [user, isDirectorView, includeBackupProjects]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -91,7 +205,11 @@ function SubmittalsPage({ isDirectorView = false, onNavigateToProject }) {
       let projectsQuery = supabase.from('projects').select('id, project_number, name, color');
 
       if (!isDirectorView && userData) {
-        projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        if (includeBackupProjects) {
+          projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        } else {
+          projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
+        }
       }
 
       const { data: projectsData } = await projectsQuery;
@@ -196,21 +314,49 @@ function SubmittalsPage({ isDirectorView = false, onNavigateToProject }) {
       {/* HEADER                                                            */}
       {/* ================================================================== */}
       <div style={{ marginBottom: 'var(--space-lg)' }}>
-        <h1 style={{
-          fontSize: '1.75rem',
-          fontWeight: '700',
-          color: 'var(--text-primary)',
-          marginBottom: '4px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px'
-        }}>
-          <ClipboardList size={28} style={{ color: 'var(--sunbelt-orange)' }} />
-          {isDirectorView ? 'All Submittals' : 'My Submittals'}
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-          {isDirectorView ? 'Submittals across all projects' : 'Submittals from your assigned projects'}
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h1 style={{
+              fontSize: '1.75rem',
+              fontWeight: '700',
+              color: 'var(--text-primary)',
+              marginBottom: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <ClipboardList size={28} style={{ color: 'var(--sunbelt-orange)' }} />
+              {isDirectorView ? 'All Submittals' : 'My Submittals'}
+            </h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+              {isDirectorView ? 'Submittals across all projects' : 'Submittals from your assigned projects'}
+            </p>
+          </div>
+
+          {/* Include Backup Projects Toggle */}
+          {!isDirectorView && onToggleBackupProjects && (
+            <button
+              onClick={() => onToggleBackupProjects(!includeBackupProjects)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 14px',
+                background: includeBackupProjects ? 'rgba(249, 115, 22, 0.1)' : 'var(--bg-secondary)',
+                border: `1px solid ${includeBackupProjects ? 'var(--sunbelt-orange)' : 'var(--border-color)'}`,
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+                color: includeBackupProjects ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+                fontSize: '0.8125rem',
+                fontWeight: '500',
+                transition: 'all 0.15s'
+              }}
+            >
+              {includeBackupProjects ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+              Include backup PM projects
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ================================================================== */}
@@ -344,59 +490,15 @@ function SubmittalsPage({ isDirectorView = false, onNavigateToProject }) {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'var(--bg-tertiary)' }}>
-                  <th style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '0.75rem',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em'
-                  }}>Submittal</th>
-                  <th style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '0.75rem',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    width: '180px'
-                  }}>Project</th>
-                  <th style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '0.75rem',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    width: '180px'
-                  }}>Sent To</th>
-                  <th style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '0.75rem',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    width: '130px'
-                  }}>Status</th>
-                  <th style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '0.75rem',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    width: '120px'
-                  }}>Due Date</th>
+                  <SortableHeader label="Submittal" column="title" currentSort={sort} onSort={handleSort} />
+                  <SortableHeader label="Project" column="project" currentSort={sort} onSort={handleSort} width="180px" />
+                  <SortableHeader label="Sent To" column="sent_to" currentSort={sort} onSort={handleSort} width="180px" />
+                  <SortableHeader label="Status" column="status" currentSort={sort} onSort={handleSort} width="130px" />
+                  <SortableHeader label="Due Date" column="due_date" currentSort={sort} onSort={handleSort} width="120px" />
                 </tr>
               </thead>
               <tbody>
-                {filteredSubmittals.map((submittal, idx) => {
+                {[...filteredSubmittals].sort(sortSubmittals).map((submittal, idx) => {
                   const overdue = isOverdue(submittal.due_date, submittal.status);
                   return (
                     <tr

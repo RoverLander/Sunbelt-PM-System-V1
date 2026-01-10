@@ -59,7 +59,15 @@ import {
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 
-function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType }) {
+function Sidebar({
+  currentView,
+  setCurrentView,
+  dashboardType,
+  setDashboardType,
+  includeBackupProjects = false,
+  onToggleBackupProjects,
+  onStatClick
+}) {
   const { user, signOut } = useAuth();
 
   // ==========================================================================
@@ -72,15 +80,14 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
 
   const [currentUser, setCurrentUser] = useState(null);
   const [showDashboardMenu, setShowDashboardMenu] = useState(false);
-  
+
   // PM View Stats
   const [activeProjects, setActiveProjects] = useState(0);
   const [myTasks, setMyTasks] = useState(0);
   const [overdueTasks, setOverdueTasks] = useState(0);
-  const [includeSecondary, setIncludeSecondary] = useState(() => {
-    const saved = localStorage.getItem('includeSecondaryInCounts');
-    return saved !== null ? JSON.parse(saved) : false;
-  });
+
+  // Use props for includeSecondary (synced with App state)
+  const includeSecondary = includeBackupProjects;
 
   // Director View Stats
   const [directorStats, setDirectorStats] = useState({
@@ -434,9 +441,9 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
   const toggleDarkMode = () => setDarkMode(prev => !prev);
 
   const toggleIncludeSecondary = () => {
-    const newValue = !includeSecondary;
-    setIncludeSecondary(newValue);
-    localStorage.setItem('includeSecondaryInCounts', JSON.stringify(newValue));
+    if (onToggleBackupProjects) {
+      onToggleBackupProjects(!includeSecondary);
+    }
   };
 
   // ==========================================================================
@@ -526,17 +533,30 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
               </div>
             </div>
 
-            {/* Overdue row */}
+            {/* Overdue row - clickable */}
             {overdueTasks > 0 && (
-              <div style={{
-                padding: '6px 10px',
-                background: 'rgba(239, 68, 68, 0.1)',
-                borderRadius: 'var(--radius-sm)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginBottom: '8px'
-              }}>
+              <div
+                onClick={() => onStatClick && onStatClick('tasks', 'overdue')}
+                style={{
+                  padding: '6px 10px',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  borderRadius: 'var(--radius-sm)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '8px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                  e.currentTarget.style.transform = 'translateX(4px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                  e.currentTarget.style.transform = 'translateX(0)';
+                }}
+              >
                 <AlertCircle size={14} style={{ color: 'var(--danger)' }} />
                 <span style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--danger)' }}>{overdueTasks} Overdue</span>
               </div>

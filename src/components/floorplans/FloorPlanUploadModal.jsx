@@ -2,7 +2,7 @@
 // FloorPlanUploadModal Component
 // ============================================================================
 // Modal for uploading new floor plan files (PDF or images).
-// Simplified version that doesn't rely on PDF.js worker for page detection.
+// PDF files are automatically converted to PNG for marker support.
 // ============================================================================
 
 import React, { useState, useRef } from 'react';
@@ -13,10 +13,15 @@ import {
   Image,
   AlertCircle,
   Loader,
-  File
+  File,
+  CheckCircle
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Set up PDF.js worker from CDN
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 // ============================================================================
 // CONSTANTS
@@ -46,6 +51,8 @@ function FloorPlanUploadModal({ isOpen, onClose, projectId, projectNumber, onSuc
   const [pageCount, setPageCount] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [conversionProgress, setConversionProgress] = useState('');
+  const [isPdfConverting, setIsPdfConverting] = useState(false);
 
   // ==========================================================================
   // FILE HANDLING
@@ -78,10 +85,16 @@ function FloorPlanUploadModal({ isOpen, onClose, projectId, projectNumber, onSuc
       setName(baseName);
     }
 
-    // For PDFs, default to 1 page (user can manually specify if needed)
-    // PDF.js worker doesn't work well in StackBlitz environment
+    // For PDFs, automatically detect page count
     if (file.type === 'application/pdf') {
-      setPageCount(1);
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        setPageCount(pdf.numPages);
+      } catch (err) {
+        console.error('Error detecting PDF pages:', err);
+        setPageCount(1);
+      }
     }
   };
 
@@ -102,11 +115,56 @@ function FloorPlanUploadModal({ isOpen, onClose, projectId, projectNumber, onSuc
   };
 
   // ==========================================================================
+  // PDF TO PNG CONVERSION
+  // ==========================================================================
+  const convertPdfToImages = async (file) => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const images = [];
+
+    // Render at 2x scale for good quality (adjustable)
+    const scale = 2.0;
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      setConversionProgress(`Converting page ${pageNum} of ${pdf.numPages}...`);
+
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale });
+
+      // Create canvas
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      // Render PDF page to canvas
+      await page.render({
+        canvasContext: context,
+        viewport: viewport
+      }).promise;
+
+      // Convert canvas to blob
+      const blob = await new Promise((resolve) => {
+        canvas.toBlob(resolve, 'image/png', 0.95);
+      });
+
+      images.push({
+        pageNumber: pageNum,
+        blob,
+        width: viewport.width,
+        height: viewport.height
+      });
+    }
+
+    return images;
+  };
+
+  // ==========================================================================
   // SUBMIT HANDLER
   // ==========================================================================
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!selectedFile) {
       setError('Please select a file');
       return;
@@ -121,59 +179,141 @@ function FloorPlanUploadModal({ isOpen, onClose, projectId, projectNumber, onSuc
     setError('');
 
     try {
-      // Generate storage path
       const timestamp = Date.now();
-      const sanitizedFileName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const storagePath = `${projectId}/floor-plans/${timestamp}_${sanitizedFileName}`;
+      const isPdf = selectedFile.type === 'application/pdf';
 
-      // Upload file to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('project-files')
-        .upload(storagePath, selectedFile, {
-          cacheControl: '3600',
-          upsert: false
-        });
+      // If PDF, convert to PNG images first
+      if (isPdf) {
+        setIsPdfConverting(true);
+        setConversionProgress('Starting PDF conversion...');
 
-      if (uploadError) throw uploadError;
+        try {
+          const images = await convertPdfToImages(selectedFile);
 
-      // Create floor plan record
-      const floorPlanData = {
-        project_id: projectId,
-        name: name.trim(),
-        description: description.trim() || null,
-        file_path: storagePath,
-        file_name: selectedFile.name,
-        file_type: selectedFile.type,
-        file_size: selectedFile.size,
-        page_count: pageCount,
-        sort_order: existingCount || 0,
-        uploaded_by: user?.id
-      };
+          // Upload each page as a separate floor plan or as pages of one plan
+          if (images.length === 1) {
+            // Single page PDF - upload as single image
+            setConversionProgress('Uploading converted image...');
+            const storagePath = `${projectId}/floor-plans/${timestamp}_${name.trim().replace(/[^a-zA-Z0-9._-]/g, '_')}.png`;
 
-      const { data, error: insertError } = await supabase
-        .from('floor_plans')
-        .insert([floorPlanData])
-        .select()
-        .single();
+            const { error: uploadError } = await supabase.storage
+              .from('project-files')
+              .upload(storagePath, images[0].blob, {
+                cacheControl: '3600',
+                upsert: false,
+                contentType: 'image/png'
+              });
 
-      if (insertError) throw insertError;
+            if (uploadError) throw uploadError;
 
-      // If multi-page PDF, create page entries
-      if (pageCount > 1) {
-        const pages = Array.from({ length: pageCount }, (_, i) => ({
-          floor_plan_id: data.id,
-          page_number: i + 1,
-          name: `Page ${i + 1}`
-        }));
+            // Create floor plan record
+            const { data, error: insertError } = await supabase
+              .from('floor_plans')
+              .insert([{
+                project_id: projectId,
+                name: name.trim(),
+                description: description.trim() || null,
+                file_path: storagePath,
+                file_name: `${name.trim()}.png`,
+                file_type: 'image/png',
+                file_size: images[0].blob.size,
+                page_count: 1,
+                sort_order: existingCount || 0,
+                uploaded_by: user?.id
+              }])
+              .select()
+              .single();
 
-        const { error: pagesError } = await supabase.from('floor_plan_pages').insert(pages);
-        if (pagesError) {
-          console.error('Error creating floor plan pages:', pagesError);
-          // Floor plan created but pages failed - still report success but log error
+            if (insertError) throw insertError;
+            onSuccess && onSuccess(data);
+
+          } else {
+            // Multi-page PDF - create separate floor plans for each page
+            // This allows independent marker placement on each page
+            for (let i = 0; i < images.length; i++) {
+              setConversionProgress(`Uploading page ${i + 1} of ${images.length}...`);
+              const image = images[i];
+              const pageName = `${name.trim()} - Page ${i + 1}`;
+              const storagePath = `${projectId}/floor-plans/${timestamp}_page${i + 1}_${name.trim().replace(/[^a-zA-Z0-9._-]/g, '_')}.png`;
+
+              const { error: uploadError } = await supabase.storage
+                .from('project-files')
+                .upload(storagePath, image.blob, {
+                  cacheControl: '3600',
+                  upsert: false,
+                  contentType: 'image/png'
+                });
+
+              if (uploadError) throw uploadError;
+
+              // Create floor plan record for this page
+              const { error: insertError } = await supabase
+                .from('floor_plans')
+                .insert([{
+                  project_id: projectId,
+                  name: pageName,
+                  description: description.trim() || null,
+                  file_path: storagePath,
+                  file_name: `${pageName}.png`,
+                  file_type: 'image/png',
+                  file_size: image.blob.size,
+                  page_count: 1,
+                  sort_order: (existingCount || 0) + i,
+                  uploaded_by: user?.id
+                }])
+                .select()
+                .single();
+
+              if (insertError) throw insertError;
+            }
+
+            onSuccess && onSuccess({ multiple: true, count: images.length });
+          }
+
+        } catch (convErr) {
+          console.error('PDF conversion error:', convErr);
+          throw new Error('Failed to convert PDF. Try uploading as PNG/JPG instead.');
+        } finally {
+          setIsPdfConverting(false);
+          setConversionProgress('');
         }
+
+      } else {
+        // Regular image upload
+        const sanitizedFileName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `${projectId}/floor-plans/${timestamp}_${sanitizedFileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('project-files')
+          .upload(storagePath, selectedFile, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+
+        // Create floor plan record
+        const { data, error: insertError } = await supabase
+          .from('floor_plans')
+          .insert([{
+            project_id: projectId,
+            name: name.trim(),
+            description: description.trim() || null,
+            file_path: storagePath,
+            file_name: selectedFile.name,
+            file_type: selectedFile.type,
+            file_size: selectedFile.size,
+            page_count: 1,
+            sort_order: existingCount || 0,
+            uploaded_by: user?.id
+          }])
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+        onSuccess && onSuccess(data);
       }
 
-      onSuccess && onSuccess(data);
       handleClose();
     } catch (err) {
       console.error('Error uploading floor plan:', err);
@@ -328,14 +468,28 @@ function FloorPlanUploadModal({ isOpen, onClose, projectId, projectNumber, onSuc
               {selectedFile ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-sm)' }}>
                   {getFileIcon(selectedFile.type)}
-                  <div>
+                  <div style={{ textAlign: 'center' }}>
                     <p style={{ fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
                       {selectedFile.name}
                     </p>
                     <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
                       {formatFileSize(selectedFile.size)}
-                      {selectedFile.type === 'application/pdf' && ` • PDF`}
+                      {selectedFile.type === 'application/pdf' && ` • ${pageCount} page${pageCount > 1 ? 's' : ''}`}
                     </p>
+                    {selectedFile.type === 'application/pdf' && (
+                      <p style={{
+                        fontSize: '0.75rem',
+                        color: 'var(--success)',
+                        margin: '8px 0 0 0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px'
+                      }}>
+                        <CheckCircle size={12} />
+                        Will be converted to PNG for marker support
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -438,40 +592,19 @@ function FloorPlanUploadModal({ isOpen, onClose, projectId, projectNumber, onSuc
             </div>
 
             {/* ============================================================ */}
-            {/* PAGE COUNT (for PDFs)                                        */}
+            {/* PDF INFO (multi-page notice)                                 */}
             {/* ============================================================ */}
-            {selectedFile?.type === 'application/pdf' && (
-              <div>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: '0.875rem',
-                    fontWeight: '600',
-                    color: 'var(--text-primary)',
-                    marginBottom: 'var(--space-xs)'
-                  }}
-                >
-                  Number of Pages
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={pageCount}
-                  onChange={(e) => setPageCount(Math.max(1, parseInt(e.target.value) || 1))}
-                  style={{
-                    width: '100px',
-                    padding: 'var(--space-sm) var(--space-md)',
-                    background: 'var(--bg-primary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 'var(--radius-md)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.9375rem'
-                  }}
-                />
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
-                  Enter the number of pages in your PDF
-                </p>
+            {selectedFile?.type === 'application/pdf' && pageCount > 1 && (
+              <div style={{
+                padding: 'var(--space-sm) var(--space-md)',
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '0.8125rem',
+                color: 'var(--info)'
+              }}>
+                This {pageCount}-page PDF will be converted to {pageCount} separate floor plan images,
+                each with independent marker support.
               </div>
             )}
           </div>
@@ -527,7 +660,7 @@ function FloorPlanUploadModal({ isOpen, onClose, projectId, projectNumber, onSuc
               {loading ? (
                 <>
                   <Loader size={16} className="animate-spin" />
-                  Uploading...
+                  {isPdfConverting ? conversionProgress || 'Converting...' : 'Uploading...'}
                 </>
               ) : (
                 <>

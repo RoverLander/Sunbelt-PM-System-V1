@@ -59,6 +59,7 @@ import ProjectCalendarWeek from './ProjectCalendarWeek';
 
 // ✅ ADDED: Workflow imports
 import WorkflowTracker from './WorkflowTracker';
+import StationDetailModal from '../workflow/StationDetailModal';
 
 // ============================================================================
 // CONSTANTS
@@ -170,6 +171,10 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
   const [editRFI, setEditRFI] = useState(null);
   const [editSubmittal, setEditSubmittal] = useState(null);
 
+  // Workflow station modal
+  const [selectedStation, setSelectedStation] = useState(null);
+  const [prefilledStationKey, setPrefilledStationKey] = useState(null);
+
   // Kanban drag state
   const [draggedTask, setDraggedTask] = useState(null);
 
@@ -183,6 +188,28 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   }, []);
+
+  // ==========================================================================
+  // NAVIGATE TO ITEM (from floor plan viewer)
+  // ==========================================================================
+  const handleNavigateToItem = useCallback((tabName, itemId) => {
+    // Switch to the appropriate tab
+    setActiveTab(tabName);
+
+    // Find the item and open its edit modal
+    setTimeout(() => {
+      if (tabName === 'tasks') {
+        const task = tasks.find(t => t.id === itemId);
+        if (task) setEditTask(task);
+      } else if (tabName === 'rfis') {
+        const rfi = rfis.find(r => r.id === itemId);
+        if (rfi) setEditRFI(rfi);
+      } else if (tabName === 'submittals') {
+        const submittal = submittals.find(s => s.id === itemId);
+        if (submittal) setEditSubmittal(submittal);
+      }
+    }, 100); // Small delay to allow tab switch animation
+  }, [tasks, rfis, submittals]);
 
   // ==========================================================================
   // DATA FETCHING
@@ -427,9 +454,15 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                   stations={workflowStations}
                   tasks={tasks}
                   projectStatuses={projectWorkflowStatus}
-                  onStationClick={(station, status, deadline) => {
-                    console.log('Station clicked:', station, status, deadline);
-                    // TODO: Open StationDetailModal when implemented
+                  onStationClick={(station, status, deadline, taskCount) => {
+                    // If no tasks linked, open add task modal with station pre-filled
+                    if (taskCount === 0) {
+                      setPrefilledStationKey(station.station_key);
+                      setShowAddTask(true);
+                    } else {
+                      // Open station detail modal to view/manage linked tasks
+                      setSelectedStation(station);
+                    }
                   }}
                 />
               )}
@@ -497,6 +530,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                   tasks={tasks}
                   showToast={showToast}
                   onDataRefresh={fetchProjectData}
+                  onNavigateToItem={handleNavigateToItem}
                 />
               )}
 
@@ -537,12 +571,17 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
 
       <AddTaskModal
         isOpen={showAddTask}
-        onClose={() => setShowAddTask(false)}
+        onClose={() => {
+          setShowAddTask(false);
+          setPrefilledStationKey(null);
+        }}
         projectId={project.id}
         projectName={project.name}
         projectNumber={project.project_number}
+        prefilledStationKey={prefilledStationKey}
         onSuccess={() => {
           setShowAddTask(false);
+          setPrefilledStationKey(null);
           fetchProjectData();
           showToast('Task created');
         }}
@@ -644,6 +683,24 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
           fetchProjectData();
           showToast('Milestone created');
         }}
+      />
+
+      {/* WORKFLOW STATION DETAIL MODAL */}
+      <StationDetailModal
+        isOpen={!!selectedStation}
+        onClose={() => setSelectedStation(null)}
+        project={project}
+        station={selectedStation}
+        onAddTask={(stationKey) => {
+          setSelectedStation(null);
+          setPrefilledStationKey(stationKey);
+          setShowAddTask(true);
+        }}
+        onTaskClick={(task) => {
+          setSelectedStation(null);
+          setEditTask(task);
+        }}
+        onRefresh={fetchProjectData}
       />
 
       {/* TOAST */}

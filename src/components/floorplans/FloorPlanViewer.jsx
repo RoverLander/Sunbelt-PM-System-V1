@@ -60,7 +60,8 @@ function FloorPlanViewer({
   onPageRename,
   showToast,
   onRefresh,
-  onDataRefresh
+  onDataRefresh,
+  onNavigateToItem
 }) {
   // ==========================================================================
   // REFS
@@ -77,6 +78,13 @@ function FloorPlanViewer({
   const [fileUrl, setFileUrl] = useState(null);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
   const [mode, setMode] = useState('view'); // 'view' or 'addMarker'
+
+  // ==========================================================================
+  // STATE - PAN/DRAG
+  // ==========================================================================
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   // ==========================================================================
   // STATE - MARKERS
@@ -213,7 +221,52 @@ function FloorPlanViewer({
   // ==========================================================================
   const handleZoomIn = () => setZoom(z => Math.min(z + ZOOM_STEP, MAX_ZOOM));
   const handleZoomOut = () => setZoom(z => Math.max(z - ZOOM_STEP, MIN_ZOOM));
-  const handleResetZoom = () => setZoom(1);
+  const handleResetZoom = () => {
+    setZoom(1);
+    setPanOffset({ x: 0, y: 0 });
+  };
+
+  // ==========================================================================
+  // HANDLERS - PAN/DRAG
+  // ==========================================================================
+  const handleMouseDown = (e) => {
+    // Only pan in view mode and when zoomed in
+    if (mode !== 'view' || zoom <= 1) return;
+    // Don't start drag if clicking on marker elements
+    const target = e.target;
+    const isMarkerOrButton = target.closest('[data-marker]') || target.tagName === 'BUTTON';
+    if (isMarkerOrButton) return;
+
+    setIsDragging(true);
+    setDragStart({
+      x: e.clientX - panOffset.x,
+      y: e.clientY - panOffset.y
+    });
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+
+    setPanOffset({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  // Reset pan when zoom changes to 1 or below
+  useEffect(() => {
+    if (zoom <= 1) {
+      setPanOffset({ x: 0, y: 0 });
+    }
+  }, [zoom]);
 
   // ==========================================================================
   // HANDLERS - PAGE NAVIGATION
@@ -370,14 +423,15 @@ function FloorPlanViewer({
   // ==========================================================================
   const getItemDisplayInfo = (marker) => {
     if (!marker.item) return { number: '', title: '', label: '' };
-    
+
     if (marker.item_type === 'rfi') {
       return {
         number: marker.item.rfi_number,
         title: marker.item.subject,
         label: 'RFI Number',
         titleLabel: 'Subject',
-        detailsTitle: 'RFI Details'
+        detailsTitle: 'RFI Details',
+        tabName: 'rfis'
       };
     } else if (marker.item_type === 'task') {
       return {
@@ -385,7 +439,8 @@ function FloorPlanViewer({
         title: marker.item.description || '',
         label: 'Task',
         titleLabel: 'Description',
-        detailsTitle: 'Task Details'
+        detailsTitle: 'Task Details',
+        tabName: 'tasks'
       };
     } else {
       return {
@@ -393,9 +448,21 @@ function FloorPlanViewer({
         title: marker.item.title,
         label: 'Submittal Number',
         titleLabel: 'Title',
-        detailsTitle: 'Submittal Details'
+        detailsTitle: 'Submittal Details',
+        tabName: 'submittals'
       };
     }
+  };
+
+  // ==========================================================================
+  // HANDLER - NAVIGATE TO ITEM
+  // ==========================================================================
+  const handleNavigateToItem = (marker) => {
+    if (!onNavigateToItem || !marker.item) return;
+
+    const displayInfo = getItemDisplayInfo(marker);
+    onClose(); // Close the viewer first
+    onNavigateToItem(displayInfo.tabName, marker.item.id);
   };
 
   // ==========================================================================
@@ -707,14 +774,21 @@ function FloorPlanViewer({
       {/* ================================================================== */}
       <div
         ref={containerRef}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
         style={{
           flex: 1,
-          overflow: 'auto',
+          overflow: zoom > 1 ? 'hidden' : 'auto',
           background: '#0a0a14',
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          cursor: mode === 'addMarker' ? 'crosshair' :
+                  isDragging ? 'grabbing' :
+                  zoom > 1 ? 'grab' : 'default'
         }}
       >
         {/* ===== LOADING STATE ===== */}
@@ -740,10 +814,11 @@ function FloorPlanViewer({
           <div
             style={{
               position: 'relative',
-              transform: `scale(${zoom})`,
+              transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
               transformOrigin: 'center center',
-              transition: 'transform 0.15s ease',
-              margin: '40px'
+              transition: isDragging ? 'none' : 'transform 0.15s ease',
+              margin: '40px',
+              userSelect: 'none'
             }}
           >
             <img
@@ -751,10 +826,11 @@ function FloorPlanViewer({
               src={fileUrl}
               alt={floorPlan.name}
               onClick={handleImageClick}
+              onDragStart={(e) => e.preventDefault()}
               style={{
                 maxWidth: '100%',
                 display: 'block',
-                cursor: mode === 'addMarker' ? 'crosshair' : 'default',
+                cursor: 'inherit',
                 borderRadius: 'var(--radius-md)',
                 boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
               }}
@@ -770,6 +846,7 @@ function FloorPlanViewer({
               return (
                 <div
                   key={marker.id}
+                  data-marker="true"
                   style={{
                     position: 'absolute',
                     left: `${marker.x_percent}%`,
@@ -934,8 +1011,32 @@ function FloorPlanViewer({
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: '600' }}>
                     {getItemDisplayInfo(selectedMarker).label}
                   </div>
-                  <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--sunbelt-orange)' }}>
+                  <div
+                    onClick={() => handleNavigateToItem(selectedMarker)}
+                    style={{
+                      fontSize: '1.125rem',
+                      fontWeight: '700',
+                      color: 'var(--sunbelt-orange)',
+                      cursor: onNavigateToItem ? 'pointer' : 'default',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'opacity 0.15s'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (onNavigateToItem) {
+                        e.currentTarget.style.opacity = '0.8';
+                        e.currentTarget.style.textDecoration = 'underline';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.opacity = '1';
+                      e.currentTarget.style.textDecoration = 'none';
+                    }}
+                    title={onNavigateToItem ? `View ${getItemDisplayInfo(selectedMarker).label}` : ''}
+                  >
                     {getItemDisplayInfo(selectedMarker).number}
+                    {onNavigateToItem && <ExternalLink size={14} />}
                   </div>
                 </div>
 

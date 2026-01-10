@@ -295,6 +295,7 @@ function AddTaskModal({
   projectId,
   projectName = '',
   projectNumber = '',
+  prefilledStationKey = null,
   onSuccess
 }) {
   const { user } = useAuth();
@@ -351,7 +352,7 @@ function AddTaskModal({
         priority: 'Medium',
         due_date: '',
         start_date: '',
-        workflow_station_key: '',
+        workflow_station_key: prefilledStationKey || '',
         assigned_court: ''
       });
       setPendingFiles([]);
@@ -361,7 +362,7 @@ function AddTaskModal({
       fetchMilestones();
       fetchWorkflowStations();
     }
-  }, [isOpen, user]);
+  }, [isOpen, user, prefilledStationKey]);
 
   // Cleanup file object URLs on unmount
   useEffect(() => {

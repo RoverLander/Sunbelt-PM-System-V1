@@ -79,6 +79,7 @@ function WorkflowNode({
   station,
   status,
   deadline,
+  linkedTaskCount = 0,
   isExpanded,
   hasChildren,
   onToggle,
@@ -86,6 +87,7 @@ function WorkflowNode({
   isParallel,
   level = 0
 }) {
+  const [showTooltip, setShowTooltip] = useState(false);
   const daysUntil = getDaysUntilDeadline(deadline);
   const urgency = getUrgencyLevel(daysUntil);
   const color = getStationColor(status, deadline);
@@ -106,6 +108,34 @@ function WorkflowNode({
     }
   };
 
+  const getTooltipContent = () => {
+    const statusLabels = {
+      'completed': 'Completed',
+      'in_progress': 'In Progress',
+      'awaiting_response': 'Awaiting Response',
+      'skipped': 'Skipped',
+      'not_started': 'Not Started'
+    };
+
+    let deadlineText = '';
+    if (deadline && status !== 'completed' && status !== 'skipped') {
+      if (daysUntil < 0) deadlineText = `⚠️ ${Math.abs(daysUntil)} days overdue`;
+      else if (daysUntil === 0) deadlineText = '⚠️ Due today';
+      else deadlineText = `${daysUntil} days remaining`;
+    }
+
+    return {
+      status: statusLabels[status] || 'Not Started',
+      taskCount: linkedTaskCount,
+      deadline: deadlineText,
+      action: status === 'not_started' || linkedTaskCount === 0
+        ? 'Click to create a task'
+        : 'Click to view details'
+    };
+  };
+
+  const tooltip = getTooltipContent();
+
   return (
     <div
       style={{
@@ -113,35 +143,32 @@ function WorkflowNode({
         alignItems: 'flex-start',
         gap: '12px',
         paddingLeft: level > 0 ? `${level * 24}px` : 0,
-        marginBottom: '8px'
+        marginBottom: '8px',
+        position: 'relative'
       }}
     >
       {/* Status indicator */}
       <div
         onClick={onClick}
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
         style={{
           width: '36px',
           height: '36px',
           borderRadius: '50%',
           background: status === 'completed' ? 'rgba(34, 197, 94, 0.2)' :
                      status === 'skipped' ? 'var(--bg-tertiary)' :
+                     status === 'not_started' ? 'var(--bg-tertiary)' :
                      `${color}20`,
-          border: `2px solid ${color}`,
+          border: `2px solid ${status === 'not_started' ? 'var(--border-color)' : color}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
           transition: 'all 0.2s ease',
           flexShrink: 0,
-          position: 'relative'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.1)';
-          e.currentTarget.style.boxShadow = `0 0 12px ${color}40`;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = 'none';
+          position: 'relative',
+          opacity: status === 'not_started' ? 0.6 : 1
         }}
       >
         {getStatusIcon()}
@@ -158,6 +185,91 @@ function WorkflowNode({
             background: 'var(--danger)',
             border: '2px solid var(--bg-secondary)'
           }} />
+        )}
+
+        {/* Task count badge */}
+        {linkedTaskCount > 0 && status !== 'completed' && (
+          <div style={{
+            position: 'absolute',
+            bottom: '-4px',
+            right: '-4px',
+            minWidth: '16px',
+            height: '16px',
+            borderRadius: '8px',
+            background: 'var(--sunbelt-orange)',
+            color: 'white',
+            fontSize: '0.625rem',
+            fontWeight: '700',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 4px',
+            border: '2px solid var(--bg-secondary)'
+          }}>
+            {linkedTaskCount}
+          </div>
+        )}
+
+        {/* Tooltip */}
+        {showTooltip && (
+          <div style={{
+            position: 'absolute',
+            left: '50%',
+            bottom: 'calc(100% + 8px)',
+            transform: 'translateX(-50%)',
+            background: 'var(--bg-primary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            padding: '12px 16px',
+            minWidth: '200px',
+            boxShadow: 'var(--shadow-lg)',
+            zIndex: 100,
+            pointerEvents: 'none'
+          }}>
+            <div style={{ fontWeight: '700', fontSize: '0.875rem', marginBottom: '8px', color: 'var(--text-primary)' }}>
+              {station.name}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-tertiary)' }}>Status:</span>
+                <span style={{ color, fontWeight: '600' }}>{tooltip.status}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-tertiary)' }}>Tasks:</span>
+                <span style={{ color: 'var(--text-primary)', fontWeight: '600' }}>{tooltip.taskCount}</span>
+              </div>
+              {tooltip.deadline && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Deadline:</span>
+                  <span style={{ color: urgency === 'overdue' ? 'var(--danger)' : 'var(--text-primary)', fontWeight: '600' }}>
+                    {tooltip.deadline}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div style={{
+              marginTop: '8px',
+              paddingTop: '8px',
+              borderTop: '1px solid var(--border-color)',
+              color: 'var(--sunbelt-orange)',
+              fontSize: '0.75rem',
+              fontWeight: '600'
+            }}>
+              {tooltip.action}
+            </div>
+            {/* Arrow */}
+            <div style={{
+              position: 'absolute',
+              left: '50%',
+              bottom: '-6px',
+              transform: 'translateX(-50%) rotate(45deg)',
+              width: '10px',
+              height: '10px',
+              background: 'var(--bg-primary)',
+              borderRight: '1px solid var(--border-color)',
+              borderBottom: '1px solid var(--border-color)'
+            }} />
+          </div>
         )}
       </div>
 
@@ -422,12 +534,22 @@ function WorkflowTracker({
     return stations.filter(s => s.parent_station_key === stationKey);
   }, [stations]);
 
+  // Calculate task counts per station
+  const stationTaskCounts = useMemo(() => {
+    const counts = {};
+    stations.forEach(station => {
+      counts[station.station_key] = tasks.filter(t => t.workflow_station_key === station.station_key).length;
+    });
+    return counts;
+  }, [stations, tasks]);
+
   // Handle station click
   const handleStationClick = useCallback((station) => {
     if (onStationClick) {
-      onStationClick(station, calculatedStatuses[station.station_key], stationDeadlines[station.station_key]);
+      const taskCount = stationTaskCounts[station.station_key] || 0;
+      onStationClick(station, calculatedStatuses[station.station_key], stationDeadlines[station.station_key], taskCount);
     }
-  }, [onStationClick, calculatedStatuses, stationDeadlines]);
+  }, [onStationClick, calculatedStatuses, stationDeadlines, stationTaskCounts]);
 
   // Calculate overall progress
   const overallProgress = useMemo(() => {
@@ -454,6 +576,7 @@ function WorkflowTracker({
     const isExpanded = expandedStations.has(station.station_key);
     const status = calculatedStatuses[station.station_key] || 'not_started';
     const deadline = stationDeadlines[station.station_key];
+    const taskCount = stationTaskCounts[station.station_key] || 0;
 
     return (
       <div key={station.station_key}>
@@ -461,6 +584,7 @@ function WorkflowTracker({
           station={station}
           status={status}
           deadline={deadline}
+          linkedTaskCount={taskCount}
           isExpanded={isExpanded}
           hasChildren={hasChildren}
           onToggle={() => toggleStation(station.station_key)}
