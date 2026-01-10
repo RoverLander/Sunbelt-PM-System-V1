@@ -163,6 +163,14 @@ export class CelebrationParticles extends PIXI.Container {
   isActive() {
     return this.particleSystems.length > 0;
   }
+
+  /**
+   * Clean up all resources
+   */
+  destroy(options) {
+    this.clear();
+    super.destroy(options);
+  }
 }
 
 export default CelebrationParticles;

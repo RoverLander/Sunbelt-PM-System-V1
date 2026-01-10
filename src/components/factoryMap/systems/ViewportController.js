@@ -24,6 +24,7 @@ export class ViewportController {
     // Momentum
     this.momentum = { x: 0, y: 0 };
     this.momentumAnimationId = null;
+    this.panAnimationId = null;
     this.friction = 0.92;
     this.minVelocity = 0.5;
 
@@ -89,6 +90,9 @@ export class ViewportController {
 
     if (this.momentumAnimationId) {
       cancelAnimationFrame(this.momentumAnimationId);
+    }
+    if (this.panAnimationId) {
+      cancelAnimationFrame(this.panAnimationId);
     }
   }
 
@@ -381,6 +385,12 @@ export class ViewportController {
   }
 
   animatePanTo(targetX, targetY, duration = 500) {
+    // Cancel any existing pan animation to prevent stacking
+    if (this.panAnimationId) {
+      cancelAnimationFrame(this.panAnimationId);
+      this.panAnimationId = null;
+    }
+
     const startX = this.position.x;
     const startY = this.position.y;
     const startTime = performance.now();
@@ -399,11 +409,13 @@ export class ViewportController {
       this.onViewportChange(this.getViewportBounds());
 
       if (progress < 1) {
-        requestAnimationFrame(animate);
+        this.panAnimationId = requestAnimationFrame(animate);
+      } else {
+        this.panAnimationId = null;
       }
     };
 
-    requestAnimationFrame(animate);
+    this.panAnimationId = requestAnimationFrame(animate);
   }
 
   resetView() {

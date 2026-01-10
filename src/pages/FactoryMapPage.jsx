@@ -295,8 +295,10 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
 
   const handleJobSiteClick = useCallback((data) => {
     console.log('Job site clicked:', data);
-    if (data.projectId && onNavigateToProject) {
-      onNavigateToProject(data.projectId);
+    // projectData.id is the correct property from JobSiteSprite
+    const projectId = data.projectData?.id;
+    if (projectId && onNavigateToProject) {
+      onNavigateToProject(projectId);
     }
   }, [onNavigateToProject]);
 
@@ -316,8 +318,10 @@ const FactoryMapPage = ({ onNavigateToProject }) => {
 
   const handleTruckClick = useCallback((data) => {
     console.log('Truck clicked:', data);
-    if (data.projectId && onNavigateToProject) {
-      onNavigateToProject(data.projectId);
+    // deliveryData.projectId is the correct property from TruckSprite
+    const projectId = data.deliveryData?.projectId;
+    if (projectId && onNavigateToProject) {
+      onNavigateToProject(projectId);
     }
   }, [onNavigateToProject]);
 
