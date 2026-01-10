@@ -578,6 +578,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
         projectId={project.id}
         projectName={project.name}
         projectNumber={project.project_number}
+        projectFactory={project.factory}
         prefilledStationKey={prefilledStationKey}
         onSuccess={() => {
           setShowAddTask(false);
@@ -595,6 +596,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
           projectId={project.id}
           projectName={project.name}
           projectNumber={project.project_number}
+          projectFactory={project.factory}
           onSuccess={() => {
             setEditTask(null);
             fetchProjectData();

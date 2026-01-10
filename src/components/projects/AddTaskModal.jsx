@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
+import { useContacts } from '../../hooks/useContacts';
 import { draftTaskEmail } from '../../utils/emailUtils';
 import { COURT_OPTIONS } from '../../utils/workflowUtils';
 
@@ -295,11 +296,18 @@ function AddTaskModal({
   projectId,
   projectName = '',
   projectNumber = '',
+  projectFactory = '',
   prefilledStationKey = null,
   onSuccess
 }) {
   const { user } = useAuth();
+  const { users, factoryContacts } = useContacts(isOpen);
   const fileInputRef = useRef(null);
+
+  // ==========================================================================
+  // DERIVED - EXTRACT FACTORY CODE
+  // ==========================================================================
+  const projectFactoryCode = projectFactory?.split(' - ')[0] || '';
 
   // ==========================================================================
   // STATE
@@ -307,7 +315,6 @@ function AddTaskModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
-  const [users, setUsers] = useState([]);
   const [milestones, setMilestones] = useState([]);
   const [pendingFiles, setPendingFiles] = useState([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -358,11 +365,47 @@ function AddTaskModal({
       setPendingFiles([]);
       setError('');
       setFieldErrors({});
-      fetchUsers();
       fetchMilestones();
       fetchWorkflowStations();
     }
   }, [isOpen, user, prefilledStationKey]);
+
+  // ==========================================================================
+  // GROUPED CONTACTS FOR DROPDOWN
+  // ==========================================================================
+  const groupedContacts = React.useMemo(() => {
+    // Get factory contacts for the project's factory
+    const projectFactoryContacts = (factoryContacts || []).filter(
+      c => c.factory_code === projectFactoryCode
+    ).sort((a, b) => a.name.localeCompare(b.name));
+
+    // Get factory contacts from other factories, grouped by factory
+    const otherFactoryContacts = (factoryContacts || []).filter(
+      c => c.factory_code !== projectFactoryCode
+    );
+
+    // Group other factory contacts by factory_code
+    const otherFactoriesGrouped = otherFactoryContacts.reduce((acc, contact) => {
+      const key = contact.factory_code || 'Unknown';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(contact);
+      return acc;
+    }, {});
+
+    // Sort each group by name
+    Object.keys(otherFactoriesGrouped).forEach(key => {
+      otherFactoriesGrouped[key].sort((a, b) => a.name.localeCompare(b.name));
+    });
+
+    // Sunbelt Corporate users (internal team)
+    const sunbeltUsers = (users || []).sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      projectFactory: projectFactoryContacts,
+      sunbeltCorporate: sunbeltUsers,
+      otherFactories: otherFactoriesGrouped
+    };
+  }, [factoryContacts, users, projectFactoryCode]);
 
   // Cleanup file object URLs on unmount
   useEffect(() => {
@@ -376,21 +419,6 @@ function AddTaskModal({
   // ==========================================================================
   // DATA FETCHING
   // ==========================================================================
-  const fetchUsers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
-      setUsers(data || []);
-    } catch (err) {
-      console.error('Error fetching users:', err);
-    }
-  };
-
   const fetchMilestones = async () => {
     try {
       const { data, error } = await supabase
@@ -739,8 +767,38 @@ function AddTaskModal({
                   style={styles.select}
                 >
                   <option value="">Unassigned</option>
-                  {users.map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
+
+                  {/* Section 1: Project Factory Contacts (if factory is set) */}
+                  {projectFactoryCode && groupedContacts.projectFactory.length > 0 && (
+                    <optgroup label={`━━ ${projectFactory || projectFactoryCode} ━━`}>
+                      {groupedContacts.projectFactory.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.department || c.role_code})
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+
+                  {/* Section 2: Sunbelt Corporate (Internal Team) */}
+                  {groupedContacts.sunbeltCorporate.length > 0 && (
+                    <optgroup label="━━ Sunbelt Corporate ━━">
+                      {groupedContacts.sunbeltCorporate.map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.role})
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+
+                  {/* Section 3: Other Factory Contacts (grouped by factory) */}
+                  {Object.entries(groupedContacts.otherFactories).map(([factoryCode, contacts]) => (
+                    <optgroup key={factoryCode} label={`── ${factoryCode} ──`}>
+                      {contacts.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.department || c.role_code})
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>
@@ -753,8 +811,8 @@ function AddTaskModal({
                   style={styles.select}
                 >
                   <option value="">Select owner</option>
-                  {users.map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
+                  {groupedContacts.sunbeltCorporate.map(u => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
                   ))}
                 </select>
               </div>
@@ -813,8 +871,8 @@ function AddTaskModal({
                   style={styles.select}
                 >
                   <option value="">Select owner</option>
-                  {users.map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
+                  {groupedContacts.sunbeltCorporate.map(u => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
                   ))}
                 </select>
               </div>
