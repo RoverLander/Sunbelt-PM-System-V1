@@ -37,7 +37,8 @@ import {
   Flag,
   Map,
   GripVertical,
-  GitGraph
+  GitGraph,
+  BookOpen
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -63,6 +64,9 @@ import WorkflowTracker from './WorkflowTracker';
 // ✅ ADDED: Files tab
 import ProjectFiles from './ProjectFiles';
 
+// ✅ ADDED: Project Log tab
+import ProjectLog from './ProjectLog';
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -75,6 +79,7 @@ const TABS = [
   { id: 'rfis', label: 'RFIs', icon: MessageSquare },
   { id: 'submittals', label: 'Submittals', icon: ClipboardList },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
+  { id: 'log', label: 'Log', icon: BookOpen },
   { id: 'files', label: 'Files', icon: FolderOpen },
   { id: 'floorplan', label: 'Floorplan', icon: Map },
 ];
@@ -481,6 +486,14 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                   setStatusFilter={setSubmittalStatusFilter}
                   onAdd={() => setShowAddSubmittal(true)}
                   onEdit={setEditSubmittal}
+                />
+              )}
+
+              {/* LOG TAB */}
+              {activeTab === 'log' && (
+                <ProjectLog
+                  projectId={project.id}
+                  onUpdate={fetchProjectData}
                 />
               )}
 
