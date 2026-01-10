@@ -3,6 +3,7 @@ import * as PIXI from 'pixi.js';
 /**
  * JobSiteSprite - Delivery destination marker
  * Shows project location with status-based coloring and pulse animation
+ * Updated for PIXI v8 Graphics API
  */
 export class JobSiteSprite extends PIXI.Container {
   constructor(projectData, options = {}) {
@@ -22,25 +23,24 @@ export class JobSiteSprite extends PIXI.Container {
     const marker = new PIXI.Graphics();
     const color = this.getStatusColor();
 
-    // Pin body
-    marker.beginFill(color);
-    marker.moveTo(0, 0);
-    marker.lineTo(-10, -25);
-    marker.quadraticCurveTo(-12, -32, 0, -35);
-    marker.quadraticCurveTo(12, -32, 10, -25);
-    marker.lineTo(0, 0);
-    marker.closePath();
-    marker.endFill();
+    // Pin body - using poly for custom shape
+    marker
+      .moveTo(0, 0)
+      .lineTo(-10, -25)
+      .quadraticCurveTo(-12, -32, 0, -35)
+      .quadraticCurveTo(12, -32, 10, -25)
+      .lineTo(0, 0)
+      .fill(color);
 
     // Inner circle
-    marker.beginFill(0xffffff);
-    marker.drawCircle(0, -25, 6);
-    marker.endFill();
+    marker
+      .circle(0, -25, 6)
+      .fill(0xffffff);
 
     // Icon in center (package)
-    marker.beginFill(color);
-    marker.drawRect(-3, -28, 6, 6);
-    marker.endFill();
+    marker
+      .rect(-3, -28, 6, 6)
+      .fill(color);
 
     this.marker = marker;
     this.addChild(marker);
@@ -48,10 +48,10 @@ export class JobSiteSprite extends PIXI.Container {
     // Shadow/glow for active sites
     if (this.status === 'Installation' || this.status === 'Shipping') {
       const glow = new PIXI.Graphics();
-      glow.beginFill(color, 0.3);
-      glow.drawCircle(0, -25, 15);
-      glow.endFill();
-      glow.name = 'glow';
+      glow
+        .circle(0, -25, 15)
+        .fill({ color: color, alpha: 0.3 });
+      glow.label = 'glow';
       this.addChildAt(glow, 0);
     }
 
@@ -59,11 +59,14 @@ export class JobSiteSprite extends PIXI.Container {
     const name = this.projectData.name || 'Project';
     const truncated = name.length > 15 ? name.substring(0, 12) + '...' : name;
 
-    const label = new PIXI.Text(truncated, {
-      fontSize: 9,
-      fontFamily: 'sans-serif',
-      fill: 0xffffff,
-      align: 'center'
+    const label = new PIXI.Text({
+      text: truncated,
+      style: {
+        fontSize: 9,
+        fontFamily: 'sans-serif',
+        fill: 0xffffff,
+        align: 'center'
+      }
     });
     label.anchor.set(0.5, 0);
     label.position.set(0, 5);
@@ -133,7 +136,8 @@ export class JobSiteSprite extends PIXI.Container {
     // Pulse animation for active sites
     if (this.status === 'Installation' || this.status === 'Shipping') {
       const pulse = Math.sin(this.animationTime) * 0.1 + 1;
-      const glow = this.getChildByName('glow');
+      // In PIXI v8, use getChildByLabel instead of getChildByName
+      const glow = this.children.find(c => c.label === 'glow');
       if (glow) {
         glow.scale.set(pulse);
         glow.alpha = 0.3 + Math.sin(this.animationTime) * 0.1;

@@ -3,12 +3,13 @@ import * as PIXI from 'pixi.js';
 /**
  * CelebrationParticles - Confetti burst effect for delivery arrivals
  * Creates colorful particles that burst outward and fall with gravity
+ * Updated for PIXI v8 Graphics API
  */
 export class CelebrationParticles extends PIXI.Container {
   constructor() {
     super();
 
-    this.name = 'celebrationParticles';
+    this.label = 'celebrationParticles';
     this.particleSystems = [];
 
     // Sunbelt-themed colors
@@ -104,9 +105,7 @@ export class CelebrationParticles extends PIXI.Container {
           p.alpha = 1 - ((progress - 0.7) / 0.3);
         }
 
-        // Draw particle
-        system.graphics.beginFill(p.color, p.alpha);
-
+        // Draw particle - PIXI v8 API
         if (p.shape === 'rect') {
           // Rotated rectangle (confetti)
           const cos = Math.cos(p.rotation);
@@ -114,29 +113,20 @@ export class CelebrationParticles extends PIXI.Container {
           const hw = p.size * 0.8;
           const hh = p.size * 0.4;
 
-          system.graphics.moveTo(
-            p.x + cos * hw - sin * hh,
-            p.y + sin * hw + cos * hh
-          );
-          system.graphics.lineTo(
-            p.x - cos * hw - sin * hh,
-            p.y - sin * hw + cos * hh
-          );
-          system.graphics.lineTo(
-            p.x - cos * hw + sin * hh,
-            p.y - sin * hw - cos * hh
-          );
-          system.graphics.lineTo(
-            p.x + cos * hw + sin * hh,
-            p.y + sin * hw - cos * hh
-          );
-          system.graphics.closePath();
+          system.graphics
+            .poly([
+              p.x + cos * hw - sin * hh, p.y + sin * hw + cos * hh,
+              p.x - cos * hw - sin * hh, p.y - sin * hw + cos * hh,
+              p.x - cos * hw + sin * hh, p.y - sin * hw - cos * hh,
+              p.x + cos * hw + sin * hh, p.y + sin * hw - cos * hh
+            ])
+            .fill({ color: p.color, alpha: p.alpha });
         } else {
           // Circle
-          system.graphics.drawCircle(p.x, p.y, p.size * 0.5);
+          system.graphics
+            .circle(p.x, p.y, p.size * 0.5)
+            .fill({ color: p.color, alpha: p.alpha });
         }
-
-        system.graphics.endFill();
       });
     });
 

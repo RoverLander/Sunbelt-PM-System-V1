@@ -4,12 +4,13 @@ import { REGION_CONFIG, getRegionAt } from '../data/factoryLocations';
 /**
  * TerrainLayer - Regional decorations like trees, mountains, cacti
  * Generates appropriate sprites based on geographic region
+ * Updated for PIXI v8 Graphics API
  */
 export class TerrainLayer extends PIXI.Container {
   constructor(mapDimensions, options = {}) {
     super();
 
-    this.name = 'terrainLayer';
+    this.label = 'terrainLayer';
     this.mapWidth = mapDimensions.width;
     this.mapHeight = mapDimensions.height;
     this.density = options.density || 'medium';
@@ -102,66 +103,50 @@ export class TerrainLayer extends PIXI.Container {
     switch (type) {
       case 'evergreen':
         // Triangle pine tree
-        tree.beginFill(0x1a4d2e);
-        tree.moveTo(0, -20 * scale);
-        tree.lineTo(-10 * scale, 0);
-        tree.lineTo(10 * scale, 0);
-        tree.closePath();
-        tree.endFill();
+        tree
+          .poly([0, -20 * scale, -10 * scale, 0, 10 * scale, 0])
+          .fill(0x1a4d2e);
         // Second layer
-        tree.beginFill(0x236b40);
-        tree.moveTo(0, -28 * scale);
-        tree.lineTo(-7 * scale, -10 * scale);
-        tree.lineTo(7 * scale, -10 * scale);
-        tree.closePath();
-        tree.endFill();
+        tree
+          .poly([0, -28 * scale, -7 * scale, -10 * scale, 7 * scale, -10 * scale])
+          .fill(0x236b40);
         // Trunk
-        tree.beginFill(0x4a3520);
-        tree.drawRect(-2 * scale, 0, 4 * scale, 6 * scale);
-        tree.endFill();
+        tree
+          .rect(-2 * scale, 0, 4 * scale, 6 * scale)
+          .fill(0x4a3520);
         break;
 
       case 'palm':
         // Palm trunk
-        tree.beginFill(0x8b7355);
-        tree.drawRect(-2 * scale, -15 * scale, 4 * scale, 20 * scale);
-        tree.endFill();
-        // Palm fronds
-        tree.beginFill(0x228b22);
-        for (let i = 0; i < 5; i++) {
-          const angle = (i / 5) * Math.PI * 2;
-          tree.moveTo(0, -18 * scale);
-          tree.lineTo(
-            Math.cos(angle) * 12 * scale,
-            -18 * scale + Math.sin(angle) * 8 * scale - 5 * scale
-          );
-        }
-        tree.endFill();
+        tree
+          .rect(-2 * scale, -15 * scale, 4 * scale, 20 * scale)
+          .fill(0x8b7355);
+        // Palm fronds - simplified for v8
+        tree
+          .circle(0, -18 * scale, 10 * scale)
+          .fill({ color: 0x228b22, alpha: 0.7 });
         break;
 
       case 'oak':
       case 'maple':
         // Round deciduous tree
         const color = type === 'maple' ? 0xc75b39 : 0x2d5a3f;
-        tree.beginFill(color);
-        tree.drawCircle(0, -12 * scale, 10 * scale);
-        tree.endFill();
-        tree.beginFill(0x4a3520);
-        tree.drawRect(-2 * scale, -4 * scale, 4 * scale, 8 * scale);
-        tree.endFill();
+        tree
+          .circle(0, -12 * scale, 10 * scale)
+          .fill(color);
+        tree
+          .rect(-2 * scale, -4 * scale, 4 * scale, 8 * scale)
+          .fill(0x4a3520);
         break;
 
       case 'pine':
         // Southern pine
-        tree.beginFill(0x2d5a3f);
-        tree.moveTo(0, -25 * scale);
-        tree.lineTo(-8 * scale, -5 * scale);
-        tree.lineTo(8 * scale, -5 * scale);
-        tree.closePath();
-        tree.endFill();
-        tree.beginFill(0x4a3520);
-        tree.drawRect(-2 * scale, -5 * scale, 4 * scale, 10 * scale);
-        tree.endFill();
+        tree
+          .poly([0, -25 * scale, -8 * scale, -5 * scale, 8 * scale, -5 * scale])
+          .fill(0x2d5a3f);
+        tree
+          .rect(-2 * scale, -5 * scale, 4 * scale, 10 * scale)
+          .fill(0x4a3520);
         break;
     }
 
@@ -187,18 +172,22 @@ export class TerrainLayer extends PIXI.Container {
     const cactus = new PIXI.Graphics();
 
     // Main trunk
-    cactus.beginFill(0x228b22);
-    cactus.drawRoundedRect(-3 * scale, -20 * scale, 6 * scale, 25 * scale, 3 * scale);
-    cactus.endFill();
+    cactus
+      .roundRect(-3 * scale, -20 * scale, 6 * scale, 25 * scale, 3 * scale)
+      .fill(0x228b22);
 
     // Arms
     if (Math.random() > 0.3) {
-      cactus.drawRoundedRect(-10 * scale, -15 * scale, 7 * scale, 4 * scale, 2 * scale);
-      cactus.drawRoundedRect(-10 * scale, -15 * scale, 4 * scale, 10 * scale, 2 * scale);
+      cactus
+        .roundRect(-10 * scale, -15 * scale, 7 * scale, 4 * scale, 2 * scale)
+        .roundRect(-10 * scale, -15 * scale, 4 * scale, 10 * scale, 2 * scale)
+        .fill(0x228b22);
     }
     if (Math.random() > 0.3) {
-      cactus.drawRoundedRect(3 * scale, -12 * scale, 7 * scale, 4 * scale, 2 * scale);
-      cactus.drawRoundedRect(6 * scale, -12 * scale, 4 * scale, 8 * scale, 2 * scale);
+      cactus
+        .roundRect(3 * scale, -12 * scale, 7 * scale, 4 * scale, 2 * scale)
+        .roundRect(6 * scale, -12 * scale, 4 * scale, 8 * scale, 2 * scale)
+        .fill(0x228b22);
     }
 
     cactus.alpha = 0.8;
@@ -223,20 +212,14 @@ export class TerrainLayer extends PIXI.Container {
     const mountain = new PIXI.Graphics();
 
     // Mountain body
-    mountain.beginFill(0x5a6a55);
-    mountain.moveTo(0, -40 * scale);
-    mountain.lineTo(-50 * scale, 0);
-    mountain.lineTo(50 * scale, 0);
-    mountain.closePath();
-    mountain.endFill();
+    mountain
+      .poly([0, -40 * scale, -50 * scale, 0, 50 * scale, 0])
+      .fill(0x5a6a55);
 
     // Snow cap
-    mountain.beginFill(0xffffff, 0.9);
-    mountain.moveTo(0, -40 * scale);
-    mountain.lineTo(-12 * scale, -25 * scale);
-    mountain.lineTo(12 * scale, -25 * scale);
-    mountain.closePath();
-    mountain.endFill();
+    mountain
+      .poly([0, -40 * scale, -12 * scale, -25 * scale, 12 * scale, -25 * scale])
+      .fill({ color: 0xffffff, alpha: 0.9 });
 
     mountain.alpha = 0.6;
     return mountain;
@@ -250,17 +233,13 @@ export class TerrainLayer extends PIXI.Container {
       const scale = 1 + Math.random();
 
       const mesa = new PIXI.Graphics();
-      mesa.beginFill(0xc4956a);
-      mesa.moveTo(-30 * scale, 0);
-      mesa.lineTo(-25 * scale, -20 * scale);
-      mesa.lineTo(25 * scale, -20 * scale);
-      mesa.lineTo(30 * scale, 0);
-      mesa.closePath();
-      mesa.endFill();
+      mesa
+        .poly([-30 * scale, 0, -25 * scale, -20 * scale, 25 * scale, -20 * scale, 30 * scale, 0])
+        .fill(0xc4956a);
 
-      mesa.beginFill(0xd4a574);
-      mesa.drawRect(-20 * scale, -20 * scale, 40 * scale, 5 * scale);
-      mesa.endFill();
+      mesa
+        .rect(-20 * scale, -20 * scale, 40 * scale, 5 * scale)
+        .fill(0xd4a574);
 
       mesa.position.set(x, y);
       mesa.alpha = 0.5;
@@ -276,18 +255,16 @@ export class TerrainLayer extends PIXI.Container {
       const y = y1 + Math.random() * (y2 - y1);
 
       const derrick = new PIXI.Graphics();
-      derrick.beginFill(0x3a3a3a);
-      derrick.moveTo(0, -30);
-      derrick.lineTo(-8, 0);
-      derrick.lineTo(8, 0);
-      derrick.closePath();
-      derrick.endFill();
+      derrick
+        .poly([0, -30, -8, 0, 8, 0])
+        .fill(0x3a3a3a);
 
-      derrick.lineStyle(2, 0x3a3a3a);
-      derrick.moveTo(-4, -10);
-      derrick.lineTo(4, -10);
-      derrick.moveTo(-6, -5);
-      derrick.lineTo(6, -5);
+      derrick
+        .moveTo(-4, -10)
+        .lineTo(4, -10)
+        .moveTo(-6, -5)
+        .lineTo(6, -5)
+        .stroke({ color: 0x3a3a3a, width: 2 });
 
       derrick.position.set(x, y);
       derrick.alpha = 0.6;
@@ -305,22 +282,19 @@ export class TerrainLayer extends PIXI.Container {
       const farm = new PIXI.Graphics();
 
       // Farmhouse
-      farm.beginFill(0xc75050);
-      farm.drawRect(-8, -12, 16, 12);
-      farm.endFill();
+      farm
+        .rect(-8, -12, 16, 12)
+        .fill(0xc75050);
 
       // Roof
-      farm.beginFill(0x4a3520);
-      farm.moveTo(-10, -12);
-      farm.lineTo(0, -20);
-      farm.lineTo(10, -12);
-      farm.closePath();
-      farm.endFill();
+      farm
+        .poly([-10, -12, 0, -20, 10, -12])
+        .fill(0x4a3520);
 
       // Field pattern
-      farm.beginFill(0xc4a040, 0.3);
-      farm.drawRect(-25, 5, 50, 20);
-      farm.endFill();
+      farm
+        .rect(-25, 5, 50, 20)
+        .fill({ color: 0xc4a040, alpha: 0.3 });
 
       farm.position.set(x, y);
       farm.alpha = 0.5;
@@ -337,17 +311,17 @@ export class TerrainLayer extends PIXI.Container {
       const height = 20 + Math.random() * 30;
 
       const building = new PIXI.Graphics();
-      building.beginFill(0x4a5568);
-      building.drawRect(-8, -height, 16, height);
-      building.endFill();
+      building
+        .rect(-8, -height, 16, height)
+        .fill(0x4a5568);
 
       // Windows
-      building.beginFill(0xfbbf24, 0.6);
       for (let row = 0; row < Math.floor(height / 8); row++) {
-        building.drawRect(-5, -height + 3 + row * 8, 4, 3);
-        building.drawRect(1, -height + 3 + row * 8, 4, 3);
+        building
+          .rect(-5, -height + 3 + row * 8, 4, 3)
+          .rect(1, -height + 3 + row * 8, 4, 3);
       }
-      building.endFill();
+      building.fill({ color: 0xfbbf24, alpha: 0.6 });
 
       building.position.set(x, y);
       building.alpha = 0.5;

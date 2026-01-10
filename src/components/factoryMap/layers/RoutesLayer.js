@@ -3,12 +3,13 @@ import * as PIXI from 'pixi.js';
 /**
  * RoutesLayer - Renders delivery routes as curved paths
  * Uses bezier curves with animated dashed lines for active deliveries
+ * Updated for PIXI v8 Graphics API
  */
 export class RoutesLayer extends PIXI.Container {
   constructor(mapDimensions) {
     super();
 
-    this.name = 'routesLayer';
+    this.label = 'routesLayer';
     this.mapWidth = mapDimensions.width;
     this.mapHeight = mapDimensions.height;
     this.routes = new Map();
@@ -55,9 +56,10 @@ export class RoutesLayer extends PIXI.Container {
     graphics.clear();
 
     // Draw path shadow first
-    graphics.lineStyle(4, 0x000000, 0.2);
-    graphics.moveTo(from.x, from.y + 2);
-    graphics.quadraticCurveTo(controlPoint.x, controlPoint.y + 2, to.x, to.y + 2);
+    graphics
+      .moveTo(from.x, from.y + 2)
+      .quadraticCurveTo(controlPoint.x, controlPoint.y + 2, to.x, to.y + 2)
+      .stroke({ color: 0x000000, width: 4, alpha: 0.2 });
 
     // Main route line
     if (status === 'active') {
@@ -71,9 +73,10 @@ export class RoutesLayer extends PIXI.Container {
       });
     } else if (status === 'completed') {
       // Solid faded line for completed
-      graphics.lineStyle(2, color, 0.3);
-      graphics.moveTo(from.x, from.y);
-      graphics.quadraticCurveTo(controlPoint.x, controlPoint.y, to.x, to.y);
+      graphics
+        .moveTo(from.x, from.y)
+        .quadraticCurveTo(controlPoint.x, controlPoint.y, to.x, to.y)
+        .stroke({ color, width: 2, alpha: 0.3 });
     } else {
       // Dotted line for scheduled
       this.drawDashedCurve(graphics, from, controlPoint, to, {
@@ -86,14 +89,14 @@ export class RoutesLayer extends PIXI.Container {
     }
 
     // Origin marker (small circle at factory)
-    graphics.beginFill(color, 0.8);
-    graphics.drawCircle(from.x, from.y, 5);
-    graphics.endFill();
+    graphics
+      .circle(from.x, from.y, 5)
+      .fill({ color, alpha: 0.8 });
 
     // Destination marker
-    graphics.beginFill(color, 0.8);
-    graphics.drawCircle(to.x, to.y, 5);
-    graphics.endFill();
+    graphics
+      .circle(to.x, to.y, 5)
+      .fill({ color, alpha: 0.8 });
   }
 
   // Draw dashed bezier curve
@@ -123,9 +126,6 @@ export class RoutesLayer extends PIXI.Container {
     const dashCycle = dashLength + gapLength;
     let currentLength = offset % dashCycle;
     let drawing = currentLength < dashLength;
-    let segmentStart = 0;
-
-    graphics.lineStyle(width, color, 0.9);
 
     for (let i = 1; i < points.length; i++) {
       const dx = points[i].x - points[i - 1].x;
@@ -150,8 +150,10 @@ export class RoutesLayer extends PIXI.Container {
         const endY = startPoint.y + (points[i].y - points[i - 1].y) * t;
 
         if (drawing) {
-          graphics.moveTo(startPoint.x, startPoint.y);
-          graphics.lineTo(endX, endY);
+          graphics
+            .moveTo(startPoint.x, startPoint.y)
+            .lineTo(endX, endY)
+            .stroke({ color, width, alpha: 0.9 });
         }
 
         currentLength += dist;
