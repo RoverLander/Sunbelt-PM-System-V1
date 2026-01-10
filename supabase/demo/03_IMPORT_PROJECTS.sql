@@ -260,7 +260,7 @@ BEGIN
   ) RETURNING id INTO v_project_id;
 
   -- ========================================================================
-  -- PROJECT 15: Hanford AMPS (NWBS - Planning)
+  -- PROJECT 15: Hanford AMPS (NWBS - Complete) - SHOWCASE PROJECT
   -- ========================================================================
   INSERT INTO projects (
     project_number, name, factory, client_name, salesperson,
@@ -269,7 +269,7 @@ BEGIN
   ) VALUES (
     'NWBS-25250', '168x66 Hanford AMPS Project MMG', 'NWBS',
     'Mobile Modular Management Corporation', 'Mitch Quintana',
-    '2025-07-21', '2026-01-27', 'Planning', 'On Track',
+    '2025-07-21', '2026-01-10', 'Complete', 'On Track',
     v_matthew_id, v_matthew_id, NOW()
   ) RETURNING id INTO v_project_id;
 

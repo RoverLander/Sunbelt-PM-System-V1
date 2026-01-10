@@ -78,6 +78,7 @@ const TABS = [
 
 // Updated Jan 9, 2026: 'On Hold' and 'Blocked' merged into 'Awaiting Response'
 const TASK_STATUS_OPTIONS = ['All', 'Not Started', 'In Progress', 'Awaiting Response', 'Completed', 'Cancelled'];
+const KANBAN_STATUSES = ['Not Started', 'In Progress', 'Awaiting Response', 'Completed', 'Cancelled'];
 const RFI_STATUS_OPTIONS = ['All', 'Draft', 'Open', 'Answered', 'Closed'];
 const SUBMITTAL_STATUS_OPTIONS = ['All', 'Pending', 'Submitted', 'Under Review', 'Approved', 'Approved as Noted', 'Revise and Resubmit', 'Rejected'];
 
@@ -792,8 +793,6 @@ function SearchInput({ value, onChange, placeholder }) {
 // TASKS TAB
 // ============================================================================
 function TasksTab({ tasks, allTasks, search, setSearch, statusFilter, setStatusFilter, view, setView, onAdd, onEdit, onDragStart, onDragOver, onDrop, draggedTask }) {
-  kanbanStatuses = ['Not Started', 'In Progress', 'Awaiting Response', 'Completed'];
-
   return (
     <div>
       {/* Toolbar */}
@@ -822,7 +821,7 @@ function TasksTab({ tasks, allTasks, search, setSearch, statusFilter, setStatusF
       {/* Kanban View */}
       {view === 'kanban' && (
         <div style={{ display: 'flex', gap: 'var(--space-md)', overflowX: 'auto', paddingBottom: 'var(--space-md)' }}>
-          {kanbanStatuses.map(status => {
+          {KANBAN_STATUSES.map(status => {
             const columnTasks = tasks.filter(t => t.status === status);
             return (
               <div
