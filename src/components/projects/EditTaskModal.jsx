@@ -51,13 +51,19 @@ const TASK_PRIORITIES = ['Low', 'Medium', 'High'];
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', projectNumber = '', onSuccess, onDelete }) {
-  
+function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', projectNumber = '', projectFactory = '', onSuccess, onDelete }) {
+
   // ==========================================================================
   // HOOKS
   // ==========================================================================
   const { user } = useAuth();
-  const { contacts } = useContacts(isOpen);
+  const { contacts, users, factoryContacts } = useContacts(isOpen);
+
+  // ==========================================================================
+  // DERIVED - EXTRACT FACTORY CODE
+  // ==========================================================================
+  // Factory is stored as "CODE - Full Name" (e.g., "NWBS - Northwest Building Systems")
+  const projectFactoryCode = projectFactory?.split(' - ')[0] || '';
 
   // ==========================================================================
   // STATE
@@ -119,9 +125,47 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
   }, [isOpen, task]);
 
   // ==========================================================================
+  // GROUPED CONTACTS FOR DROPDOWN
+  // ==========================================================================
+  // Organizes contacts into: Project Factory → Sunbelt Corporate → Other Factories
+  const groupedContacts = React.useMemo(() => {
+    // Get factory contacts for the project's factory
+    const projectFactoryContacts = factoryContacts.filter(
+      c => c.factory_code === projectFactoryCode
+    ).sort((a, b) => a.name.localeCompare(b.name));
+
+    // Get factory contacts from other factories, grouped by factory
+    const otherFactoryContacts = factoryContacts.filter(
+      c => c.factory_code !== projectFactoryCode
+    );
+
+    // Group other factory contacts by factory_code
+    const otherFactoriesGrouped = otherFactoryContacts.reduce((acc, contact) => {
+      const key = contact.factory_code || 'Unknown';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(contact);
+      return acc;
+    }, {});
+
+    // Sort each group by name
+    Object.keys(otherFactoriesGrouped).forEach(key => {
+      otherFactoriesGrouped[key].sort((a, b) => a.name.localeCompare(b.name));
+    });
+
+    // Sunbelt Corporate users (internal team)
+    const sunbeltUsers = users.sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      projectFactory: projectFactoryContacts,
+      sunbeltCorporate: sunbeltUsers,
+      otherFactories: otherFactoriesGrouped
+    };
+  }, [factoryContacts, users, projectFactoryCode]);
+
+  // ==========================================================================
   // DATA FETCHING
   // ==========================================================================
-  
+
   const fetchMilestones = async () => {
     try {
       const { data, error } = await supabase
@@ -565,18 +609,39 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
                 className="form-input"
               >
                 <option value="">Select team member</option>
-                {/* Internal Team */}
-                <optgroup label="── Internal Team ──">
-                  {contacts.filter(c => c.contact_type === 'user').map(u => (
-                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                  ))}
-                </optgroup>
-                {/* Factory Contacts */}
-                <optgroup label="── Factory Contacts ──">
-                  {contacts.filter(c => c.contact_type === 'factory').map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </optgroup>
+
+                {/* Section 1: Project Factory Contacts (if factory is set) */}
+                {projectFactoryCode && groupedContacts.projectFactory.length > 0 && (
+                  <optgroup label={`━━ ${projectFactory || projectFactoryCode} ━━`}>
+                    {groupedContacts.projectFactory.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.department || c.role_code})
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+
+                {/* Section 2: Sunbelt Corporate (Internal Team) */}
+                {groupedContacts.sunbeltCorporate.length > 0 && (
+                  <optgroup label="━━ Sunbelt Corporate ━━">
+                    {groupedContacts.sunbeltCorporate.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.role})
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+
+                {/* Section 3: Other Factory Contacts (grouped by factory) */}
+                {Object.entries(groupedContacts.otherFactories).map(([factoryCode, contacts]) => (
+                  <optgroup key={factoryCode} label={`── ${factoryCode} ──`}>
+                    {contacts.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.department || c.role_code})
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
             </div>
           )}

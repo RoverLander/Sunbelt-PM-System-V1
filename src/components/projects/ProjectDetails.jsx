@@ -37,10 +37,12 @@ import {
   Flag,
   Map,
   GripVertical,
-  GitGraph
+  GitGraph,
+  Download
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
+import { exportRFILog, exportSubmittalLog } from '../../utils/excelExport';
 
 // Modal imports
 import EditProjectModal from './EditProjectModal';
@@ -498,6 +500,15 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                   setStatusFilter={setRfiStatusFilter}
                   onAdd={() => setShowAddRFI(true)}
                   onEdit={setEditRFI}
+                  onExport={() => {
+                    exportRFILog(rfis, {
+                      name: project.name,
+                      projectNumber: project.project_number,
+                      client: project.client,
+                      factory: project.factory
+                    });
+                    showToast('RFI Log exported');
+                  }}
                 />
               )}
 
@@ -512,6 +523,15 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                   setStatusFilter={setSubmittalStatusFilter}
                   onAdd={() => setShowAddSubmittal(true)}
                   onEdit={setEditSubmittal}
+                  onExport={() => {
+                    exportSubmittalLog(submittals, {
+                      name: project.name,
+                      projectNumber: project.project_number,
+                      client: project.client,
+                      factory: project.factory
+                    });
+                    showToast('Submittal Log exported');
+                  }}
                 />
               )}
 
@@ -578,6 +598,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
         projectId={project.id}
         projectName={project.name}
         projectNumber={project.project_number}
+        projectFactory={project.factory}
         prefilledStationKey={prefilledStationKey}
         onSuccess={() => {
           setShowAddTask(false);
@@ -595,6 +616,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
           projectId={project.id}
           projectName={project.name}
           projectNumber={project.project_number}
+          projectFactory={project.factory}
           onSuccess={() => {
             setEditTask(null);
             fetchProjectData();
@@ -972,7 +994,7 @@ function TaskCard({ task, onEdit, onDragStart }) {
 // ============================================================================
 // RFIs TAB
 // ============================================================================
-function RFIsTab({ rfis, allRFIs, search, setSearch, statusFilter, setStatusFilter, onAdd, onEdit }) {
+function RFIsTab({ rfis, allRFIs, search, setSearch, statusFilter, setStatusFilter, onAdd, onEdit, onExport }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
@@ -982,9 +1004,14 @@ function RFIsTab({ rfis, allRFIs, search, setSearch, statusFilter, setStatusFilt
             {RFI_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === 'All' ? `All RFIs (${allRFIs.length})` : s}</option>)}
           </select>
         </div>
-        <button onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: '600', fontSize: '0.875rem' }}>
-          <Plus size={16} /> Add RFI
-        </button>
+        <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+          <button onClick={onExport} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: '600', fontSize: '0.875rem' }} title="Export RFI Log to Excel">
+            <Download size={16} /> Export Log
+          </button>
+          <button onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: '600', fontSize: '0.875rem' }}>
+            <Plus size={16} /> Add RFI
+          </button>
+        </div>
       </div>
       <DataTable
         columns={[
@@ -1011,7 +1038,7 @@ function RFIsTab({ rfis, allRFIs, search, setSearch, statusFilter, setStatusFilt
 // ============================================================================
 // SUBMITTALS TAB
 // ============================================================================
-function SubmittalsTab({ submittals, allSubmittals, search, setSearch, statusFilter, setStatusFilter, onAdd, onEdit }) {
+function SubmittalsTab({ submittals, allSubmittals, search, setSearch, statusFilter, setStatusFilter, onAdd, onEdit, onExport }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)', flexWrap: 'wrap', gap: 'var(--space-md)' }}>
@@ -1021,9 +1048,14 @@ function SubmittalsTab({ submittals, allSubmittals, search, setSearch, statusFil
             {SUBMITTAL_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === 'All' ? `All Submittals (${allSubmittals.length})` : s}</option>)}
           </select>
         </div>
-        <button onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: '600', fontSize: '0.875rem' }}>
-          <Plus size={16} /> Add Submittal
-        </button>
+        <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+          <button onClick={onExport} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: '600', fontSize: '0.875rem' }} title="Export Submittal Log to Excel">
+            <Download size={16} /> Export Log
+          </button>
+          <button onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontWeight: '600', fontSize: '0.875rem' }}>
+            <Plus size={16} /> Add Submittal
+          </button>
+        </div>
       </div>
       <DataTable
         columns={[

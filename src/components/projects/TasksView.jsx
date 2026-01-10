@@ -16,9 +16,10 @@
 // ============================================================================
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { List, LayoutGrid, Plus, Filter, Search, X, AlertTriangle } from 'lucide-react';
+import { List, LayoutGrid, Plus, Filter, Search, X, AlertTriangle, User, Users } from 'lucide-react';
 import KanbanBoard from './KanbanBoard';
 import { supabase } from '../../utils/supabaseClient';
+import { useAuth } from '../../context/AuthContext';
 
 // ============================================================================
 // CONSTANTS
@@ -202,9 +203,16 @@ function TasksView({
   showToast
 }) {
   // ==========================================================================
+  // HOOKS
+  // ==========================================================================
+  const { user } = useAuth();
+  const currentUserId = user?.id;
+
+  // ==========================================================================
   // STATE
   // ==========================================================================
   const [viewMode, setViewMode] = useState('list');
+  const [filterOwnership, setFilterOwnership] = useState('all'); // 'all' or 'mine'
   const [filterPriority, setFilterPriority] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterAssignee, setFilterAssignee] = useState('all');
@@ -226,6 +234,14 @@ function TasksView({
   // Filter tasks based on all criteria
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
+      // Ownership filter (My Tasks vs All Tasks)
+      if (filterOwnership === 'mine' && currentUserId) {
+        const isAssignedToMe = task.assignee_id === currentUserId;
+        const isOwnedByMe = task.internal_owner_id === currentUserId;
+        const isCreatedByMe = task.created_by === currentUserId;
+        if (!isAssignedToMe && !isOwnedByMe && !isCreatedByMe) return false;
+      }
+
       // Priority filter
       if (filterPriority !== 'all' && task.priority !== filterPriority) return false;
 
@@ -248,7 +264,7 @@ function TasksView({
 
       return true;
     });
-  }, [tasks, filterPriority, filterStatus, filterAssignee, searchTerm]);
+  }, [tasks, filterOwnership, currentUserId, filterPriority, filterStatus, filterAssignee, searchTerm]);
 
   // Count active filters
   const activeFilterCount = useMemo(() => {
@@ -376,6 +392,60 @@ function TasksView({
 
           {/* Filter dropdowns */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
+            {/* Ownership Toggle - My Tasks vs All Tasks */}
+            <div style={{
+              display: 'flex',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              padding: '2px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <button
+                onClick={() => setFilterOwnership('all')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '6px 12px',
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  background: filterOwnership === 'all' ? 'var(--bg-primary)' : 'transparent',
+                  color: filterOwnership === 'all' ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+                  fontWeight: '600',
+                  fontSize: '0.8125rem',
+                  cursor: 'pointer',
+                  boxShadow: filterOwnership === 'all' ? 'var(--shadow-sm)' : 'none',
+                  transition: 'all 0.15s'
+                }}
+              >
+                <Users size={14} />
+                All Tasks
+              </button>
+              <button
+                onClick={() => setFilterOwnership('mine')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '6px 12px',
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  background: filterOwnership === 'mine' ? 'var(--bg-primary)' : 'transparent',
+                  color: filterOwnership === 'mine' ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+                  fontWeight: '600',
+                  fontSize: '0.8125rem',
+                  cursor: 'pointer',
+                  boxShadow: filterOwnership === 'mine' ? 'var(--shadow-sm)' : 'none',
+                  transition: 'all 0.15s'
+                }}
+              >
+                <User size={14} />
+                My Tasks
+              </button>
+            </div>
+
+            <div style={{ width: '1px', height: '24px', background: 'var(--border-color)' }} />
+
             <Filter size={16} style={{ color: 'var(--text-tertiary)' }} />
 
             {/* Status filter */}
