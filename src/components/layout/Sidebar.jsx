@@ -54,7 +54,8 @@ import {
   Server,
   Factory,
   Clock,
-  Mail
+  Mail,
+  Map
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -864,6 +865,7 @@ function Sidebar({
       { id: 'rfis', label: 'RFIs', icon: FileText },
       { id: 'submittals', label: 'Submittals', icon: ClipboardList },
       { id: 'calendar', label: 'Calendar', icon: Calendar },
+      { id: 'factory-map', label: 'Factory Map', icon: Map },
     ];
 
     switch (dashboardType) {
