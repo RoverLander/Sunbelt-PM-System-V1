@@ -28,7 +28,7 @@ BEGIN
       v_project.id,
       'Kickoff Meeting',
       'Schedule and conduct project kickoff meeting with dealer and internal team',
-      CASE WHEN v_project.status IN ('In Progress', 'PM Handoff') THEN 'Completed' ELSE 'Not Started' END,
+      CASE WHEN v_project.status IN ('In Progress', 'PM Handoff', 'Complete') THEN 'Completed' ELSE 'Not Started' END,
       'High',
       v_project.start_date + INTERVAL '7 days',
       v_pm_id,
@@ -42,7 +42,7 @@ BEGIN
       'Complete Site Survey',
       'Conduct site visit and document conditions, measurements, and access requirements',
       CASE
-        WHEN v_project.status = 'In Progress' THEN 'Completed'
+        WHEN v_project.status IN ('In Progress', 'Complete') THEN 'Completed'
         WHEN v_project.status = 'PM Handoff' THEN 'In Progress'
         ELSE 'Not Started'
       END,
@@ -59,6 +59,7 @@ BEGIN
       'Review 20% Drawings',
       'Review preliminary layout drawings and provide feedback to drafting',
       CASE
+        WHEN v_project.status = 'Complete' THEN 'Completed'
         WHEN v_project.status = 'In Progress' AND v_project.health_status != 'Critical' THEN 'Completed'
         WHEN v_project.status = 'In Progress' THEN 'In Progress'
         WHEN v_project.status = 'PM Handoff' THEN 'In Progress'
@@ -77,7 +78,11 @@ BEGIN
       v_project.id,
       'Follow Up on Color Selections',
       'Contact dealer regarding outstanding color and finish selections',
-      CASE WHEN v_project.status = 'In Progress' THEN 'In Progress' ELSE 'Not Started' END,
+      CASE
+        WHEN v_project.status = 'Complete' THEN 'Completed'
+        WHEN v_project.status = 'In Progress' THEN 'In Progress'
+        ELSE 'Not Started'
+      END,
       'Medium',
       v_project.start_date + INTERVAL '30 days',
       v_pm_id,
@@ -85,14 +90,18 @@ BEGIN
       NOW()
     );
 
-    -- Task 5: Permit Submission (only for In Progress)
-    IF v_project.status = 'In Progress' THEN
+    -- Task 5: Permit Submission (for In Progress and Complete projects)
+    IF v_project.status IN ('In Progress', 'Complete') THEN
       INSERT INTO tasks (project_id, title, description, status, priority, due_date, assignee_id, workflow_station_key, created_at)
       VALUES (
         v_project.id,
         'Submit Building Permits',
         'Prepare and submit building permit application to local jurisdiction',
-        CASE WHEN v_project.health_status = 'Critical' THEN 'Awaiting Response' ELSE 'Not Started' END,
+        CASE
+          WHEN v_project.status = 'Complete' THEN 'Completed'
+          WHEN v_project.health_status = 'Critical' THEN 'Awaiting Response'
+          ELSE 'Not Started'
+        END,
         'High',
         v_project.target_online_date - INTERVAL '90 days',
         v_pm_id,
@@ -108,6 +117,7 @@ BEGIN
       'Order Long Lead Items',
       'Identify and order equipment with extended lead times (HVAC, electrical panels, etc.)',
       CASE
+        WHEN v_project.status = 'Complete' THEN 'Completed'
         WHEN v_project.status = 'In Progress' AND v_project.health_status = 'On Track' THEN 'Completed'
         WHEN v_project.status = 'In Progress' THEN 'In Progress'
         ELSE 'Not Started'
@@ -165,12 +175,12 @@ BEGIN
       'Site Access Clarification',
       'Please clarify the site access route for delivery vehicles. The preliminary survey shows potential issues with overhead clearance on the main access road.',
       CASE
-        WHEN v_project.status = 'In Progress' THEN 'Closed'
+        WHEN v_project.status IN ('In Progress', 'Complete') THEN 'Closed'
         WHEN v_project.status = 'PM Handoff' THEN 'Open'
         ELSE 'Draft'
       END,
       'Medium',
-      CASE WHEN v_project.status != 'Planning' THEN v_project.start_date + INTERVAL '10 days' ELSE NULL END,
+      CASE WHEN v_project.status NOT IN ('Planning') THEN v_project.start_date + INTERVAL '10 days' ELSE NULL END,
       v_project.start_date + INTERVAL '17 days',
       true,
       COALESCE(v_project.client_name, 'Dealer Contact'),
@@ -189,12 +199,13 @@ BEGIN
       'Electrical Panel Location',
       'Drawing sheet E-101 shows the main electrical panel in a location that conflicts with the mechanical room layout. Please advise on preferred location.',
       CASE
+        WHEN v_project.status = 'Complete' THEN 'Closed'
         WHEN v_project.status = 'In Progress' AND v_project.health_status = 'On Track' THEN 'Closed'
         WHEN v_project.status = 'In Progress' THEN 'Open'
         ELSE 'Draft'
       END,
       'High',
-      CASE WHEN v_project.status = 'In Progress' THEN v_project.start_date + INTERVAL '25 days' ELSE NULL END,
+      CASE WHEN v_project.status IN ('In Progress', 'Complete') THEN v_project.start_date + INTERVAL '25 days' ELSE NULL END,
       v_project.start_date + INTERVAL '32 days',
       true,
       'Engineering Department',
@@ -245,12 +256,13 @@ BEGIN
       'Carrier 5-ton rooftop unit with economizer',
       'Product Data',
       CASE
+        WHEN v_project.status = 'Complete' THEN 'Approved'
         WHEN v_project.status = 'In Progress' AND v_project.health_status = 'On Track' THEN 'Approved'
         WHEN v_project.status = 'In Progress' THEN 'Under Review'
         ELSE 'Pending'
       END,
       'High',
-      CASE WHEN v_project.status != 'Planning' THEN v_project.start_date + INTERVAL '20 days' ELSE NULL END,
+      CASE WHEN v_project.status NOT IN ('Planning') THEN v_project.start_date + INTERVAL '20 days' ELSE NULL END,
       v_project.start_date + INTERVAL '30 days',
       true,
       COALESCE(v_project.client_name, 'Dealer Contact'),
@@ -272,11 +284,12 @@ BEGIN
       '200A main breaker panel with surge protection',
       'Product Data',
       CASE
+        WHEN v_project.status = 'Complete' THEN 'Approved'
         WHEN v_project.status = 'In Progress' THEN 'Under Review'
         ELSE 'Pending'
       END,
       'Medium',
-      CASE WHEN v_project.status = 'In Progress' THEN v_project.start_date + INTERVAL '25 days' ELSE NULL END,
+      CASE WHEN v_project.status IN ('In Progress', 'Complete') THEN v_project.start_date + INTERVAL '25 days' ELSE NULL END,
       v_project.start_date + INTERVAL '35 days',
       true,
       COALESCE(v_project.client_name, 'Dealer Contact'),
@@ -329,7 +342,7 @@ BEGIN
       'Administrative',
       v_project.start_date,
       false,
-      CASE WHEN v_project.status != 'Pre-PM' THEN 'Completed' ELSE 'Not Started' END,
+      CASE WHEN v_project.status NOT IN ('Pre-PM', 'Planning') THEN 'Completed' ELSE 'Not Started' END,
       v_pm_id,
       NOW()
     );
@@ -344,6 +357,7 @@ BEGIN
       v_project.start_date + INTERVAL '60 days',
       true,
       CASE
+        WHEN v_project.status = 'Complete' THEN 'Completed'
         WHEN v_project.status = 'In Progress' AND v_project.health_status = 'On Track' THEN 'Completed'
         WHEN v_project.status = 'In Progress' THEN 'In Progress'
         ELSE 'Not Started'
@@ -361,7 +375,11 @@ BEGIN
       'Production',
       v_project.target_online_date - INTERVAL '60 days',
       true,
-      CASE WHEN v_project.status = 'In Progress' AND v_project.health_status = 'On Track' THEN 'In Progress' ELSE 'Not Started' END,
+      CASE
+        WHEN v_project.status = 'Complete' THEN 'Completed'
+        WHEN v_project.status = 'In Progress' AND v_project.health_status = 'On Track' THEN 'In Progress'
+        ELSE 'Not Started'
+      END,
       v_pm_id,
       NOW()
     );
@@ -375,7 +393,7 @@ BEGIN
       'Delivery',
       v_project.target_online_date - INTERVAL '14 days',
       true,
-      'Not Started',
+      CASE WHEN v_project.status = 'Complete' THEN 'Completed' ELSE 'Not Started' END,
       v_pm_id,
       NOW()
     );
