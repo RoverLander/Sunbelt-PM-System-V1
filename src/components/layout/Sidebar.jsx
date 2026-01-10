@@ -212,11 +212,18 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
       const today = new Date().toISOString().split('T')[0];
 
-      // Fetch projects where user is primary PM
-      const { data: primaryProjects } = await supabase
+      // Fetch projects where user is owner
+      const { data: ownerProjects } = await supabase
         .from('projects')
         .select('id')
         .eq('owner_id', currentUser.id)
+        .in('status', activeStatuses);
+
+      // Fetch projects where user is primary PM
+      const { data: primaryPmProjects } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('primary_pm_id', currentUser.id)
         .in('status', activeStatuses);
 
       // Fetch projects where user is backup PM (if toggle enabled)
@@ -232,7 +239,8 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
 
       // Combine and deduplicate
       const allProjectIds = [...new Set([
-        ...(primaryProjects || []).map(p => p.id),
+        ...(ownerProjects || []).map(p => p.id),
+        ...(primaryPmProjects || []).map(p => p.id),
         ...backupProjects.map(p => p.id)
       ])];
 

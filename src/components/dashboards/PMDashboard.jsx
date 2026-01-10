@@ -1056,7 +1056,7 @@ function PMDashboard({ onNavigateToProject }) {
                         </span>
                       </td>
                       <td style={{ padding: 'var(--space-md)', textAlign: 'right', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                        {formatDate(project.target_delivery_date || project.delivery_date)}
+                        {formatDate(project.target_online_date)}
                       </td>
                       <td style={{ padding: 'var(--space-md)', textAlign: 'right' }}>
                         <ChevronRight size={16} style={{ color: 'var(--text-tertiary)' }} />
