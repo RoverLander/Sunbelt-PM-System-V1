@@ -594,7 +594,7 @@ function AddTaskModal({
             .getPublicUrl(storagePath);
 
           // Create attachment record
-          await supabase.from('attachments').insert([{
+          const { error: attachError } = await supabase.from('attachments').insert([{
             project_id: projectId,
             task_id: task.id,
             file_name: fileItem.name,
@@ -604,6 +604,9 @@ function AddTaskModal({
             public_url: urlData?.publicUrl,
             uploaded_by: user?.id
           }]);
+          if (attachError) {
+            console.error('Error creating attachment record:', attachError);
+          }
         }
       }
 

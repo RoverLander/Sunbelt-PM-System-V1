@@ -348,7 +348,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
       // Fetch users
       const { data: users } = await supabase.from('users').select('id, is_active');
       const userList = users || [];
-      const activeUsers = userList.filter(u => u.is_active !== false).length;
+      const activeUsers = userList.filter(u => u.is_active === true).length;
 
       // Fetch project count
       const { count: projectCount } = await supabase
@@ -1101,7 +1101,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
             fontWeight: '600',
             fontSize: '0.75rem'
           }}>
-            {currentUser?.name?.split(' ').map(n => n[0]).join('').slice(0, 2) || '?'}
+            {currentUser?.name?.split(' ').filter(n => n).map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

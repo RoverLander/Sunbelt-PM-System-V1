@@ -127,13 +127,13 @@ function ProjectFiles({ projectId, onUpdate }) {
 
   const getAssociationLabel = (attachment) => {
     if (attachment.task && attachment.task_id) {
-      return { type: 'Task', label: attachment.task.title, icon: CheckSquare, color: 'var(--info)' };
+      return { type: 'Task', label: attachment.task.title || 'Untitled Task', icon: CheckSquare, color: 'var(--info)' };
     }
     if (attachment.rfi && attachment.rfi_id) {
-      return { type: 'RFI', label: `${attachment.rfi.rfi_number}: ${attachment.rfi.subject}`, icon: MessageSquare, color: 'var(--warning)' };
+      return { type: 'RFI', label: `${attachment.rfi.rfi_number || 'N/A'}: ${attachment.rfi.subject || 'No Subject'}`, icon: MessageSquare, color: 'var(--warning)' };
     }
     if (attachment.submittal && attachment.submittal_id) {
-      return { type: 'Submittal', label: `${attachment.submittal.submittal_number}: ${attachment.submittal.title}`, icon: ClipboardList, color: 'var(--success)' };
+      return { type: 'Submittal', label: `${attachment.submittal.submittal_number || 'N/A'}: ${attachment.submittal.title || 'Untitled'}`, icon: ClipboardList, color: 'var(--success)' };
     }
     return { type: 'Project', label: 'General Project File', icon: FolderOpen, color: 'var(--sunbelt-orange)' };
   };
