@@ -230,13 +230,14 @@ function FloorPlanViewer({
   // HANDLERS - PAN/DRAG
   // ==========================================================================
   const handleMouseDown = (e) => {
-    // Only pan in view mode and when zoomed in
-    if (mode !== 'view' || zoom <= 1) return;
-    // Don't start drag if clicking on marker elements
+    // Only pan in view mode (not addMarker mode)
+    if (mode !== 'view') return;
+    // Don't start drag if clicking on marker elements or buttons
     const target = e.target;
     const isMarkerOrButton = target.closest('[data-marker]') || target.tagName === 'BUTTON';
     if (isMarkerOrButton) return;
 
+    e.preventDefault();
     setIsDragging(true);
     setDragStart({
       x: e.clientX - panOffset.x,
@@ -246,6 +247,7 @@ function FloorPlanViewer({
 
   const handleMouseMove = (e) => {
     if (!isDragging) return;
+    e.preventDefault();
 
     setPanOffset({
       x: e.clientX - dragStart.x,
@@ -261,13 +263,6 @@ function FloorPlanViewer({
     setIsDragging(false);
   };
 
-  // Reset pan when zoom changes to 1 or below
-  useEffect(() => {
-    if (zoom <= 1) {
-      setPanOffset({ x: 0, y: 0 });
-    }
-  }, [zoom]);
-
   // ==========================================================================
   // HANDLERS - PAGE NAVIGATION
   // ==========================================================================
@@ -278,14 +273,21 @@ function FloorPlanViewer({
   // HANDLERS - MARKER PLACEMENT
   // ==========================================================================
   const handleImageClick = (e) => {
-    if (!isPM || mode !== 'addMarker' || isPdf) return;
+    if (!isPM || mode !== 'addMarker' || isPdf || isDragging) return;
 
-    const rect = e.currentTarget.getBoundingClientRect();
+    // Get the image element for accurate positioning
+    const img = imageRef.current;
+    if (!img) return;
+
+    const rect = img.getBoundingClientRect();
     const x_percent = ((e.clientX - rect.left) / rect.width) * 100;
     const y_percent = ((e.clientY - rect.top) / rect.height) * 100;
 
-    setPendingMarkerPosition({ x_percent, y_percent });
-    setShowAddMarker(true);
+    // Only place marker if click is within the image bounds
+    if (x_percent >= 0 && x_percent <= 100 && y_percent >= 0 && y_percent <= 100) {
+      setPendingMarkerPosition({ x_percent, y_percent });
+      setShowAddMarker(true);
+    }
   };
 
   // ===== HANDLE MARKER CREATION =====
@@ -780,15 +782,14 @@ function FloorPlanViewer({
         onMouseLeave={handleMouseLeave}
         style={{
           flex: 1,
-          overflow: zoom > 1 ? 'hidden' : 'auto',
+          overflow: 'hidden',
           background: '#0a0a14',
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: mode === 'addMarker' ? 'crosshair' :
-                  isDragging ? 'grabbing' :
-                  zoom > 1 ? 'grab' : 'default'
+                  isDragging ? 'grabbing' : 'grab'
         }}
       >
         {/* ===== LOADING STATE ===== */}
@@ -812,27 +813,30 @@ function FloorPlanViewer({
         ) : fileUrl ? (
           /* ===== IMAGE VIEWER WITH MARKERS ===== */
           <div
+            onClick={handleImageClick}
             style={{
               position: 'relative',
               transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
               transformOrigin: 'center center',
-              transition: isDragging ? 'none' : 'transform 0.15s ease',
-              margin: '40px',
-              userSelect: 'none'
+              transition: isDragging ? 'none' : 'transform 0.2s ease-out',
+              userSelect: 'none',
+              willChange: isDragging ? 'transform' : 'auto'
             }}
           >
             <img
               ref={imageRef}
               src={fileUrl}
               alt={floorPlan.name}
-              onClick={handleImageClick}
               onDragStart={(e) => e.preventDefault()}
+              draggable={false}
               style={{
-                maxWidth: '100%',
+                maxWidth: 'calc(100vw - 80px)',
+                maxHeight: 'calc(100vh - 200px)',
                 display: 'block',
                 cursor: 'inherit',
                 borderRadius: 'var(--radius-md)',
-                boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                pointerEvents: 'none'
               }}
             />
 
