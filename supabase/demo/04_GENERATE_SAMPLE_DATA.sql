@@ -13,12 +13,14 @@ DECLARE
   v_project RECORD;
   v_pm_id UUID;
   v_task_id UUID;
-  v_rfi_count INTEGER := 1;
-  v_submittal_count INTEGER := 1;
+  v_rfi_num INTEGER;
+  v_submittal_num INTEGER;
 BEGIN
   -- Loop through all projects
   FOR v_project IN SELECT * FROM projects ORDER BY created_at LOOP
     v_pm_id := v_project.primary_pm_id;
+    v_rfi_num := 1;
+    v_submittal_num := 1;
 
     -- ======================================================================
     -- TASKS (5-8 per project with varied statuses)
@@ -156,13 +158,15 @@ BEGIN
 
     -- ======================================================================
     -- RFIs (2-3 per project)
+    -- Include: number, sent_to, is_external fields
     -- ======================================================================
 
-    -- RFI 1: Site Conditions
-    INSERT INTO rfis (project_id, rfi_number, subject, question, status, priority, date_sent, due_date, created_by, created_at)
+    -- RFI 1: Site Conditions (External to dealer)
+    INSERT INTO rfis (project_id, rfi_number, number, subject, question, status, priority, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
     VALUES (
       v_project.id,
-      'RFI-' || LPAD(v_rfi_count::TEXT, 3, '0'),
+      v_project.project_number || '-RFI-' || LPAD(v_rfi_num::TEXT, 3, '0'),
+      v_rfi_num,
       'Site Access Clarification',
       'Please clarify the site access route for delivery vehicles. The preliminary survey shows potential issues with overhead clearance on the main access road.',
       CASE
@@ -173,16 +177,20 @@ BEGIN
       'Medium',
       CASE WHEN v_project.status != 'Planning' THEN v_project.start_date + INTERVAL '10 days' ELSE NULL END,
       v_project.start_date + INTERVAL '17 days',
+      COALESCE(v_project.client_name, 'Dealer Contact'),
+      NULL,
+      true,
       v_pm_id,
       NOW()
     );
-    v_rfi_count := v_rfi_count + 1;
+    v_rfi_num := v_rfi_num + 1;
 
-    -- RFI 2: Technical Question
-    INSERT INTO rfis (project_id, rfi_number, subject, question, status, priority, date_sent, due_date, created_by, created_at)
+    -- RFI 2: Technical Question (External to architect/engineer)
+    INSERT INTO rfis (project_id, rfi_number, number, subject, question, status, priority, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
     VALUES (
       v_project.id,
-      'RFI-' || LPAD(v_rfi_count::TEXT, 3, '0'),
+      v_project.project_number || '-RFI-' || LPAD(v_rfi_num::TEXT, 3, '0'),
+      v_rfi_num,
       'Electrical Panel Location',
       'Drawing sheet E-101 shows the main electrical panel in a location that conflicts with the mechanical room layout. Please advise on preferred location.',
       CASE
@@ -193,38 +201,47 @@ BEGIN
       'High',
       CASE WHEN v_project.status = 'In Progress' THEN v_project.start_date + INTERVAL '25 days' ELSE NULL END,
       v_project.start_date + INTERVAL '32 days',
+      'Engineering Department',
+      NULL,
+      true,
       v_pm_id,
       NOW()
     );
-    v_rfi_count := v_rfi_count + 1;
+    v_rfi_num := v_rfi_num + 1;
 
     -- RFI 3: Open/Overdue for problem projects
     IF v_project.health_status IN ('At Risk', 'Critical') THEN
-      INSERT INTO rfis (project_id, rfi_number, subject, question, status, priority, date_sent, due_date, created_by, created_at)
+      INSERT INTO rfis (project_id, rfi_number, number, subject, question, status, priority, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
       VALUES (
         v_project.id,
-        'RFI-' || LPAD(v_rfi_count::TEXT, 3, '0'),
+        v_project.project_number || '-RFI-' || LPAD(v_rfi_num::TEXT, 3, '0'),
+        v_rfi_num,
         'URGENT: Foundation Specification',
         'Foundation drawings do not match site survey elevation data. Need immediate clarification to proceed with module set.',
         'Open',
         'Urgent',
         CURRENT_DATE - INTERVAL '7 days',
         CURRENT_DATE - INTERVAL '2 days',  -- Overdue!
+        'Site Contractor',
+        NULL,
+        true,
         v_pm_id,
         NOW()
       );
-      v_rfi_count := v_rfi_count + 1;
+      v_rfi_num := v_rfi_num + 1;
     END IF;
 
     -- ======================================================================
     -- SUBMITTALS (2-3 per project)
+    -- Include: number, sent_to, is_external fields
     -- ======================================================================
 
     -- Submittal 1: HVAC Equipment
-    INSERT INTO submittals (project_id, submittal_number, title, description, status, date_sent, due_date, created_by, created_at)
+    INSERT INTO submittals (project_id, submittal_number, number, title, description, status, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
     VALUES (
       v_project.id,
-      'SUB-' || LPAD(v_submittal_count::TEXT, 3, '0'),
+      v_project.project_number || '-SUB-' || LPAD(v_submittal_num::TEXT, 3, '0'),
+      v_submittal_num,
       'HVAC Equipment Cutsheets',
       'Carrier 5-ton rooftop unit with economizer - Model 48TCDD06A2A5-0A0A0',
       CASE
@@ -234,16 +251,20 @@ BEGIN
       END,
       CASE WHEN v_project.status != 'Planning' THEN v_project.start_date + INTERVAL '20 days' ELSE NULL END,
       v_project.start_date + INTERVAL '30 days',
+      COALESCE(v_project.client_name, 'Dealer Contact'),
+      NULL,
+      true,
       v_pm_id,
       NOW()
     );
-    v_submittal_count := v_submittal_count + 1;
+    v_submittal_num := v_submittal_num + 1;
 
     -- Submittal 2: Electrical
-    INSERT INTO submittals (project_id, submittal_number, title, description, status, date_sent, due_date, created_by, created_at)
+    INSERT INTO submittals (project_id, submittal_number, number, title, description, status, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
     VALUES (
       v_project.id,
-      'SUB-' || LPAD(v_submittal_count::TEXT, 3, '0'),
+      v_project.project_number || '-SUB-' || LPAD(v_submittal_num::TEXT, 3, '0'),
+      v_submittal_num,
       'Main Electrical Panel',
       'Square D 200A main breaker panel with surge protection',
       CASE
@@ -252,26 +273,33 @@ BEGIN
       END,
       CASE WHEN v_project.status = 'In Progress' THEN v_project.start_date + INTERVAL '25 days' ELSE NULL END,
       v_project.start_date + INTERVAL '35 days',
+      COALESCE(v_project.client_name, 'Dealer Contact'),
+      NULL,
+      true,
       v_pm_id,
       NOW()
     );
-    v_submittal_count := v_submittal_count + 1;
+    v_submittal_num := v_submittal_num + 1;
 
     -- Submittal 3: Rejected for problem projects
     IF v_project.health_status = 'Critical' THEN
-      INSERT INTO submittals (project_id, submittal_number, title, description, status, date_sent, due_date, created_by, created_at)
+      INSERT INTO submittals (project_id, submittal_number, number, title, description, status, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
       VALUES (
         v_project.id,
-        'SUB-' || LPAD(v_submittal_count::TEXT, 3, '0'),
+        v_project.project_number || '-SUB-' || LPAD(v_submittal_num::TEXT, 3, '0'),
+        v_submittal_num,
         'Exterior Finish Materials',
         'Fiber cement siding and trim package - Hardie Board',
         'Rejected',
         CURRENT_DATE - INTERVAL '14 days',
         CURRENT_DATE - INTERVAL '7 days',
+        COALESCE(v_project.client_name, 'Dealer Contact'),
+        NULL,
+        true,
         v_pm_id,
         NOW()
       );
-      v_submittal_count := v_submittal_count + 1;
+      v_submittal_num := v_submittal_num + 1;
     END IF;
 
     -- ======================================================================
