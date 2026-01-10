@@ -37,40 +37,13 @@ import ClientsPage from './components/pages/ClientsPage';
 // Project Details
 import ProjectDetails from './components/projects/ProjectDetails';
 
+// Reports
+import { ExecutiveReports } from './components/reports';
+
 import { supabase } from './utils/supabaseClient';
 import './App.css';
 
-// ============================================================================
-// REPORTS PLACEHOLDER
-// ============================================================================
-function ReportsPage() {
-  return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ marginBottom: 'var(--space-lg)' }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
-          Reports
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-          Analytics and reporting
-        </p>
-      </div>
-      <div style={{
-        background: 'var(--bg-secondary)',
-        borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--border-color)',
-        padding: '60px 40px',
-        textAlign: 'center'
-      }}>
-        <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📊</div>
-        <h2 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>Reports Coming Soon</h2>
-        <p style={{ color: 'var(--text-secondary)', maxWidth: '400px', margin: '0 auto' }}>
-          We're building comprehensive reporting features including project analytics, 
-          team performance metrics, and exportable reports.
-        </p>
-      </div>
-    </div>
-  );
-}
+// ExecutiveReports is now imported from ./components/reports
 
 // ============================================================================
 // APP CONTENT
@@ -291,7 +264,7 @@ function AppContent() {
         case 'team':
           return <TeamPage onNavigateToProject={handleNavigateToProject} />;
         case 'reports':
-          return <ReportsPage />;
+          return <ExecutiveReports />;
         case 'projects':
           return <ProjectsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
         case 'tasks':
@@ -315,7 +288,7 @@ function AppContent() {
         case 'team':
           return <TeamPage onNavigateToProject={handleNavigateToProject} />;
         case 'reports':
-          return <ReportsPage />;
+          return <ExecutiveReports />;
         case 'projects':
           return <ProjectsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
         case 'tasks':
