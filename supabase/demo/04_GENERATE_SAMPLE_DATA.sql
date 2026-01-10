@@ -2,17 +2,13 @@
 -- STEP 4: GENERATE SAMPLE TASKS, RFIs, SUBMITTALS, MILESTONES
 -- ============================================================================
 -- Creates realistic sample data for each project for demo purposes
--- ============================================================================
-
--- ============================================================================
--- GENERATE TASKS FOR EACH PROJECT
+-- Schema based on actual app code analysis (Jan 2026)
 -- ============================================================================
 
 DO $$
 DECLARE
   v_project RECORD;
   v_pm_id UUID;
-  v_task_id UUID;
   v_rfi_num INTEGER;
   v_submittal_num INTEGER;
 BEGIN
@@ -26,7 +22,7 @@ BEGIN
     -- TASKS (5-8 per project with varied statuses)
     -- ======================================================================
 
-    -- Task 1: Kickoff Meeting (Completed for In Progress projects)
+    -- Task 1: Kickoff Meeting
     INSERT INTO tasks (project_id, title, description, status, priority, due_date, assignee_id, created_at)
     VALUES (
       v_project.id,
@@ -81,10 +77,7 @@ BEGIN
       v_project.id,
       'Follow Up on Color Selections',
       'Contact dealer regarding outstanding color and finish selections',
-      CASE
-        WHEN v_project.status = 'In Progress' THEN 'In Progress'
-        ELSE 'Not Started'
-      END,
+      CASE WHEN v_project.status = 'In Progress' THEN 'In Progress' ELSE 'Not Started' END,
       'Medium',
       v_project.start_date + INTERVAL '30 days',
       v_pm_id,
@@ -92,7 +85,7 @@ BEGIN
       NOW()
     );
 
-    -- Task 5: Permit Submission (only for In Progress projects)
+    -- Task 5: Permit Submission (only for In Progress)
     IF v_project.status = 'In Progress' THEN
       INSERT INTO tasks (project_id, title, description, status, priority, due_date, assignee_id, workflow_station_key, created_at)
       VALUES (
@@ -108,7 +101,7 @@ BEGIN
       );
     END IF;
 
-    -- Task 6: Long Lead Items (for projects with equipment)
+    -- Task 6: Long Lead Items
     INSERT INTO tasks (project_id, title, description, status, priority, due_date, assignee_id, workflow_station_key, created_at)
     VALUES (
       v_project.id,
@@ -135,7 +128,7 @@ BEGIN
         'Address critical path delays and develop recovery plan',
         'In Progress',
         'Urgent',
-        CURRENT_DATE - INTERVAL '5 days',  -- Overdue!
+        CURRENT_DATE - INTERVAL '5 days',
         v_pm_id,
         NOW()
       );
@@ -158,11 +151,13 @@ BEGIN
 
     -- ======================================================================
     -- RFIs (2-3 per project)
-    -- Include: number, sent_to, is_external fields
+    -- Schema: project_id, rfi_number, number, subject, question, status,
+    --         priority, due_date, date_sent, is_external, sent_to,
+    --         sent_to_email, created_by
     -- ======================================================================
 
-    -- RFI 1: Site Conditions (External to dealer)
-    INSERT INTO rfis (project_id, rfi_number, number, subject, question, status, priority, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
+    -- RFI 1: Site Conditions
+    INSERT INTO rfis (project_id, rfi_number, number, subject, question, status, priority, date_sent, due_date, is_external, sent_to, sent_to_email, created_by, created_at)
     VALUES (
       v_project.id,
       v_project.project_number || '-RFI-' || LPAD(v_rfi_num::TEXT, 3, '0'),
@@ -177,16 +172,16 @@ BEGIN
       'Medium',
       CASE WHEN v_project.status != 'Planning' THEN v_project.start_date + INTERVAL '10 days' ELSE NULL END,
       v_project.start_date + INTERVAL '17 days',
+      true,
       COALESCE(v_project.client_name, 'Dealer Contact'),
       NULL,
-      true,
       v_pm_id,
       NOW()
     );
     v_rfi_num := v_rfi_num + 1;
 
-    -- RFI 2: Technical Question (External to architect/engineer)
-    INSERT INTO rfis (project_id, rfi_number, number, subject, question, status, priority, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
+    -- RFI 2: Technical Question
+    INSERT INTO rfis (project_id, rfi_number, number, subject, question, status, priority, date_sent, due_date, is_external, sent_to, sent_to_email, created_by, created_at)
     VALUES (
       v_project.id,
       v_project.project_number || '-RFI-' || LPAD(v_rfi_num::TEXT, 3, '0'),
@@ -201,9 +196,9 @@ BEGIN
       'High',
       CASE WHEN v_project.status = 'In Progress' THEN v_project.start_date + INTERVAL '25 days' ELSE NULL END,
       v_project.start_date + INTERVAL '32 days',
+      true,
       'Engineering Department',
       NULL,
-      true,
       v_pm_id,
       NOW()
     );
@@ -211,7 +206,7 @@ BEGIN
 
     -- RFI 3: Open/Overdue for problem projects
     IF v_project.health_status IN ('At Risk', 'Critical') THEN
-      INSERT INTO rfis (project_id, rfi_number, number, subject, question, status, priority, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
+      INSERT INTO rfis (project_id, rfi_number, number, subject, question, status, priority, date_sent, due_date, is_external, sent_to, sent_to_email, created_by, created_at)
       VALUES (
         v_project.id,
         v_project.project_number || '-RFI-' || LPAD(v_rfi_num::TEXT, 3, '0'),
@@ -219,12 +214,12 @@ BEGIN
         'URGENT: Foundation Specification',
         'Foundation drawings do not match site survey elevation data. Need immediate clarification to proceed with module set.',
         'Open',
-        'Urgent',
+        'Critical',
         CURRENT_DATE - INTERVAL '7 days',
-        CURRENT_DATE - INTERVAL '2 days',  -- Overdue!
+        CURRENT_DATE - INTERVAL '2 days',
+        true,
         'Site Contractor',
         NULL,
-        true,
         v_pm_id,
         NOW()
       );
@@ -233,66 +228,85 @@ BEGIN
 
     -- ======================================================================
     -- SUBMITTALS (2-3 per project)
-    -- Include: sent_to, is_external fields
+    -- Schema: project_id, submittal_number, title, description,
+    --         submittal_type (REQUIRED), status, priority (REQUIRED),
+    --         due_date, date_submitted, is_external, sent_to, sent_to_email,
+    --         spec_section, manufacturer, model_number, revision_number,
+    --         created_by
+    -- NOTE: No 'number' column in submittals table
     -- ======================================================================
 
     -- Submittal 1: HVAC Equipment
-    INSERT INTO submittals (project_id, submittal_number, title, description, status, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
+    INSERT INTO submittals (project_id, submittal_number, title, description, submittal_type, status, priority, date_submitted, due_date, is_external, sent_to, sent_to_email, manufacturer, model_number, revision_number, created_by, created_at)
     VALUES (
       v_project.id,
       v_project.project_number || '-SUB-' || LPAD(v_submittal_num::TEXT, 3, '0'),
       'HVAC Equipment Cutsheets',
-      'Carrier 5-ton rooftop unit with economizer - Model 48TCDD06A2A5-0A0A0',
+      'Carrier 5-ton rooftop unit with economizer',
+      'Product Data',
       CASE
         WHEN v_project.status = 'In Progress' AND v_project.health_status = 'On Track' THEN 'Approved'
         WHEN v_project.status = 'In Progress' THEN 'Under Review'
-        ELSE 'Draft'
+        ELSE 'Pending'
       END,
+      'High',
       CASE WHEN v_project.status != 'Planning' THEN v_project.start_date + INTERVAL '20 days' ELSE NULL END,
       v_project.start_date + INTERVAL '30 days',
+      true,
       COALESCE(v_project.client_name, 'Dealer Contact'),
       NULL,
-      true,
+      'Carrier',
+      '48TCDD06A2A5-0A0A0',
+      0,
       v_pm_id,
       NOW()
     );
     v_submittal_num := v_submittal_num + 1;
 
-    -- Submittal 2: Electrical
-    INSERT INTO submittals (project_id, submittal_number, title, description, status, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
+    -- Submittal 2: Electrical Panel
+    INSERT INTO submittals (project_id, submittal_number, title, description, submittal_type, status, priority, date_submitted, due_date, is_external, sent_to, sent_to_email, manufacturer, model_number, revision_number, created_by, created_at)
     VALUES (
       v_project.id,
       v_project.project_number || '-SUB-' || LPAD(v_submittal_num::TEXT, 3, '0'),
       'Main Electrical Panel',
-      'Square D 200A main breaker panel with surge protection',
+      '200A main breaker panel with surge protection',
+      'Product Data',
       CASE
         WHEN v_project.status = 'In Progress' THEN 'Under Review'
-        ELSE 'Draft'
+        ELSE 'Pending'
       END,
+      'Medium',
       CASE WHEN v_project.status = 'In Progress' THEN v_project.start_date + INTERVAL '25 days' ELSE NULL END,
       v_project.start_date + INTERVAL '35 days',
+      true,
       COALESCE(v_project.client_name, 'Dealer Contact'),
       NULL,
-      true,
+      'Square D',
+      'HOM2200M200PCVP',
+      0,
       v_pm_id,
       NOW()
     );
     v_submittal_num := v_submittal_num + 1;
 
-    -- Submittal 3: Rejected for problem projects
+    -- Submittal 3: Rejected for Critical projects
     IF v_project.health_status = 'Critical' THEN
-      INSERT INTO submittals (project_id, submittal_number, title, description, status, date_sent, due_date, sent_to, sent_to_email, is_external, created_by, created_at)
+      INSERT INTO submittals (project_id, submittal_number, title, description, submittal_type, status, priority, date_submitted, due_date, is_external, sent_to, sent_to_email, manufacturer, revision_number, created_by, created_at)
       VALUES (
         v_project.id,
         v_project.project_number || '-SUB-' || LPAD(v_submittal_num::TEXT, 3, '0'),
         'Exterior Finish Materials',
-        'Fiber cement siding and trim package - Hardie Board',
+        'Fiber cement siding and trim package',
+        'Samples',
         'Rejected',
+        'High',
         CURRENT_DATE - INTERVAL '14 days',
         CURRENT_DATE - INTERVAL '7 days',
+        true,
         COALESCE(v_project.client_name, 'Dealer Contact'),
         NULL,
-        true,
+        'James Hardie',
+        1,
         v_pm_id,
         NOW()
       );
@@ -300,56 +314,69 @@ BEGIN
     END IF;
 
     -- ======================================================================
-    -- MILESTONES (3-4 per project)
+    -- MILESTONES (4 per project)
+    -- Schema: project_id, name, description, category (REQUIRED),
+    --         due_date, is_critical_path, status, created_by
+    -- Status values: 'Not Started', 'In Progress', 'Completed'
     -- ======================================================================
 
     -- Milestone 1: Sales Handoff
-    INSERT INTO milestones (project_id, name, description, due_date, status, created_at)
+    INSERT INTO milestones (project_id, name, description, category, due_date, is_critical_path, status, created_by, created_at)
     VALUES (
       v_project.id,
       'Sales Handoff Complete',
       'All sales documentation received and project officially handed to PM',
+      'Administrative',
       v_project.start_date,
-      CASE WHEN v_project.status != 'Pre-PM' THEN 'Completed' ELSE 'Pending' END,
+      false,
+      CASE WHEN v_project.status != 'Pre-PM' THEN 'Completed' ELSE 'Not Started' END,
+      v_pm_id,
       NOW()
     );
 
     -- Milestone 2: Drawings Approved
-    INSERT INTO milestones (project_id, name, description, due_date, status, created_at)
+    INSERT INTO milestones (project_id, name, description, category, due_date, is_critical_path, status, created_by, created_at)
     VALUES (
       v_project.id,
       '100% Drawings Approved',
       'Final construction drawings approved by dealer',
+      'Submittal',
       v_project.start_date + INTERVAL '60 days',
+      true,
       CASE
         WHEN v_project.status = 'In Progress' AND v_project.health_status = 'On Track' THEN 'Completed'
         WHEN v_project.status = 'In Progress' THEN 'In Progress'
-        ELSE 'Pending'
+        ELSE 'Not Started'
       END,
+      v_pm_id,
       NOW()
     );
 
     -- Milestone 3: Production Start
-    INSERT INTO milestones (project_id, name, description, due_date, status, is_factory_milestone, created_at)
+    INSERT INTO milestones (project_id, name, description, category, due_date, is_critical_path, status, created_by, created_at)
     VALUES (
       v_project.id,
       'Production Start',
       'Factory begins module production',
+      'Production',
       v_project.target_online_date - INTERVAL '60 days',
-      CASE WHEN v_project.status = 'In Progress' AND v_project.health_status = 'On Track' THEN 'In Progress' ELSE 'Pending' END,
       true,
+      CASE WHEN v_project.status = 'In Progress' AND v_project.health_status = 'On Track' THEN 'In Progress' ELSE 'Not Started' END,
+      v_pm_id,
       NOW()
     );
 
     -- Milestone 4: Delivery
-    INSERT INTO milestones (project_id, name, description, due_date, status, is_factory_milestone, created_at)
+    INSERT INTO milestones (project_id, name, description, category, due_date, is_critical_path, status, created_by, created_at)
     VALUES (
       v_project.id,
       'Delivery to Site',
       'Modules delivered and set on foundation',
+      'Delivery',
       v_project.target_online_date - INTERVAL '14 days',
-      'Pending',
       true,
+      'Not Started',
+      v_pm_id,
       NOW()
     );
 
