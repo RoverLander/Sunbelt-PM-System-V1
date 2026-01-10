@@ -15,7 +15,6 @@ INSERT INTO users (
   name,
   role,
   is_active,
-  factory_code,
   created_at
 )
 VALUES (
@@ -24,7 +23,6 @@ VALUES (
   'Juanita Earnest',
   'PC',
   true,
-  'PMI',  -- Phoenix factory code
   NOW()
 )
 ON CONFLICT (email) DO UPDATE SET
@@ -33,7 +31,7 @@ ON CONFLICT (email) DO UPDATE SET
   is_active = true;
 
 -- Verify
-SELECT id, email, name, role, factory_code FROM users WHERE email = 'juanita.earnest@phoenixmodular.com';
+SELECT id, email, name, role FROM users WHERE email = 'juanita.earnest@phoenixmodular.com';
 
 -- ============================================================================
 -- IMPORTANT: After running this, you need to:
