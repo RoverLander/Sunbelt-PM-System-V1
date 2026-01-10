@@ -42,7 +42,10 @@ import {
   ExternalLink,
   GripVertical,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -71,6 +74,49 @@ const PRIORITY_COLORS = {
 
 const ALL_STATUSES = ['Not Started', 'In Progress', 'Awaiting Response', 'Completed', 'Cancelled'];
 const PRIORITIES = ['Low', 'Normal', 'Medium', 'High', 'Critical'];
+
+// Priority order for sorting (higher number = higher priority)
+const PRIORITY_ORDER = { 'Critical': 5, 'High': 4, 'Medium': 3, 'Normal': 2, 'Low': 1 };
+const STATUS_ORDER = { 'Not Started': 1, 'In Progress': 2, 'Awaiting Response': 3, 'Completed': 4, 'Cancelled': 5 };
+
+// ============================================================================
+// SORTABLE TABLE HEADER COMPONENT
+// ============================================================================
+function SortableHeader({ label, column, currentSort, onSort, width }) {
+  const isActive = currentSort.column === column;
+  const direction = isActive ? currentSort.direction : null;
+
+  return (
+    <th
+      onClick={() => onSort(column)}
+      style={{
+        padding: '12px 16px',
+        textAlign: 'left',
+        fontSize: '0.75rem',
+        fontWeight: '600',
+        color: isActive ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+        textTransform: 'uppercase',
+        cursor: 'pointer',
+        userSelect: 'none',
+        width: width,
+        transition: 'color 0.15s'
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--sunbelt-orange)'}
+      onMouseLeave={(e) => e.currentTarget.style.color = isActive ? 'var(--sunbelt-orange)' : 'var(--text-secondary)'}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {label}
+        {direction === 'asc' ? (
+          <ChevronUp size={14} />
+        ) : direction === 'desc' ? (
+          <ChevronDown size={14} />
+        ) : (
+          <ChevronsUpDown size={14} style={{ opacity: 0.4 }} />
+        )}
+      </div>
+    </th>
+  );
+}
 
 // ============================================================================
 // VIEW TOGGLE COMPONENT
@@ -693,6 +739,11 @@ function TasksPage({
   const [filterPriority, setFilterPriority] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // ==========================================================================
+  // STATE - SORTING
+  // ==========================================================================
+  const [sort, setSort] = useState({ column: 'due_date', direction: 'asc' });
+
   // Update filter when initialFilter prop changes (from sidebar click)
   useEffect(() => {
     if (initialFilter) {
@@ -774,6 +825,42 @@ function TasksPage({
   // ==========================================================================
   // FILTER TASKS
   // ==========================================================================
+  // Handle sort column click
+  const handleSort = (column) => {
+    setSort(prev => ({
+      column,
+      direction: prev.column === column && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  // Sort comparator function
+  const sortTasks = (a, b) => {
+    const { column, direction } = sort;
+    const multiplier = direction === 'asc' ? 1 : -1;
+
+    switch (column) {
+      case 'title':
+        return multiplier * (a.title || '').localeCompare(b.title || '');
+      case 'project':
+        return multiplier * (a.project?.project_number || '').localeCompare(b.project?.project_number || '');
+      case 'priority':
+        return multiplier * ((PRIORITY_ORDER[a.priority] || 0) - (PRIORITY_ORDER[b.priority] || 0));
+      case 'status':
+        return multiplier * ((STATUS_ORDER[a.status] || 0) - (STATUS_ORDER[b.status] || 0));
+      case 'due_date':
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return multiplier * 1;
+        if (!b.due_date) return multiplier * -1;
+        return multiplier * new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+      case 'assignee':
+        const aName = a.external_assignee_name || a.assignee?.name || '';
+        const bName = b.external_assignee_name || b.assignee?.name || '';
+        return multiplier * aName.localeCompare(bName);
+      default:
+        return 0;
+    }
+  };
+
   const filteredTasks = tasks.filter(task => {
     // Status filter
     if (filterStatus === 'open' && ['Completed', 'Cancelled'].includes(task.status)) return false;
@@ -802,7 +889,7 @@ function TasksPage({
     }
 
     return true;
-  });
+  }).sort(sortTasks);
 
   // ==========================================================================
   // STATS
@@ -1166,12 +1253,12 @@ function TasksPage({
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'var(--bg-tertiary)' }}>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Task</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', width: '180px' }}>Project</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', width: '100px' }}>Priority</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', width: '120px' }}>Status</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', width: '120px' }}>Due Date</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', width: '150px' }}>Assignee</th>
+                    <SortableHeader label="Task" column="title" currentSort={sort} onSort={handleSort} />
+                    <SortableHeader label="Project" column="project" currentSort={sort} onSort={handleSort} width="180px" />
+                    <SortableHeader label="Priority" column="priority" currentSort={sort} onSort={handleSort} width="100px" />
+                    <SortableHeader label="Status" column="status" currentSort={sort} onSort={handleSort} width="120px" />
+                    <SortableHeader label="Due Date" column="due_date" currentSort={sort} onSort={handleSort} width="120px" />
+                    <SortableHeader label="Assignee" column="assignee" currentSort={sort} onSort={handleSort} width="150px" />
                   </tr>
                 </thead>
                 <tbody>

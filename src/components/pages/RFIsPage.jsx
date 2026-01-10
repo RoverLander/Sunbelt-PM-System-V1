@@ -31,7 +31,10 @@ import {
   Calendar,
   AlertCircle,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -45,6 +48,54 @@ const STATUS_COLORS = {
   'Answered': '#22c55e',
   'Closed': 'var(--text-tertiary)'
 };
+
+// Status ordering for sorting (lower number = earlier in workflow)
+const STATUS_ORDER = {
+  'Draft': 1,
+  'Open': 2,
+  'Answered': 3,
+  'Closed': 4
+};
+
+// ============================================================================
+// SORTABLE TABLE HEADER COMPONENT
+// ============================================================================
+function SortableHeader({ label, column, currentSort, onSort, width }) {
+  const isActive = currentSort.column === column;
+  const direction = isActive ? currentSort.direction : null;
+
+  return (
+    <th
+      onClick={() => onSort(column)}
+      style={{
+        padding: '12px 16px',
+        textAlign: 'left',
+        fontSize: '0.75rem',
+        fontWeight: '600',
+        color: isActive ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+        textTransform: 'uppercase',
+        letterSpacing: '0.05em',
+        cursor: 'pointer',
+        userSelect: 'none',
+        width: width || 'auto',
+        transition: 'color 0.15s'
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--sunbelt-orange)'}
+      onMouseLeave={(e) => e.currentTarget.style.color = isActive ? 'var(--sunbelt-orange)' : 'var(--text-secondary)'}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {label}
+        {direction === 'asc' ? (
+          <ChevronUp size={14} />
+        ) : direction === 'desc' ? (
+          <ChevronDown size={14} />
+        ) : (
+          <ChevronsUpDown size={14} style={{ opacity: 0.4 }} />
+        )}
+      </div>
+    </th>
+  );
+}
 
 // ============================================================================
 // MAIN COMPONENT
@@ -72,6 +123,47 @@ function RFIsPage({
   const [filterStatus, setFilterStatus] = useState(initialFilter || 'all');
   const [filterProject, setFilterProject] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // ==========================================================================
+  // STATE - SORTING (Default to due_date ascending - most urgent first)
+  // ==========================================================================
+  const [sort, setSort] = useState({ column: 'due_date', direction: 'asc' });
+
+  // ==========================================================================
+  // SORT HANDLER
+  // ==========================================================================
+  const handleSort = (column) => {
+    setSort(prev => ({
+      column,
+      direction: prev.column === column && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  // ==========================================================================
+  // SORT COMPARATOR
+  // ==========================================================================
+  const sortRFIs = (a, b) => {
+    const { column, direction } = sort;
+    const multiplier = direction === 'asc' ? 1 : -1;
+
+    switch (column) {
+      case 'subject':
+        return multiplier * (a.subject || '').localeCompare(b.subject || '');
+      case 'project':
+        return multiplier * (a.project?.project_number || '').localeCompare(b.project?.project_number || '');
+      case 'sent_to':
+        return multiplier * (a.sent_to || '').localeCompare(b.sent_to || '');
+      case 'status':
+        return multiplier * ((STATUS_ORDER[a.status] || 99) - (STATUS_ORDER[b.status] || 99));
+      case 'due_date':
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return multiplier * 1;
+        if (!b.due_date) return multiplier * -1;
+        return multiplier * (new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+      default:
+        return 0;
+    }
+  };
 
   // Update filter when initialFilter prop changes
   useEffect(() => {
@@ -378,59 +470,15 @@ function RFIsPage({
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'var(--bg-tertiary)' }}>
-                  <th style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '0.75rem',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em'
-                  }}>RFI</th>
-                  <th style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '0.75rem',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    width: '180px'
-                  }}>Project</th>
-                  <th style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '0.75rem',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    width: '180px'
-                  }}>Sent To</th>
-                  <th style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '0.75rem',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    width: '100px'
-                  }}>Status</th>
-                  <th style={{
-                    padding: '12px 16px',
-                    textAlign: 'left',
-                    fontSize: '0.75rem',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    width: '120px'
-                  }}>Due Date</th>
+                  <SortableHeader label="RFI" column="subject" currentSort={sort} onSort={handleSort} />
+                  <SortableHeader label="Project" column="project" currentSort={sort} onSort={handleSort} width="180px" />
+                  <SortableHeader label="Sent To" column="sent_to" currentSort={sort} onSort={handleSort} width="180px" />
+                  <SortableHeader label="Status" column="status" currentSort={sort} onSort={handleSort} width="100px" />
+                  <SortableHeader label="Due Date" column="due_date" currentSort={sort} onSort={handleSort} width="120px" />
                 </tr>
               </thead>
               <tbody>
-                {filteredRFIs.map((rfi, idx) => {
+                {[...filteredRFIs].sort(sortRFIs).map((rfi, idx) => {
                   const overdue = isOverdue(rfi.due_date, rfi.status);
                   return (
                     <tr
