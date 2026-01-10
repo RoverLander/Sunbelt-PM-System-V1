@@ -145,12 +145,23 @@ export class TruckSprite extends PIXI.Container {
     const x = (1 - t) * (1 - t) * from.x + 2 * (1 - t) * t * controlPoint.x + t * t * to.x;
     const y = (1 - t) * (1 - t) * from.y + 2 * (1 - t) * t * controlPoint.y + t * t * to.y;
 
+    // Guard against NaN from bezier calculations
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      console.warn('TruckSprite: Invalid bezier position calculated, using fallback');
+      return;
+    }
+
     this.position.set(x, y);
 
     // Calculate rotation (direction of travel)
     const dx = 2 * (1 - t) * (controlPoint.x - from.x) + 2 * t * (to.x - controlPoint.x);
     const dy = 2 * (1 - t) * (controlPoint.y - from.y) + 2 * t * (to.y - controlPoint.y);
-    this.truck.rotation = Math.atan2(dy, dx);
+    const rotation = Math.atan2(dy, dx);
+
+    // Only set rotation if it's a valid number
+    if (Number.isFinite(rotation)) {
+      this.truck.rotation = rotation;
+    }
   }
 
   // Animation update

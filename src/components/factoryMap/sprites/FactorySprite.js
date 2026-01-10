@@ -334,7 +334,14 @@ export class FactorySprite extends PIXI.Container {
     this.off('pointerout');
     this.off('pointertap');
 
+    // Properly destroy smoke particles to prevent memory leaks
+    this.smokeParticles.forEach(particle => {
+      if (particle && !particle.destroyed) {
+        particle.destroy();
+      }
+    });
     this.smokeParticles = [];
+
     super.destroy(options);
   }
 }
