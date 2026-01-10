@@ -69,7 +69,7 @@ function TeamWorkloadView({
           t.due_date && t.due_date < today
         );
         const inProgressTasks = openTasks.filter(t => t.status === 'In Progress');
-        const blockedTasks = openTasks.filter(t => t.status === 'Blocked');
+        const awaitingTasks = openTasks.filter(t => t.status === 'Awaiting Response');
 
         // ===== RFIS =====
         const userRFIs = rfis.filter(r => {
@@ -112,7 +112,7 @@ function TeamWorkloadView({
           projects: activeProjects,
           openTasks: openTasks.length,
           inProgressTasks: inProgressTasks.length,
-          blockedTasks: blockedTasks.length,
+          awaitingTasks: awaitingTasks.length,
           overdueTasks: overdueTasks.length,
           openRFIs: openRFIs.length,
           overdueRFIs: overdueRFIs.length,

@@ -243,7 +243,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         .from('tasks')
         .select('id, status, due_date')
         .or(`assignee_id.eq.${currentUser.id},internal_owner_id.eq.${currentUser.id}`)
-        .in('status', ['Not Started', 'In Progress', 'Blocked', 'On Hold']);
+        .in('status', ['Not Started', 'In Progress', 'Awaiting Response']);
 
       const openTasks = tasksData || [];
       setMyTasks(openTasks.length);
@@ -280,7 +280,7 @@ function Sidebar({ currentView, setCurrentView, dashboardType, setDashboardType 
         .from('tasks')
         .select('id', { count: 'exact', head: true })
         .lt('due_date', today)
-        .in('status', ['Not Started', 'In Progress', 'Blocked', 'On Hold']);
+        .in('status', ['Not Started', 'In Progress', 'Awaiting Response']);
 
       // Fetch team members
       const { count: teamCount } = await supabase

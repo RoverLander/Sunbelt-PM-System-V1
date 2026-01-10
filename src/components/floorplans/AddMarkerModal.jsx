@@ -325,7 +325,7 @@ function AddMarkerModal({
       'Open': '#3b82f6', 'Pending': '#f59e0b', 'Answered': '#22c55e', 'Closed': '#64748b',
       'Submitted': '#3b82f6', 'Under Review': '#f59e0b', 'Approved': '#22c55e',
       'Approved as Noted': '#22c55e', 'Revise & Resubmit': '#ef4444', 'Rejected': '#ef4444',
-      'Not Started': '#64748b', 'In Progress': '#3b82f6', 'On Hold': '#f59e0b', 'Completed': '#22c55e'
+      'Not Started': '#64748b', 'In Progress': '#3b82f6', 'Awaiting Response': '#f59e0b', 'Completed': '#22c55e', 'Cancelled': '#94a3b8'
     };
     return colors[status] || '#64748b';
   };

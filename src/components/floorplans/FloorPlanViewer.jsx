@@ -174,7 +174,7 @@ function FloorPlanViewer({
           } else if (marker.item_type === 'submittal') {
             return ['Pending', 'Submitted', 'Under Review'].includes(item.status);
           } else if (marker.item_type === 'task') {
-            return ['Not Started', 'In Progress', 'Blocked'].includes(item.status);
+            return ['Not Started', 'In Progress', 'Awaiting Response'].includes(item.status);
           }
         } 
         // ===== CHECK CLOSED/COMPLETED STATUS =====
@@ -339,12 +339,12 @@ function FloorPlanViewer({
     } 
     // ===== TASK COLORS =====
     else if (marker.item_type === 'task') {
-      const colors = { 
-        'Not Started': '#64748b', 
-        'In Progress': '#3b82f6', 
-        'Blocked': '#ef4444', 
-        'Completed': '#22c55e', 
-        'Cancelled': '#94a3b8' 
+      const colors = {
+        'Not Started': '#64748b',
+        'In Progress': '#3b82f6',
+        'Awaiting Response': '#f59e0b',
+        'Completed': '#22c55e',
+        'Cancelled': '#94a3b8'
       };
       return colors[status] || '#64748b';
     }

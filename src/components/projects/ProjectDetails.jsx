@@ -60,6 +60,9 @@ import ProjectCalendarWeek from './ProjectCalendarWeek';
 // ✅ ADDED: Workflow imports
 import WorkflowTracker from './WorkflowTracker';
 
+// ✅ ADDED: Files tab
+import ProjectFiles from './ProjectFiles';
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -483,7 +486,10 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
 
               {/* FILES TAB */}
               {activeTab === 'files' && (
-                <PlaceholderTab icon={FolderOpen} message="File management coming soon" />
+                <ProjectFiles
+                  projectId={project.id}
+                  onUpdate={fetchProjectData}
+                />
               )}
 
               {/* FLOORPLAN TAB */}
