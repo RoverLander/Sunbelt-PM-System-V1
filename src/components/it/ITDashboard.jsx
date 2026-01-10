@@ -689,27 +689,31 @@ function QuickActionButton({ icon: Icon, label, onClick }) {
   );
 }
 
-// Activity Item
+// Activity Item - helper to get icon component
+const getActivityIcon = (type) => {
+  switch (type) {
+    case 'user': return Users;
+    case 'project': return Database;
+    case 'task': return CheckCircle;
+    default: return Activity;
+  }
+};
+
+const getActivityColor = (type) => {
+  switch (type) {
+    case 'user': return '#3b82f6';
+    case 'project': return 'var(--sunbelt-orange)';
+    case 'task': return '#22c55e';
+    default: return 'var(--text-secondary)';
+  }
+};
+
+const renderActivityIcon = (type) => {
+  const IconComponent = getActivityIcon(type);
+  return <IconComponent size={14} style={{ color: getActivityColor(type), flexShrink: 0 }} />;
+};
+
 function ActivityItem({ activity }) {
-  const getIcon = () => {
-    switch (activity.type) {
-      case 'user': return Users;
-      case 'project': return Database;
-      case 'task': return CheckCircle;
-      default: return Activity;
-    }
-  };
-
-  const getColor = () => {
-    switch (activity.type) {
-      case 'user': return '#3b82f6';
-      case 'project': return 'var(--sunbelt-orange)';
-      case 'task': return '#22c55e';
-      default: return 'var(--text-secondary)';
-    }
-  };
-
-  const Icon = getIcon();
   const timeAgo = getTimeAgo(activity.timestamp);
 
   return (
@@ -720,7 +724,7 @@ function ActivityItem({ activity }) {
       padding: 'var(--space-xs) 0',
       borderBottom: '1px solid var(--border-color)'
     }}>
-      <Icon size={14} style={{ color: getColor(), flexShrink: 0 }} />
+      {renderActivityIcon(activity.type)}
       <span style={{
         fontSize: '0.8125rem',
         color: 'var(--text-primary)',

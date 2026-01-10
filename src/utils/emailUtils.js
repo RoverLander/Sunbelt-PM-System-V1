@@ -233,16 +233,17 @@ const buildProjectReference = (projectName, projectNumber) => {
 const openEmailDraft = ({ to = '', cc = '', bcc = '', subject = '', body = '' }) => {
   // Build query parameters
   const params = new URLSearchParams();
-  
+
   // Add CC (combine default CC with provided CC)
   const combinedCC = [COMPANY_CONFIG.defaultCC, cc].filter(Boolean).join(',');
   if (combinedCC) params.append('cc', combinedCC);
-  
+
   if (bcc) params.append('bcc', bcc);
   if (subject) params.append('subject', subject);
   if (body) params.append('body', body);
-  
-  const queryString = params.toString();
+
+  // URLSearchParams encodes spaces as '+', but mailto: requires '%20'
+  const queryString = params.toString().replace(/\+/g, '%20');
   const mailto = `mailto:${encodeURIComponent(to)}${queryString ? '?' + queryString : ''}`;
   
   // Check for length limitations

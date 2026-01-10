@@ -101,6 +101,12 @@ const getItemTypeIcon = (type) => {
   return icons[type] || CheckSquare;
 };
 
+// Helper to render icon inline (avoids component-during-render warning)
+const renderItemIcon = (type, size, style) => {
+  const IconComponent = getItemTypeIcon(type);
+  return <IconComponent size={size} style={style} />;
+};
+
 const getWeekDates = (offset = 0) => {
   const today = new Date();
   const currentDay = today.getDay();
@@ -904,30 +910,27 @@ function PMDashboard({ onNavigateToProject }) {
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  {items.slice(0, 3).map(item => {
-                    const Icon = getItemTypeIcon(item.type);
-                    return (
-                      <div
-                        key={`${item.type}-${item.id}`}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '2px 4px',
-                          background: `${getItemTypeColor(item.type)}15`,
-                          borderRadius: 'var(--radius-sm)',
-                          fontSize: '0.6875rem',
-                          color: getItemTypeColor(item.type),
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}
-                      >
-                        <Icon size={10} style={{ color: getItemTypeColor(item.type), flexShrink: 0 }} />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</span>
-                      </div>
-                    );
-                  })}
+                  {items.slice(0, 3).map(item => (
+                    <div
+                      key={`${item.type}-${item.id}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '2px 4px',
+                        background: `${getItemTypeColor(item.type)}15`,
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '0.6875rem',
+                        color: getItemTypeColor(item.type),
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}
+                    >
+                      {renderItemIcon(item.type, 10, { color: getItemTypeColor(item.type), flexShrink: 0 })}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</span>
+                    </div>
+                  ))}
                   {items.length > 3 && (
                     <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textAlign: 'center' }}>
                       +{items.length - 3} more
@@ -1155,9 +1158,8 @@ function StatCard({ label, value, icon: Icon, color, isText = false, highlight =
 // ATTENTION ITEM COMPONENT
 // ============================================================================
 function AttentionItem({ item, onClick, isOverdue = false }) {
-  const Icon = getItemTypeIcon(item.type);
   const daysUntil = getDaysUntilDue(item.dueDate);
-  
+
   return (
     <div
       onClick={() => onClick(item.project)}
@@ -1174,7 +1176,7 @@ function AttentionItem({ item, onClick, isOverdue = false }) {
       onMouseEnter={(e) => e.currentTarget.style.transform = 'translateX(4px)'}
       onMouseLeave={(e) => e.currentTarget.style.transform = 'translateX(0)'}
     >
-      <Icon size={14} style={{ color: getItemTypeColor(item.type), flexShrink: 0 }} />
+      {renderItemIcon(item.type, 14, { color: getItemTypeColor(item.type), flexShrink: 0 })}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           fontSize: '0.8125rem',
