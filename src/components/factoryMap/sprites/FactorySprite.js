@@ -170,6 +170,65 @@ export class FactorySprite extends PIXI.Container {
 
     this.labelText = label;
     this.addChild(label);
+
+    // Stats badge (shows active project count)
+    this.createStatsBadge();
+  }
+
+  createStatsBadge() {
+    const badge = new PIXI.Container();
+    badge.name = 'statsBadge';
+    badge.position.set(35, -40);
+
+    // Badge background
+    const bg = new PIXI.Graphics();
+    bg.beginFill(0x22c55e);
+    bg.drawCircle(0, 0, 12);
+    bg.endFill();
+
+    // Badge border
+    bg.lineStyle(2, 0x166534);
+    bg.drawCircle(0, 0, 12);
+
+    badge.addChild(bg);
+
+    // Badge text (count)
+    const countText = new PIXI.Text('0', {
+      fontSize: 10,
+      fontFamily: 'monospace',
+      fontWeight: 'bold',
+      fill: 0xffffff
+    });
+    countText.anchor.set(0.5, 0.5);
+    badge.addChild(countText);
+
+    this.statsBadge = badge;
+    this.statsBadgeText = countText;
+    this.statsBadge.visible = false; // Hidden until stats are set
+    this.addChild(badge);
+  }
+
+  // Update stats badge
+  setStats(stats) {
+    if (!stats || !this.statsBadge) return;
+
+    const count = stats.activeProjects || 0;
+    if (count > 0) {
+      this.statsBadgeText.text = count > 99 ? '99+' : count.toString();
+      this.statsBadge.visible = true;
+
+      // Change color based on count
+      const bg = this.statsBadge.getChildAt(0);
+      bg.clear();
+      const color = count > 10 ? 0xf59e0b : count > 5 ? 0x84cc16 : 0x22c55e;
+      bg.beginFill(color);
+      bg.drawCircle(0, 0, 12);
+      bg.endFill();
+      bg.lineStyle(2, 0x1a1a2e);
+      bg.drawCircle(0, 0, 12);
+    } else {
+      this.statsBadge.visible = false;
+    }
   }
 
   setupInteraction() {

@@ -8,6 +8,7 @@ import { RoutesLayer } from './layers/RoutesLayer';
 import { FactoriesLayer } from './layers/FactoriesLayer';
 import { JobSitesLayer } from './layers/JobSitesLayer';
 import { TrucksLayer } from './layers/TrucksLayer';
+import { CelebrationParticles } from './effects/CelebrationParticles';
 import { FACTORY_LOCATIONS, getPixelPosition } from './data/factoryLocations';
 
 // Map dimensions
@@ -32,9 +33,12 @@ const PixiMapCanvas = ({
   onTruckHover,
   onTruckClick,
   onTruckHoverEnd,
+  onTruckArrived,
+  onFactoryJump,
   factoryStats = {},
   projects = [],
-  deliveries = []
+  deliveries = [],
+  highlightedFactory = null
 }) => {
   const containerRef = useRef(null);
   const appRef = useRef(null);
@@ -103,6 +107,11 @@ const PixiMapCanvas = ({
       mapContainer.addChild(trucksLayer);
       layersRef.current.trucks = trucksLayer;
 
+      // 7. Celebration particles layer (on top of everything)
+      const celebrationLayer = new CelebrationParticles();
+      mapContainer.addChild(celebrationLayer);
+      layersRef.current.celebration = celebrationLayer;
+
       // Setup event handlers
       setupEventHandlers();
 
@@ -123,9 +132,21 @@ const PixiMapCanvas = ({
         },
         onViewportChange: (bounds) => {
           onViewportChange?.(bounds);
+        },
+        onFactoryJump: (code, index) => {
+          onFactoryJump?.(code, index);
         }
       });
       viewportRef.current = viewport;
+
+      // Set factory positions for keyboard navigation (1-9 keys)
+      const factoryPositions = Object.entries(FACTORY_LOCATIONS).map(([code, data]) => ({
+        code,
+        x: (data.x / 100) * MAP_WIDTH,
+        y: (data.y / 100) * MAP_HEIGHT,
+        name: data.name
+      }));
+      viewport.setFactoryPositions(factoryPositions);
 
       // Animation loop
       app.ticker.add((ticker) => {
@@ -138,6 +159,9 @@ const PixiMapCanvas = ({
           trucksLayer.update(deltaTime);
           routesLayer.update(deltaTime);
         }
+
+        // Always update celebration particles (even during pause)
+        celebrationLayer.update(deltaTime);
       });
 
       setIsReady(true);
@@ -161,8 +185,16 @@ const PixiMapCanvas = ({
       layers.trucks.on('truck:hoverend', () => onTruckHoverEnd?.());
       layers.trucks.on('truck:click', (data) => onTruckClick?.(data));
       layers.trucks.on('truck:arrived', (data) => {
-        console.log('Truck arrived:', data);
-        // Could trigger celebration animation
+        // Trigger celebration particles at arrival location
+        const truck = layers.trucks.trucks.get(data.deliveryId);
+        if (truck && layers.celebration) {
+          layers.celebration.celebrate(truck.x, truck.y, {
+            particleCount: 40,
+            spread: 180,
+            duration: 2500
+          });
+        }
+        onTruckArrived?.(data);
       });
     };
 
@@ -227,11 +259,12 @@ const PixiMapCanvas = ({
       const destPos = layersRef.current.jobSites.getJobSitePosition(delivery.id);
       if (!destPos) return;
 
-      // Create route
-      const routeData = routes.createRoute(
+      // Create route with factory code for highlighting
+      const routeData = routes.createRouteWithFactory(
         delivery.id,
         factoryPos,
         destPos,
+        factoryCode,
         {
           status: delivery.status === 'Shipping' ? 'active' : 'completed',
           color: delivery.status === 'Shipping' ? 0xf97316 : 0x22c55e,
@@ -284,6 +317,25 @@ const PixiMapCanvas = ({
     return viewportRef.current?.getZoom() || 1;
   }, []);
 
+  const getTruckPositions = useCallback(() => {
+    return layersRef.current.trucks?.getTruckPositions() || [];
+  }, []);
+
+  const highlightRoutesFromFactory = useCallback((factoryCode) => {
+    if (!layersRef.current.routes) return;
+    layersRef.current.routes.highlightByFactory(factoryCode);
+  }, []);
+
+  const clearRouteHighlights = useCallback(() => {
+    if (!layersRef.current.routes) return;
+    layersRef.current.routes.clearHighlights();
+  }, []);
+
+  const triggerCelebration = useCallback((x, y, options = {}) => {
+    if (!layersRef.current.celebration) return;
+    layersRef.current.celebration.celebrate(x, y, options);
+  }, []);
+
   // Expose methods
   useEffect(() => {
     if (containerRef.current) {
@@ -292,8 +344,23 @@ const PixiMapCanvas = ({
       containerRef.current.panToFactory = panToFactory;
       containerRef.current.panToJobSite = panToJobSite;
       containerRef.current.getZoom = getZoom;
+      containerRef.current.getTruckPositions = getTruckPositions;
+      containerRef.current.highlightRoutesFromFactory = highlightRoutesFromFactory;
+      containerRef.current.clearRouteHighlights = clearRouteHighlights;
+      containerRef.current.triggerCelebration = triggerCelebration;
     }
-  }, [setZoom, resetView, panToFactory, panToJobSite, getZoom]);
+  }, [setZoom, resetView, panToFactory, panToJobSite, getZoom, getTruckPositions, highlightRoutesFromFactory, clearRouteHighlights, triggerCelebration]);
+
+  // Handle highlighted factory changes (route highlighting)
+  useEffect(() => {
+    if (!isReady || !layersRef.current.routes) return;
+
+    if (highlightedFactory) {
+      highlightRoutesFromFactory(highlightedFactory);
+    } else {
+      clearRouteHighlights();
+    }
+  }, [highlightedFactory, isReady, highlightRoutesFromFactory, clearRouteHighlights]);
 
   return (
     <div

@@ -1,10 +1,14 @@
 import React from 'react';
 import { FACTORY_LOCATIONS } from './data/factoryLocations';
 
+// Map dimensions for coordinate conversion
+const MAP_WIDTH = 4000;
+const MAP_HEIGHT = 2500;
+
 /**
- * MiniMap - Small overview map showing current viewport and factory locations
+ * MiniMap - Small overview map showing current viewport, factory locations, and truck positions
  */
-const MiniMap = ({ viewport, onNavigate }) => {
+const MiniMap = ({ viewport, onNavigate, truckPositions = [] }) => {
   // Calculate viewport rectangle position (normalized 0-1)
   const viewportRect = viewport ? {
     left: (viewport.left / 4000) * 100,
@@ -57,6 +61,20 @@ const MiniMap = ({ viewport, onNavigate }) => {
               className="hover:fill-orange-300"
             >
               <title>{code}</title>
+            </circle>
+          ))}
+
+          {/* Truck dots (animated) */}
+          {truckPositions.map((truck) => (
+            <circle
+              key={truck.id}
+              cx={(truck.x / MAP_WIDTH) * 100}
+              cy={(truck.y / MAP_HEIGHT) * 100}
+              r="1.5"
+              fill="#fbbf24"
+              className="animate-pulse"
+            >
+              <title>{truck.data?.projectName || 'Delivery'}</title>
             </circle>
           ))}
 
