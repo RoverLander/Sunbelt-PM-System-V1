@@ -165,7 +165,8 @@ function AppContent() {
       'calendar': 'calendar',
       'files': 'files',
       'floorplan': 'floorplan',
-      'workflow': 'workflow'
+      'workflow': 'workflow',
+      'log': 'log'
     };
     
     setSelectedProjectId(projectId);
