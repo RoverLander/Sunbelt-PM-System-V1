@@ -49,6 +49,12 @@ const PMHealthPanel = ({ expanded = false, showTeam = false }) => {
 
   const fetchHealthData = async () => {
     try {
+      // Guard: ensure we have a valid user ID
+      if (!currentUser?.id) {
+        setLoading(false);
+        return;
+      }
+
       const today = new Date().toISOString().split('T')[0];
       const weekFromNow = new Date();
       weekFromNow.setDate(weekFromNow.getDate() + 7);
@@ -59,13 +65,18 @@ const PMHealthPanel = ({ expanded = false, showTeam = false }) => {
       const activeRfiStatuses = ['Open', 'Pending Response'];
       const activeSubmittalStatuses = ['Pending', 'Under Review'];
 
-      // Fetch user's tasks - filter client-side to avoid Supabase .in() issues
-      const { data: allTasks } = await supabase
-        .from('tasks')
-        .select('id, status, due_date')
-        .or(`assignee_id.eq.${currentUser.id},internal_owner_id.eq.${currentUser.id}`);
+      // Fetch user's tasks - use separate queries to avoid .or() issues in web containers
+      const [assignedTasksRes, ownedTasksRes] = await Promise.all([
+        supabase.from('tasks').select('id, status, due_date').eq('assignee_id', currentUser.id),
+        supabase.from('tasks').select('id, status, due_date').eq('internal_owner_id', currentUser.id)
+      ]);
 
-      const tasks = (allTasks || []).filter(t => activeTaskStatuses.includes(t.status));
+      // Combine and deduplicate tasks
+      const taskMap = new Map();
+      [...(assignedTasksRes.data || []), ...(ownedTasksRes.data || [])].forEach(t => taskMap.set(t.id, t));
+      const allTasks = Array.from(taskMap.values());
+
+      const tasks = allTasks.filter(t => activeTaskStatuses.includes(t.status));
 
       // Fetch user's RFIs - filter client-side
       const { data: allRfis } = await supabase
@@ -148,13 +159,18 @@ const PMHealthPanel = ({ expanded = false, showTeam = false }) => {
       const healthPromises = pms.map(async (pm) => {
         const today = new Date().toISOString().split('T')[0];
 
-        // Fetch all tasks for this PM and filter client-side
-        const { data: pmTasks } = await supabase
-          .from('tasks')
-          .select('id, status, due_date')
-          .or(`assignee_id.eq.${pm.id},internal_owner_id.eq.${pm.id}`);
+        // Fetch tasks using separate queries to avoid .or() issues
+        const [assignedRes, ownedRes] = await Promise.all([
+          supabase.from('tasks').select('id, status, due_date').eq('assignee_id', pm.id),
+          supabase.from('tasks').select('id, status, due_date').eq('internal_owner_id', pm.id)
+        ]);
 
-        const activeTasks = (pmTasks || []).filter(t => activeTaskStatuses.includes(t.status));
+        // Combine and deduplicate
+        const taskMap = new Map();
+        [...(assignedRes.data || []), ...(ownedRes.data || [])].forEach(t => taskMap.set(t.id, t));
+        const pmTasks = Array.from(taskMap.values());
+
+        const activeTasks = pmTasks.filter(t => activeTaskStatuses.includes(t.status));
         const taskCount = activeTasks.length;
         const overdueCount = activeTasks.filter(t => t.due_date && t.due_date < today).length;
 
