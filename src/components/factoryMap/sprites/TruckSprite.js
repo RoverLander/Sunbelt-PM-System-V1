@@ -12,6 +12,7 @@ export class TruckSprite extends PIXI.Container {
     this.routePath = routePath;
     this.progress = deliveryData.progress || 0;
     this.speed = options.speed || 0.002; // Progress per frame
+    this.originalSpeed = this.speed; // Store original speed for pause/resume
     this.animationTime = 0;
     this.wheelRotation = 0;
 
@@ -145,13 +146,13 @@ export class TruckSprite extends PIXI.Container {
     const x = (1 - t) * (1 - t) * from.x + 2 * (1 - t) * t * controlPoint.x + t * t * to.x;
     const y = (1 - t) * (1 - t) * from.y + 2 * (1 - t) * t * controlPoint.y + t * t * to.y;
 
-    // Guard against NaN from bezier calculations
+    // Guard against NaN from bezier calculations - keep current position as fallback
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
-      console.warn('TruckSprite: Invalid bezier position calculated, using fallback');
-      return;
+      console.warn('TruckSprite: Invalid bezier position calculated, keeping current position');
+      // Don't update position, but continue to allow rotation update
+    } else {
+      this.position.set(x, y);
     }
-
-    this.position.set(x, y);
 
     // Calculate rotation (direction of travel)
     const dx = 2 * (1 - t) * (controlPoint.x - from.x) + 2 * t * (to.x - controlPoint.x);

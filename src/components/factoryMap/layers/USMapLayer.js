@@ -115,7 +115,11 @@ export class USMapLayer extends PIXI.Container {
       const { bounds, color } = config;
 
       const region = new PIXI.Graphics();
-      const colorHex = parseInt(color.replace('#', ''), 16);
+      // Parse color with fallback for invalid values
+      let colorHex = parseInt((color || '').replace('#', ''), 16);
+      if (!Number.isFinite(colorHex)) {
+        colorHex = 0x1a2a3a; // Default dark blue-gray
+      }
 
       // Draw region rectangle with rounded corners
       const x = (bounds.x1 / 100) * this.mapWidth;

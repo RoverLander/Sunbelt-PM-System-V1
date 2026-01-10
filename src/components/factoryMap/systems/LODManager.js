@@ -84,10 +84,11 @@ export class LODManager {
   }
 
   calculateLOD(zoom) {
-    if (zoom < this.thresholds.minimal) return 'minimal';
-    if (zoom < this.thresholds.low) return 'low';
-    if (zoom < this.thresholds.medium) return 'medium';
-    if (zoom < this.thresholds.high) return 'high';
+    // Use <= to ensure consistent behavior at exact threshold boundaries
+    if (zoom <= this.thresholds.minimal) return 'minimal';
+    if (zoom <= this.thresholds.low) return 'low';
+    if (zoom <= this.thresholds.medium) return 'medium';
+    if (zoom <= this.thresholds.high) return 'high';
     return 'full';
   }
 
