@@ -1,35 +1,115 @@
 import * as PIXI from 'pixi.js';
+import { GlowFilter } from 'pixi-filters';
 
 /**
  * FactorySprite - Interactive factory marker on the map
- * Updated for PIXI v8 Graphics API with proper path handling
+ * Supports AI-generated sprite images with dynamic glow effects
+ * Falls back to programmatic graphics if sprite not available
  */
 export class FactorySprite extends PIXI.Container {
+  // Static texture cache for all factory sprites
+  static textureCache = null;
+  static textureLoading = false;
+  static textureLoadPromise = null;
+
   constructor(factoryData, options = {}) {
     super();
 
     this.factoryData = factoryData;
     this.label = factoryData.code;
     this.isActive = options.isActive ?? true;
+    this.activityLevel = 0; // 0-1, controls glow intensity
     this.scale.set(1);
 
     // Animation state
     this.smokeParticles = [];
     this.animationTime = Math.random() * 100;
     this.glowIntensity = 0;
+    this.targetGlowIntensity = 0;
 
-    // Create sprite elements with error handling
+    // Glow filter for active state
+    this.glowFilter = new GlowFilter({
+      distance: 20,
+      outerStrength: 0,
+      innerStrength: 0,
+      color: 0xf97316, // Sunbelt orange
+      quality: 0.3
+    });
+
+    // Create sprite elements
+    this.initializeSprite(options);
+  }
+
+  async initializeSprite(options) {
     try {
-      this.createBuilding();
-      this.createSmokestacks();
-      this.createLabel();
+      // Try to load the AI-generated sprite
+      const texture = await this.loadFactoryTexture();
+      if (texture) {
+        this.createSpriteBuilding(texture);
+      } else {
+        this.createBuilding();
+      }
     } catch (err) {
-      console.error('FactorySprite creation error for', this.label, err);
-      this.createFallback();
+      console.warn('Failed to load factory sprite, using fallback:', err);
+      this.createBuilding();
     }
 
+    this.createSmokestacks();
+    this.createLabel();
     this.setupInteraction();
     this.startAnimations();
+  }
+
+  async loadFactoryTexture() {
+    // Return cached texture if available
+    if (FactorySprite.textureCache) {
+      return FactorySprite.textureCache;
+    }
+
+    // If already loading, wait for it
+    if (FactorySprite.textureLoading) {
+      return FactorySprite.textureLoadPromise;
+    }
+
+    // Start loading
+    FactorySprite.textureLoading = true;
+    FactorySprite.textureLoadPromise = new Promise(async (resolve) => {
+      try {
+        // Try to load the factory sprite from assets
+        const texture = await PIXI.Assets.load('/assets/sprites/factory_idle.png');
+        FactorySprite.textureCache = texture;
+        resolve(texture);
+      } catch (err) {
+        console.warn('Factory sprite not found, will use programmatic fallback');
+        resolve(null);
+      } finally {
+        FactorySprite.textureLoading = false;
+      }
+    });
+
+    return FactorySprite.textureLoadPromise;
+  }
+
+  createSpriteBuilding(texture) {
+    // Create sprite from AI-generated image
+    const sprite = new PIXI.Sprite(texture);
+
+    // Scale to match expected size (adjust based on your sprite dimensions)
+    // Your sprite is 832x1216, we want it around 80-100px wide on screen
+    const targetWidth = 80;
+    const scale = targetWidth / texture.width;
+    sprite.scale.set(scale);
+
+    // Center the sprite
+    sprite.anchor.set(0.5, 0.85); // Anchor near bottom center for proper positioning
+
+    // Apply glow filter
+    sprite.filters = [this.glowFilter];
+
+    this.building = sprite;
+    this.buildingSprite = sprite;
+    this.usesSpriteImage = true;
+    this.addChild(sprite);
   }
 
   createFallback() {
@@ -62,7 +142,7 @@ export class FactorySprite extends PIXI.Container {
     building.poly([-40, -15, 0, -30, 40, -15, 0, 0]);
     building.fill({ color: 0x5a5a6a });
 
-    // Windows (orange glow)
+    // Windows (orange glow when active)
     const windowColor = this.isActive ? 0xf97316 : 0x4a4a5a;
 
     // Left face windows
@@ -85,29 +165,35 @@ export class FactorySprite extends PIXI.Container {
     building.rect(-40, -17, 80, 3);
     building.fill({ color: 0xf97316 });
 
+    // Apply glow filter to programmatic building too
+    building.filters = [this.glowFilter];
+
     this.building = building;
+    this.usesSpriteImage = false;
     this.addChild(building);
   }
 
   createSmokestacks() {
     this.smokestackContainer = new PIXI.Container();
 
-    const positions = [{ x: -20, y: -35 }, { x: 15, y: -32 }];
+    // Adjust positions based on whether using sprite or programmatic
+    const positions = this.usesSpriteImage
+      ? [{ x: -15, y: -60 }, { x: 10, y: -55 }]  // Adjust for sprite
+      : [{ x: -20, y: -35 }, { x: 15, y: -32 }]; // Original positions
 
     positions.forEach((pos, index) => {
-      // Smokestack cylinder
-      const stack = new PIXI.Graphics();
-      stack.rect(pos.x - 4, pos.y, 8, 15);
-      stack.fill({ color: 0x5a5a6a });
+      // Only create visual smokestacks for programmatic building
+      if (!this.usesSpriteImage) {
+        const stack = new PIXI.Graphics();
+        stack.rect(pos.x - 4, pos.y, 8, 15);
+        stack.fill({ color: 0x5a5a6a });
+        stack.ellipse(pos.x, pos.y, 5, 2);
+        stack.fill({ color: 0x6a6a7a });
+        this.smokestackContainer.addChild(stack);
+      }
 
-      // Top rim
-      stack.ellipse(pos.x, pos.y, 5, 2);
-      stack.fill({ color: 0x6a6a7a });
-
-      this.smokestackContainer.addChild(stack);
-
-      // Create smoke particles
-      if (this.isActive) {
+      // Create smoke particles for both types
+      if (this.isActive && this.activityLevel > 0.3) {
         for (let i = 0; i < 4; i++) {
           const smoke = this.createSmokeParticle(pos.x, pos.y - 5, index * 25 + i * 25);
           this.smokeParticles.push(smoke);
@@ -192,10 +278,41 @@ export class FactorySprite extends PIXI.Container {
     this.addChild(badge);
   }
 
+  /**
+   * Set activity level and update glow
+   * @param {number} level - 0 to 1 (0 = idle, 1 = max activity)
+   */
+  setActivityLevel(level) {
+    this.activityLevel = Math.max(0, Math.min(1, level));
+    this.targetGlowIntensity = this.activityLevel;
+
+    // Update smoke visibility based on activity
+    this.updateSmokeVisibility();
+  }
+
+  updateSmokeVisibility() {
+    // Show smoke particles only when activity is above threshold
+    const showSmoke = this.activityLevel > 0.3;
+    this.smokeParticles.forEach(smoke => {
+      smoke.visible = showSmoke;
+    });
+  }
+
   setStats(stats) {
     if (!stats || !this.statsBadge) return;
 
     const count = stats.activeProjects || 0;
+
+    // Calculate activity level based on project count
+    // 0 projects = 0, 1-3 = light, 4-6 = medium, 7+ = heavy
+    let activityLevel = 0;
+    if (count > 0) {
+      if (count <= 3) activityLevel = 0.3;
+      else if (count <= 6) activityLevel = 0.6;
+      else activityLevel = 1.0;
+    }
+    this.setActivityLevel(activityLevel);
+
     if (count > 0) {
       this.statsBadgeText.text = count > 99 ? '99+' : count.toString();
       this.statsBadge.visible = true;
@@ -223,7 +340,8 @@ export class FactorySprite extends PIXI.Container {
 
   onPointerOver(event) {
     this.scale.set(1.1);
-    this.glowIntensity = 1;
+    // Boost glow on hover
+    this.targetGlowIntensity = Math.max(this.activityLevel, 0.5);
 
     const globalPos = this.getGlobalPosition();
     this.emit('factory:hover', {
@@ -236,7 +354,8 @@ export class FactorySprite extends PIXI.Container {
 
   onPointerOut() {
     this.scale.set(1);
-    this.glowIntensity = 0;
+    // Return to activity-based glow
+    this.targetGlowIntensity = this.activityLevel;
     this.emit('factory:hoverend');
   }
 
@@ -264,13 +383,29 @@ export class FactorySprite extends PIXI.Container {
       this.animationTime = this.animationTime % 100;
     }
 
+    // Smooth glow transition
+    const glowSpeed = 0.1;
+    this.glowIntensity += (this.targetGlowIntensity - this.glowIntensity) * glowSpeed;
+
+    // Update glow filter based on intensity
+    this.glowFilter.outerStrength = this.glowIntensity * 3;
+    this.glowFilter.innerStrength = this.glowIntensity * 1.5;
+
+    // Pulse effect when active
+    if (this.activityLevel > 0) {
+      const pulse = Math.sin(this.animationTime * 2) * 0.3;
+      this.glowFilter.outerStrength += pulse * this.activityLevel;
+    }
+
     // Animate smoke particles
     this.smokeParticles.forEach((smoke, index) => {
+      if (!smoke.visible) return;
+
       const t = (this.animationTime + smoke.timeOffset) % 100;
       const progress = t / 100;
 
       smoke.y = smoke.baseY - progress * 40;
-      smoke.alpha = Math.sin(progress * Math.PI) * 0.5;
+      smoke.alpha = Math.sin(progress * Math.PI) * 0.5 * this.activityLevel;
       smoke.x = smoke.baseX + Math.sin(progress * 4 + index) * 8;
       smoke.scale.set(0.5 + progress * 1.5);
     });
@@ -278,6 +413,9 @@ export class FactorySprite extends PIXI.Container {
 
   setActive(active) {
     this.isActive = active;
+    if (!active) {
+      this.setActivityLevel(0);
+    }
   }
 
   destroy(options) {
@@ -296,6 +434,11 @@ export class FactorySprite extends PIXI.Container {
       }
     });
     this.smokeParticles = [];
+
+    // Clean up filter
+    if (this.glowFilter) {
+      this.glowFilter.destroy();
+    }
 
     super.destroy(options);
   }
