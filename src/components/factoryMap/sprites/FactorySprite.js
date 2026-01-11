@@ -2,7 +2,7 @@ import * as PIXI from 'pixi.js';
 
 /**
  * FactorySprite - Interactive factory marker on the map
- * Using PIXI v8 Graphics API with full chaining pattern
+ * Updated for PIXI v8 Graphics API with proper path handling
  */
 export class FactorySprite extends PIXI.Container {
   constructor(factoryData, options = {}) {
@@ -18,96 +18,131 @@ export class FactorySprite extends PIXI.Container {
     this.animationTime = Math.random() * 100;
     this.glowIntensity = 0;
 
-    // Create sprite elements
+    // Create sprite elements with error handling
     try {
       this.createBuilding();
+      this.createSmokestacks();
       this.createLabel();
-      console.log(`[FactorySprite] Created: ${this.label}, children: ${this.children.length}`);
     } catch (err) {
-      console.error('[FactorySprite] Error creating', this.label, ':', err.message);
+      console.error('FactorySprite creation error for', this.label, err);
       this.createFallback();
     }
 
     this.setupInteraction();
+    this.startAnimations();
   }
 
   createFallback() {
-    console.warn(`[FactorySprite] Using fallback for ${this.label}`);
-    // Ultra-simple fallback - just a circle (matches PIXI v8 examples exactly)
-    const fallback = new PIXI.Graphics()
-      .circle(0, 0, 25)
-      .fill(0xf97316);
+    // Simple fallback square if building fails
+    const fallback = new PIXI.Graphics();
+    fallback.rect(-25, -25, 50, 50);
+    fallback.fill({ color: 0x3a3a4a });
+    fallback.stroke({ color: 0xf97316, width: 2 });
     this.building = fallback;
     this.addChild(fallback);
   }
 
   createBuilding() {
-    // PIXI v8: Use chained calls like the official docs
-    // https://pixijs.com/8.x/guides/components/scene-objects/graphics
+    const building = new PIXI.Graphics();
+
+    // Build each shape separately with explicit fills
+    // Base platform (isometric diamond)
+    building.poly([-40, 20, 0, 35, 40, 20, 0, 5]);
+    building.fill({ color: 0x2a2a3a });
+
+    // Main building body - left face
+    building.poly([-40, 20, -40, -15, 0, 0, 0, 35]);
+    building.fill({ color: 0x3a3a4a });
+
+    // Main building body - right face
+    building.poly([0, 35, 0, 0, 40, -15, 40, 20]);
+    building.fill({ color: 0x4a4a5a });
+
+    // Roof
+    building.poly([-40, -15, 0, -30, 40, -15, 0, 0]);
+    building.fill({ color: 0x5a5a6a });
+
+    // Windows (orange glow)
     const windowColor = this.isActive ? 0xf97316 : 0x4a4a5a;
 
-    // Create building body - all in one chained Graphics
-    const body = new PIXI.Graphics()
-      .rect(-35, -30, 70, 60)
-      .fill(0x3a3a4a);
-    this.addChild(body);
+    // Left face windows
+    building.rect(-30, -5, 8, 10);
+    building.fill({ color: windowColor });
+    building.rect(-18, -5, 8, 10);
+    building.fill({ color: windowColor });
 
-    // Roof section
-    const roof = new PIXI.Graphics()
-      .rect(-35, -30, 70, 12)
-      .fill(0x5a5a6a);
-    this.addChild(roof);
-
-    // Smokestacks as separate Graphics
-    const stacks = new PIXI.Graphics()
-      .rect(-30, -45, 10, 15)
-      .fill(0x5a5a6a);
-    this.addChild(stacks);
-
-    const stack2 = new PIXI.Graphics()
-      .rect(20, -42, 8, 12)
-      .fill(0x5a5a6a);
-    this.addChild(stack2);
-
-    // Orange accent stripe
-    const stripe = new PIXI.Graphics()
-      .rect(-35, -32, 70, 4)
-      .fill(0xf97316);
-    this.addChild(stripe);
-
-    // Windows - each as separate Graphics to avoid chaining issues
-    const win1 = new PIXI.Graphics().rect(-25, -15, 12, 8).fill(windowColor);
-    const win2 = new PIXI.Graphics().rect(-5, -15, 12, 8).fill(windowColor);
-    const win3 = new PIXI.Graphics().rect(15, -15, 12, 8).fill(windowColor);
-    const win4 = new PIXI.Graphics().rect(-25, 0, 12, 8).fill(windowColor);
-    const win5 = new PIXI.Graphics().rect(-5, 0, 12, 8).fill(windowColor);
-    const win6 = new PIXI.Graphics().rect(15, 0, 12, 8).fill(windowColor);
-
-    this.addChild(win1, win2, win3, win4, win5, win6);
+    // Right face windows
+    building.rect(12, -5, 8, 10);
+    building.fill({ color: windowColor, alpha: 0.8 });
+    building.rect(24, -5, 8, 10);
+    building.fill({ color: windowColor, alpha: 0.8 });
 
     // Door
-    const door = new PIXI.Graphics()
-      .rect(-8, 15, 16, 15)
-      .fill(0x2a2a3a);
-    this.addChild(door);
+    building.rect(-6, 10, 12, 18);
+    building.fill({ color: 0x2a2a3a });
 
-    this.building = body;
+    // Sunbelt accent stripe
+    building.rect(-40, -17, 80, 3);
+    building.fill({ color: 0xf97316 });
+
+    this.building = building;
+    this.addChild(building);
+  }
+
+  createSmokestacks() {
+    this.smokestackContainer = new PIXI.Container();
+
+    const positions = [{ x: -20, y: -35 }, { x: 15, y: -32 }];
+
+    positions.forEach((pos, index) => {
+      // Smokestack cylinder
+      const stack = new PIXI.Graphics();
+      stack.rect(pos.x - 4, pos.y, 8, 15);
+      stack.fill({ color: 0x5a5a6a });
+
+      // Top rim
+      stack.ellipse(pos.x, pos.y, 5, 2);
+      stack.fill({ color: 0x6a6a7a });
+
+      this.smokestackContainer.addChild(stack);
+
+      // Create smoke particles
+      if (this.isActive) {
+        for (let i = 0; i < 4; i++) {
+          const smoke = this.createSmokeParticle(pos.x, pos.y - 5, index * 25 + i * 25);
+          this.smokeParticles.push(smoke);
+          this.smokestackContainer.addChild(smoke);
+        }
+      }
+    });
+
+    this.addChild(this.smokestackContainer);
+  }
+
+  createSmokeParticle(x, baseY, timeOffset) {
+    const smoke = new PIXI.Graphics();
+    smoke.circle(0, 0, 6);
+    smoke.fill({ color: 0xffffff, alpha: 0.6 });
+
+    smoke.position.set(x, baseY);
+    smoke.baseX = x;
+    smoke.baseY = baseY;
+    smoke.timeOffset = timeOffset;
+    smoke.alpha = 0;
+
+    return smoke;
   }
 
   createLabel() {
-    // Background pill for label
-    const labelBg = new PIXI.Graphics()
-      .roundRect(-25, 38, 50, 18, 9)
-      .fill(0x1a1a2e);
+    // Background pill
+    const labelBg = new PIXI.Graphics();
+    labelBg.roundRect(-25, 38, 50, 18, 9);
+    labelBg.fill({ color: 0x1a1a2e, alpha: 0.9 });
+    labelBg.stroke({ color: 0xf97316, width: 1, alpha: 0.8 });
+
     this.addChild(labelBg);
 
-    // Orange border on label
-    const labelBorder = new PIXI.Graphics()
-      .roundRect(-25, 38, 50, 18, 9)
-      .stroke({ width: 1, color: 0xf97316 });
-    this.addChild(labelBorder);
-
-    // Label text
+    // Label text - PIXI v8 style
     const label = new PIXI.Text({
       text: this.label,
       style: {
@@ -132,15 +167,12 @@ export class FactorySprite extends PIXI.Container {
     badge.label = 'statsBadge';
     badge.position.set(35, -40);
 
-    const bg = new PIXI.Graphics()
-      .circle(0, 0, 12)
-      .fill(0x22c55e);
-    badge.addChild(bg);
+    const bg = new PIXI.Graphics();
+    bg.circle(0, 0, 12);
+    bg.fill({ color: 0x22c55e });
+    bg.stroke({ color: 0x166534, width: 2 });
 
-    const border = new PIXI.Graphics()
-      .circle(0, 0, 12)
-      .stroke({ width: 2, color: 0x166534 });
-    badge.addChild(border);
+    badge.addChild(bg);
 
     const countText = new PIXI.Text({
       text: '0',
@@ -168,13 +200,12 @@ export class FactorySprite extends PIXI.Container {
       this.statsBadgeText.text = count > 99 ? '99+' : count.toString();
       this.statsBadge.visible = true;
 
-      // Update badge color based on count
       const bg = this.statsBadge.getChildAt(0);
-      if (bg) {
-        bg.clear();
-        const color = count > 10 ? 0xf59e0b : count > 5 ? 0x84cc16 : 0x22c55e;
-        bg.circle(0, 0, 12).fill(color);
-      }
+      bg.clear();
+      const color = count > 10 ? 0xf59e0b : count > 5 ? 0x84cc16 : 0x22c55e;
+      bg.circle(0, 0, 12);
+      bg.fill({ color });
+      bg.stroke({ color: 0x1a1a2e, width: 2 });
     } else {
       this.statsBadge.visible = false;
     }
@@ -221,6 +252,10 @@ export class FactorySprite extends PIXI.Container {
       factoryData: this.factoryData,
       originalEvent: event
     });
+  }
+
+  startAnimations() {
+    // Animation driven by parent ticker
   }
 
   update(deltaTime) {
