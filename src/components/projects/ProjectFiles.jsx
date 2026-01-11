@@ -17,7 +17,7 @@ import {
   User,
   X,
   Loader,
-  Map,
+  Map as MapIcon,
   MapPin
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
@@ -94,7 +94,7 @@ function ProjectFiles({ projectId, onUpdate }) {
   // HELPERS
   // ==========================================================================
   const getFileIcon = (fileType, isFloorPlan = false) => {
-    if (isFloorPlan) return <Map size={20} style={{ color: 'var(--sunbelt-orange)' }} />;
+    if (isFloorPlan) return <MapIcon size={20} style={{ color: 'var(--sunbelt-orange)' }} />;
     if (fileType?.startsWith('image/')) return <Image size={20} style={{ color: 'var(--info)' }} />;
     if (fileType?.includes('pdf')) return <FileText size={20} style={{ color: '#ef4444' }} />;
     if (fileType?.includes('word') || fileType?.includes('document')) return <FileText size={20} style={{ color: '#3b82f6' }} />;
@@ -556,7 +556,7 @@ function ProjectFiles({ projectId, onUpdate }) {
                     fontSize: '0.75rem',
                     fontWeight: '600'
                   }}>
-                    <Map size={12} />
+                    <MapIcon size={12} />
                     Floor Plan
                   </div>
 

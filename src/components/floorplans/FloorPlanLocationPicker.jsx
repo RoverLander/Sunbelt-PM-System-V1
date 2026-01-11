@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Map,
+  Map as MapIcon,
   MapPin,
   Plus,
   X,
@@ -215,7 +215,7 @@ function FloorPlanLocationPicker({
         border: '1px solid var(--border-color)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>
-          <Map size={16} />
+          <MapIcon size={16} />
           <span>No floor plans uploaded for this project</span>
         </div>
       </div>
@@ -235,7 +235,7 @@ function FloorPlanLocationPicker({
         color: 'var(--text-primary)',
         marginBottom: 'var(--space-sm)'
       }}>
-        <Map size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+        <MapIcon size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
         Floor Plan Location
       </label>
 
@@ -393,7 +393,7 @@ function FloorPlanLocationPicker({
                         onMouseOver={(e) => !isPdf && (e.currentTarget.style.borderColor = 'var(--sunbelt-orange)')}
                         onMouseOut={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
                       >
-                        <Map size={32} style={{ color: isPdf ? 'var(--text-tertiary)' : 'var(--sunbelt-orange)', marginBottom: 'var(--space-sm)' }} />
+                        <MapIcon size={32} style={{ color: isPdf ? 'var(--text-tertiary)' : 'var(--sunbelt-orange)', marginBottom: 'var(--space-sm)' }} />
                         <div style={{ fontWeight: '600', color: 'var(--text-primary)', marginBottom: '4px' }}>
                           {plan.name}
                         </div>

@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Map,
+  Map as MapIcon,
   Plus,
   Upload,
   FileText,
@@ -184,7 +184,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], t
         marginBottom: 'var(--space-lg)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-          <Map size={24} style={{ color: 'var(--sunbelt-orange)' }} />
+          <MapIcon size={24} style={{ color: 'var(--sunbelt-orange)' }} />
           <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
             Floor Plans
           </h3>
@@ -269,7 +269,7 @@ function FloorPlansTab({ projectId, projectNumber, rfis = [], submittals = [], t
           borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--border-color)'
         }}>
-          <Map size={64} style={{ color: 'var(--text-tertiary)', opacity: 0.5, marginBottom: 'var(--space-md)' }} />
+          <MapIcon size={64} style={{ color: 'var(--text-tertiary)', opacity: 0.5, marginBottom: 'var(--space-md)' }} />
           <h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--space-sm)', fontSize: '1.125rem' }}>
             No Floor Plans Yet
           </h4>
