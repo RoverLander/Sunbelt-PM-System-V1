@@ -2,7 +2,7 @@ import * as PIXI from 'pixi.js';
 
 /**
  * FactorySprite - Interactive factory marker on the map
- * Updated for PIXI v8 Graphics API - using GraphicsContext pattern
+ * Updated for PIXI v8 Graphics API - using single chained calls
  */
 export class FactorySprite extends PIXI.Container {
   constructor(factoryData, options = {}) {
@@ -21,89 +21,88 @@ export class FactorySprite extends PIXI.Container {
     // Create sprite elements with error handling
     try {
       this.createBuilding();
-      this.createSmokestacks();
       this.createLabel();
-      console.debug(`[FactorySprite] Created building for ${this.label}`);
+      console.log(`[FactorySprite] Created: ${this.label}, children: ${this.children.length}`);
     } catch (err) {
       console.error('FactorySprite creation error for', this.label, err);
       this.createFallback();
     }
 
     this.setupInteraction();
-    this.startAnimations();
   }
 
   createFallback() {
+    console.warn(`[FactorySprite] Using fallback for ${this.label}`);
     // Simple fallback rectangle if building fails
     const fallback = new PIXI.Graphics()
       .rect(-25, -25, 50, 50)
-      .fill({ color: 0x3a3a4a })
-      .stroke({ color: 0xf97316, width: 2 });
+      .fill(0x3a3a4a)
+      .stroke({ width: 3, color: 0xff0000 }); // RED stroke for debugging
     this.building = fallback;
     this.addChild(fallback);
   }
 
   createBuilding() {
+    // SIMPLIFIED DEBUG VERSION - single Graphics with all drawing
+    // Using exact same pattern as USMapLayer which DOES work
     const building = new PIXI.Graphics();
-
-    // PIXI v8 Graphics API - using plain number for fill (same as USMapLayer)
-    // Main building body (tall rectangle)
-    building.rect(-35, -30, 70, 60).fill(0x3a3a4a);
-    building.rect(-35, -30, 70, 60).stroke({ width: 2, color: 0x2a2a3a });
-
-    // Roof (darker top section)
-    building.rect(-35, -30, 70, 12).fill(0x5a5a6a);
-
-    // Windows (orange glow when active) - 2x3 grid
     const windowColor = this.isActive ? 0xf97316 : 0x4a4a5a;
 
-    // Row 1 of windows
-    building.rect(-25, -15, 12, 8).fill(windowColor);
-    building.rect(-5, -15, 12, 8).fill(windowColor);
-    building.rect(15, -15, 12, 8).fill(windowColor);
+    // Draw everything in sequence like USMapLayer does
+    // Main building body
+    building.rect(-35, -30, 70, 60);
+    building.fill(0x3a3a4a);
 
-    // Row 2 of windows
-    building.rect(-25, 0, 12, 8).fill(windowColor);
-    building.rect(-5, 0, 12, 8).fill(windowColor);
-    building.rect(15, 0, 12, 8).fill(windowColor);
+    // Building outline
+    building.rect(-35, -30, 70, 60);
+    building.stroke({ width: 2, color: 0x2a2a3a });
 
-    // Door (center bottom)
-    building.rect(-8, 15, 16, 15).fill(0x2a2a3a);
+    // Roof (darker top section)
+    building.rect(-35, -30, 70, 12);
+    building.fill(0x5a5a6a);
 
-    // Sunbelt accent stripe at top
-    building.rect(-35, -32, 70, 4).fill(0xf97316);
+    // Orange accent stripe at top
+    building.rect(-35, -32, 70, 4);
+    building.fill(0xf97316);
 
-    // Smokestack (simple rectangle)
-    building.rect(-30, -45, 10, 15).fill(0x5a5a6a);
-    building.rect(20, -42, 8, 12).fill(0x5a5a6a);
+    // Smokestacks
+    building.rect(-30, -45, 10, 15);
+    building.fill(0x5a5a6a);
+    building.rect(20, -42, 8, 12);
+    building.fill(0x5a5a6a);
+
+    // Windows - Row 1
+    building.rect(-25, -15, 12, 8);
+    building.fill(windowColor);
+    building.rect(-5, -15, 12, 8);
+    building.fill(windowColor);
+    building.rect(15, -15, 12, 8);
+    building.fill(windowColor);
+
+    // Windows - Row 2
+    building.rect(-25, 0, 12, 8);
+    building.fill(windowColor);
+    building.rect(-5, 0, 12, 8);
+    building.fill(windowColor);
+    building.rect(15, 0, 12, 8);
+    building.fill(windowColor);
+
+    // Door
+    building.rect(-8, 15, 16, 15);
+    building.fill(0x2a2a3a);
 
     this.building = building;
     this.addChild(building);
-  }
 
-  createSmokestacks() {
-    // Skip smokestacks for now - building is main priority
-    this.smokestackContainer = new PIXI.Container();
-    this.addChild(this.smokestackContainer);
-  }
-
-  createSmokeParticle(x, baseY, timeOffset) {
-    const smoke = new PIXI.Graphics();
-    smoke.circle(0, 0, 4).fill(0xcccccc);
-    smoke.position.set(x, baseY);
-    smoke.baseX = x;
-    smoke.baseY = baseY;
-    smoke.timeOffset = timeOffset;
-    smoke.alpha = 0;
-    return smoke;
+    console.log(`[FactorySprite] Building created for ${this.label}, bounds:`, building.getBounds());
   }
 
   createLabel() {
-    // Background pill - using plain numbers for fill
-    const labelBg = new PIXI.Graphics();
-    labelBg.roundRect(-25, 38, 50, 18, 9).fill(0x1a1a2e);
-    labelBg.roundRect(-25, 38, 50, 18, 9).stroke({ width: 1, color: 0xf97316 });
-
+    // Background pill
+    const labelBg = new PIXI.Graphics()
+      .roundRect(-25, 38, 50, 18, 9)
+      .fill(0x1a1a2e)
+      .stroke({ width: 1, color: 0xf97316 });
     this.addChild(labelBg);
 
     // Label text - PIXI v8 style
@@ -131,10 +130,10 @@ export class FactorySprite extends PIXI.Container {
     badge.label = 'statsBadge';
     badge.position.set(35, -40);
 
-    const bg = new PIXI.Graphics();
-    bg.circle(0, 0, 12).fill(0x22c55e);
-    bg.circle(0, 0, 12).stroke({ width: 2, color: 0x166534 });
-
+    const bg = new PIXI.Graphics()
+      .circle(0, 0, 12)
+      .fill(0x22c55e)
+      .stroke({ width: 2, color: 0x166534 });
     badge.addChild(bg);
 
     const countText = new PIXI.Text({
@@ -166,9 +165,7 @@ export class FactorySprite extends PIXI.Container {
       const bg = this.statsBadge.getChildAt(0);
       bg.clear();
       const color = count > 10 ? 0xf59e0b : count > 5 ? 0x84cc16 : 0x22c55e;
-      bg.circle(0, 0, 12);
-      bg.fill({ color });
-      bg.stroke({ color: 0x1a1a2e, width: 2 });
+      bg.circle(0, 0, 12).fill(color).stroke({ color: 0x1a1a2e, width: 2 });
     } else {
       this.statsBadge.visible = false;
     }
@@ -215,10 +212,6 @@ export class FactorySprite extends PIXI.Container {
       factoryData: this.factoryData,
       originalEvent: event
     });
-  }
-
-  startAnimations() {
-    // Animation driven by parent ticker
   }
 
   update(deltaTime) {
