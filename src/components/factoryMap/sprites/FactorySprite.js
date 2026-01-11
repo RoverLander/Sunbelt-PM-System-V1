@@ -46,98 +46,63 @@ export class FactorySprite extends PIXI.Container {
   createBuilding() {
     const building = new PIXI.Graphics();
 
-    // PIXI v8 Graphics API - simplified building using rects for reliability
+    // PIXI v8 Graphics API - using plain number for fill (same as USMapLayer)
     // Main building body (tall rectangle)
-    building
-      .rect(-35, -30, 70, 60)
-      .fill({ color: 0x3a3a4a })
-      .stroke({ color: 0x2a2a3a, width: 2 });
+    building.rect(-35, -30, 70, 60).fill(0x3a3a4a);
+    building.rect(-35, -30, 70, 60).stroke({ width: 2, color: 0x2a2a3a });
 
     // Roof (darker top section)
-    building
-      .rect(-35, -30, 70, 12)
-      .fill({ color: 0x5a5a6a });
+    building.rect(-35, -30, 70, 12).fill(0x5a5a6a);
 
     // Windows (orange glow when active) - 2x3 grid
     const windowColor = this.isActive ? 0xf97316 : 0x4a4a5a;
-    const windowW = 12;
-    const windowH = 8;
-    const windowGap = 6;
 
     // Row 1 of windows
-    building.rect(-25, -15, windowW, windowH).fill({ color: windowColor });
-    building.rect(-5, -15, windowW, windowH).fill({ color: windowColor });
-    building.rect(15, -15, windowW, windowH).fill({ color: windowColor });
+    building.rect(-25, -15, 12, 8).fill(windowColor);
+    building.rect(-5, -15, 12, 8).fill(windowColor);
+    building.rect(15, -15, 12, 8).fill(windowColor);
 
     // Row 2 of windows
-    building.rect(-25, 0, windowW, windowH).fill({ color: windowColor });
-    building.rect(-5, 0, windowW, windowH).fill({ color: windowColor });
-    building.rect(15, 0, windowW, windowH).fill({ color: windowColor });
+    building.rect(-25, 0, 12, 8).fill(windowColor);
+    building.rect(-5, 0, 12, 8).fill(windowColor);
+    building.rect(15, 0, 12, 8).fill(windowColor);
 
     // Door (center bottom)
-    building.rect(-8, 15, 16, 15).fill({ color: 0x2a2a3a });
+    building.rect(-8, 15, 16, 15).fill(0x2a2a3a);
 
     // Sunbelt accent stripe at top
-    building.rect(-35, -32, 70, 4).fill({ color: 0xf97316 });
+    building.rect(-35, -32, 70, 4).fill(0xf97316);
 
     // Smokestack (simple rectangle)
-    building.rect(-30, -45, 10, 15).fill({ color: 0x5a5a6a });
-    building.rect(20, -42, 8, 12).fill({ color: 0x5a5a6a });
+    building.rect(-30, -45, 10, 15).fill(0x5a5a6a);
+    building.rect(20, -42, 8, 12).fill(0x5a5a6a);
 
     this.building = building;
     this.addChild(building);
   }
 
   createSmokestacks() {
+    // Skip smokestacks for now - building is main priority
     this.smokestackContainer = new PIXI.Container();
-
-    const positions = [{ x: -20, y: -35 }, { x: 15, y: -32 }];
-
-    positions.forEach((pos, index) => {
-      // Smokestack cylinder
-      const stack = new PIXI.Graphics();
-      stack.rect(pos.x - 4, pos.y, 8, 15);
-      stack.fill({ color: 0x5a5a6a });
-
-      // Top rim
-      stack.ellipse(pos.x, pos.y, 5, 2);
-      stack.fill({ color: 0x6a6a7a });
-
-      this.smokestackContainer.addChild(stack);
-
-      // Create smoke particles
-      if (this.isActive) {
-        for (let i = 0; i < 4; i++) {
-          const smoke = this.createSmokeParticle(pos.x, pos.y - 5, index * 25 + i * 25);
-          this.smokeParticles.push(smoke);
-          this.smokestackContainer.addChild(smoke);
-        }
-      }
-    });
-
     this.addChild(this.smokestackContainer);
   }
 
   createSmokeParticle(x, baseY, timeOffset) {
     const smoke = new PIXI.Graphics();
-    smoke.circle(0, 0, 6);
-    smoke.fill({ color: 0xffffff, alpha: 0.6 });
-
+    smoke.circle(0, 0, 4).fill(0xcccccc);
     smoke.position.set(x, baseY);
     smoke.baseX = x;
     smoke.baseY = baseY;
     smoke.timeOffset = timeOffset;
     smoke.alpha = 0;
-
     return smoke;
   }
 
   createLabel() {
-    // Background pill
+    // Background pill - using plain numbers for fill
     const labelBg = new PIXI.Graphics();
-    labelBg.roundRect(-25, 38, 50, 18, 9);
-    labelBg.fill({ color: 0x1a1a2e, alpha: 0.9 });
-    labelBg.stroke({ color: 0xf97316, width: 1, alpha: 0.8 });
+    labelBg.roundRect(-25, 38, 50, 18, 9).fill(0x1a1a2e);
+    labelBg.roundRect(-25, 38, 50, 18, 9).stroke({ width: 1, color: 0xf97316 });
 
     this.addChild(labelBg);
 
@@ -167,9 +132,8 @@ export class FactorySprite extends PIXI.Container {
     badge.position.set(35, -40);
 
     const bg = new PIXI.Graphics();
-    bg.circle(0, 0, 12);
-    bg.fill({ color: 0x22c55e });
-    bg.stroke({ color: 0x166534, width: 2 });
+    bg.circle(0, 0, 12).fill(0x22c55e);
+    bg.circle(0, 0, 12).stroke({ width: 2, color: 0x166534 });
 
     badge.addChild(bg);
 
