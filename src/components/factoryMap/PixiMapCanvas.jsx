@@ -67,9 +67,11 @@ const PixiMapCanvas = ({
 
   // Initialize Pixi application
   useEffect(() => {
+    console.log('[PixiMapCanvas] Mount - containerRef:', !!containerRef.current, 'appRef:', !!appRef.current);
     if (!containerRef.current || appRef.current) return;
 
     const initPixi = async () => {
+      console.log('[PixiMapCanvas] Initializing PIXI...');
       // Create Pixi Application
       const app = new PIXI.Application();
 
@@ -84,8 +86,10 @@ const PixiMapCanvas = ({
       });
 
       // Add canvas to DOM
+      console.log('[PixiMapCanvas] PIXI initialized, adding canvas to DOM');
       containerRef.current.appendChild(app.canvas);
       appRef.current = app;
+      console.log('[PixiMapCanvas] Canvas added, creating layers...');
 
       // Create main map container
       const mapContainer = new PIXI.Container();
@@ -165,6 +169,8 @@ const PixiMapCanvas = ({
         name: data.name
       }));
       viewport.setFactoryPositions(factoryPositions);
+
+      console.log('[PixiMapCanvas] All layers created, starting animation loop');
 
       // Animation loop
       app.ticker.add((ticker) => {

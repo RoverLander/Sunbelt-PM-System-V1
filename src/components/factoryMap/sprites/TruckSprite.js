@@ -28,58 +28,46 @@ export class TruckSprite extends PIXI.Container {
 
     // Trailer (tan/beige modular unit)
     const trailer = new PIXI.Graphics();
-    trailer.roundRect(-28, -8, 24, 14, 2);
-    trailer.fill(0xd4a574);
+    trailer
+      .roundRect(-28, -8, 24, 14, 2)
+      .fill(0xd4a574);
 
-    // Trailer details (windows) - separate Graphics for each window
-    const trailerWindow1 = new PIXI.Graphics();
-    trailerWindow1.rect(-26, -6, 4, 4);
-    trailerWindow1.fill(0x8b7355);
-    trailer.addChild(trailerWindow1);
-
-    const trailerWindow2 = new PIXI.Graphics();
-    trailerWindow2.rect(-20, -6, 4, 4);
-    trailerWindow2.fill(0x8b7355);
-    trailer.addChild(trailerWindow2);
-
-    const trailerWindow3 = new PIXI.Graphics();
-    trailerWindow3.rect(-14, -6, 4, 4);
-    trailerWindow3.fill(0x8b7355);
-    trailer.addChild(trailerWindow3);
+    // Trailer details (windows)
+    trailer
+      .rect(-26, -6, 4, 4)
+      .rect(-20, -6, 4, 4)
+      .rect(-14, -6, 4, 4)
+      .fill(0x8b7355);
 
     // Cab (Sunbelt orange)
     const cab = new PIXI.Graphics();
-    cab.roundRect(-4, -7, 12, 12, 3);
-    cab.fill(0xf97316);
+    cab
+      .roundRect(-4, -7, 12, 12, 3)
+      .fill(0xf97316);
 
-    // Cab window - separate Graphics
-    const cabWindow = new PIXI.Graphics();
-    cabWindow.rect(-2, -5, 6, 5);
-    cabWindow.fill(0x87CEEB);
-    cab.addChild(cabWindow);
+    // Cab window
+    cab
+      .rect(-2, -5, 6, 5)
+      .fill(0x87CEEB);
 
     // Wheels
     this.wheels = [];
     const wheelPositions = [-24, -12, 2];
 
     wheelPositions.forEach(x => {
-      const wheelContainer = new PIXI.Container();
-
-      // Outer wheel
       const wheel = new PIXI.Graphics();
-      wheel.circle(0, 0, 4);
-      wheel.fill(0x1a1a1a);
-      wheelContainer.addChild(wheel);
+      wheel
+        .circle(0, 0, 4)
+        .fill(0x1a1a1a);
 
-      // Wheel detail - separate Graphics
-      const wheelDetail = new PIXI.Graphics();
-      wheelDetail.circle(0, 0, 2);
-      wheelDetail.fill(0x3a3a3a);
-      wheelContainer.addChild(wheelDetail);
+      // Wheel detail
+      wheel
+        .circle(0, 0, 2)
+        .fill(0x3a3a3a);
 
-      wheelContainer.position.set(x, 6);
-      this.wheels.push(wheelContainer);
-      truck.addChild(wheelContainer);
+      wheel.position.set(x, 6);
+      this.wheels.push(wheel);
+      truck.addChild(wheel);
     });
 
     truck.addChild(trailer);

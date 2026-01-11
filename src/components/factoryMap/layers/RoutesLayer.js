@@ -55,12 +55,11 @@ export class RoutesLayer extends PIXI.Container {
 
     graphics.clear();
 
-    // Draw path shadow first - separate Graphics
-    const shadow = new PIXI.Graphics();
-    shadow.moveTo(from.x, from.y + 2);
-    shadow.quadraticCurveTo(controlPoint.x, controlPoint.y + 2, to.x, to.y + 2);
-    shadow.stroke({ color: 0x000000, width: 4, alpha: 0.2 });
-    graphics.addChild(shadow);
+    // Draw path shadow first
+    graphics
+      .moveTo(from.x, from.y + 2)
+      .quadraticCurveTo(controlPoint.x, controlPoint.y + 2, to.x, to.y + 2)
+      .stroke({ color: 0x000000, width: 4, alpha: 0.2 });
 
     // Main route line
     if (status === 'active') {
@@ -73,12 +72,11 @@ export class RoutesLayer extends PIXI.Container {
         offset: routeData.dashOffset
       });
     } else if (status === 'completed') {
-      // Solid faded line for completed - separate Graphics
-      const completedLine = new PIXI.Graphics();
-      completedLine.moveTo(from.x, from.y);
-      completedLine.quadraticCurveTo(controlPoint.x, controlPoint.y, to.x, to.y);
-      completedLine.stroke({ color, width: 2, alpha: 0.3 });
-      graphics.addChild(completedLine);
+      // Solid faded line for completed
+      graphics
+        .moveTo(from.x, from.y)
+        .quadraticCurveTo(controlPoint.x, controlPoint.y, to.x, to.y)
+        .stroke({ color, width: 2, alpha: 0.3 });
     } else {
       // Dotted line for scheduled
       this.drawDashedCurve(graphics, from, controlPoint, to, {
@@ -90,17 +88,15 @@ export class RoutesLayer extends PIXI.Container {
       });
     }
 
-    // Origin marker (small circle at factory) - separate Graphics
-    const originMarker = new PIXI.Graphics();
-    originMarker.circle(from.x, from.y, 5);
-    originMarker.fill({ color, alpha: 0.8 });
-    graphics.addChild(originMarker);
+    // Origin marker (small circle at factory)
+    graphics
+      .circle(from.x, from.y, 5)
+      .fill({ color, alpha: 0.8 });
 
-    // Destination marker - separate Graphics
-    const destMarker = new PIXI.Graphics();
-    destMarker.circle(to.x, to.y, 5);
-    destMarker.fill({ color, alpha: 0.8 });
-    graphics.addChild(destMarker);
+    // Destination marker
+    graphics
+      .circle(to.x, to.y, 5)
+      .fill({ color, alpha: 0.8 });
   }
 
   // Draw dashed bezier curve
@@ -154,11 +150,10 @@ export class RoutesLayer extends PIXI.Container {
         const endY = startPoint.y + (points[i].y - points[i - 1].y) * t;
 
         if (drawing) {
-          const dashSegment = new PIXI.Graphics();
-          dashSegment.moveTo(startPoint.x, startPoint.y);
-          dashSegment.lineTo(endX, endY);
-          dashSegment.stroke({ color, width, alpha: 0.9 });
-          graphics.addChild(dashSegment);
+          graphics
+            .moveTo(startPoint.x, startPoint.y)
+            .lineTo(endX, endY)
+            .stroke({ color, width, alpha: 0.9 });
         }
 
         currentLength += dist;

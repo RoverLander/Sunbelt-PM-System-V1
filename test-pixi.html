@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PIXI.js v8 Graphics Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.15.0/dist/pixi.min.js"></script>
+  <style>
+    body { margin: 0; padding: 20px; background: #1a1a2e; }
+    canvas { border: 2px solid #f97316; }
+    #info { color: white; font-family: monospace; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h2 style="color: white; font-family: monospace;">PIXI.js v8.15.0 Graphics API Test</h2>
+  <div id="info"></div>
+
+  <script>
+    const info = document.getElementById('info');
+
+    async function test() {
+      // Create app
+      const app = new PIXI.Application();
+      await app.init({
+        width: 800,
+        height: 600,
+        backgroundColor: 0x0a0a14,
+        antialias: true
+      });
+      document.body.appendChild(app.canvas);
+
+      info.innerHTML += `✅ PIXI App initialized<br>`;
+      info.innerHTML += `✅ PIXI version: ${PIXI.VERSION}<br>`;
+
+      // Test 1: Multiple shapes chained (like original code)
+      const chainedGraphics = new PIXI.Graphics();
+      chainedGraphics
+        .rect(50, 50, 100, 100)
+        .fill(0xff0000)
+        .rect(170, 50, 100, 100)
+        .fill(0x00ff00)
+        .rect(290, 50, 100, 100)
+        .fill(0x0000ff);
+
+      app.stage.addChild(chainedGraphics);
+      info.innerHTML += `✅ Test 1: Chained shapes (should show 3 colored squares)<br>`;
+
+      // Test 2: Polygon like FactorySprite
+      const polyGraphics = new PIXI.Graphics();
+      polyGraphics.poly([-40, 20, 0, 35, 40, 20, 0, 5]);
+      polyGraphics.fill(0x2a2a3a);
+
+      polyGraphics.poly([-40, 20, -40, -15, 0, 0, 0, 35]);
+      polyGraphics.fill(0x3a3a4a);
+
+      polyGraphics.poly([0, 35, 0, 0, 40, -15, 40, 20]);
+      polyGraphics.fill(0x4a4a5a);
+
+      polyGraphics.position.set(400, 300);
+      app.stage.addChild(polyGraphics);
+      info.innerHTML += `✅ Test 2: Chained polygons (isometric building base)<br>`;
+
+      // Test 3: Using containers like our "fix"
+      const containerGraphics = new PIXI.Container();
+
+      const rect1 = new PIXI.Graphics();
+      rect1.rect(50, 250, 100, 100);
+      rect1.fill(0xff00ff);
+      containerGraphics.addChild(rect1);
+
+      const rect2 = new PIXI.Graphics();
+      rect2.rect(170, 250, 100, 100);
+      rect2.fill(0xffff00);
+      containerGraphics.addChild(rect2);
+
+      const rect3 = new PIXI.Graphics();
+      rect3.rect(290, 250, 100, 100);
+      rect3.fill(0x00ffff);
+      containerGraphics.addChild(rect3);
+
+      app.stage.addChild(containerGraphics);
+      info.innerHTML += `✅ Test 3: Separate Graphics objects (should show 3 colored squares)<br>`;
+
+      info.innerHTML += `<br><strong>If you see colored shapes above, PIXI works!</strong>`;
+    }
+
+    test().catch(err => {
+      info.innerHTML += `❌ Error: ${err.message}<br>`;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>
