@@ -43,47 +43,69 @@ export class FactorySprite extends PIXI.Container {
   }
 
   createBuilding() {
-    const building = new PIXI.Graphics();
+    const building = new PIXI.Container();
+    building.label = 'buildingContainer';
 
-    // Build each shape separately with explicit fills
     // Base platform (isometric diamond)
-    building.poly([-40, 20, 0, 35, 40, 20, 0, 5]);
-    building.fill({ color: 0x2a2a3a });
+    const base = new PIXI.Graphics();
+    base.poly([-40, 20, 0, 35, 40, 20, 0, 5]);
+    base.fill({ color: 0x2a2a3a });
+    building.addChild(base);
 
     // Main building body - left face
-    building.poly([-40, 20, -40, -15, 0, 0, 0, 35]);
-    building.fill({ color: 0x3a3a4a });
+    const leftFace = new PIXI.Graphics();
+    leftFace.poly([-40, 20, -40, -15, 0, 0, 0, 35]);
+    leftFace.fill({ color: 0x3a3a4a });
+    building.addChild(leftFace);
 
     // Main building body - right face
-    building.poly([0, 35, 0, 0, 40, -15, 40, 20]);
-    building.fill({ color: 0x4a4a5a });
+    const rightFace = new PIXI.Graphics();
+    rightFace.poly([0, 35, 0, 0, 40, -15, 40, 20]);
+    rightFace.fill({ color: 0x4a4a5a });
+    building.addChild(rightFace);
 
     // Roof
-    building.poly([-40, -15, 0, -30, 40, -15, 0, 0]);
-    building.fill({ color: 0x5a5a6a });
+    const roof = new PIXI.Graphics();
+    roof.poly([-40, -15, 0, -30, 40, -15, 0, 0]);
+    roof.fill({ color: 0x5a5a6a });
+    building.addChild(roof);
 
     // Windows (orange glow)
     const windowColor = this.isActive ? 0xf97316 : 0x4a4a5a;
 
     // Left face windows
-    building.rect(-30, -5, 8, 10);
-    building.fill({ color: windowColor });
-    building.rect(-18, -5, 8, 10);
-    building.fill({ color: windowColor });
+    const leftWindow1 = new PIXI.Graphics();
+    leftWindow1.rect(-30, -5, 8, 10);
+    leftWindow1.fill({ color: windowColor });
+    building.addChild(leftWindow1);
+
+    const leftWindow2 = new PIXI.Graphics();
+    leftWindow2.rect(-18, -5, 8, 10);
+    leftWindow2.fill({ color: windowColor });
+    building.addChild(leftWindow2);
 
     // Right face windows
-    building.rect(12, -5, 8, 10);
-    building.fill({ color: windowColor, alpha: 0.8 });
-    building.rect(24, -5, 8, 10);
-    building.fill({ color: windowColor, alpha: 0.8 });
+    const rightWindow1 = new PIXI.Graphics();
+    rightWindow1.rect(12, -5, 8, 10);
+    rightWindow1.fill({ color: windowColor, alpha: 0.8 });
+    building.addChild(rightWindow1);
+
+    const rightWindow2 = new PIXI.Graphics();
+    rightWindow2.rect(24, -5, 8, 10);
+    rightWindow2.fill({ color: windowColor, alpha: 0.8 });
+    building.addChild(rightWindow2);
 
     // Door
-    building.rect(-6, 10, 12, 18);
-    building.fill({ color: 0x2a2a3a });
+    const door = new PIXI.Graphics();
+    door.rect(-6, 10, 12, 18);
+    door.fill({ color: 0x2a2a3a });
+    building.addChild(door);
 
     // Sunbelt accent stripe
-    building.rect(-40, -17, 80, 3);
-    building.fill({ color: 0xf97316 });
+    const stripe = new PIXI.Graphics();
+    stripe.rect(-40, -17, 80, 3);
+    stripe.fill({ color: 0xf97316 });
+    building.addChild(stripe);
 
     this.building = building;
     this.addChild(building);

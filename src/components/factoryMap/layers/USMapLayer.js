@@ -134,53 +134,63 @@ export class USMapLayer extends PIXI.Container {
   }
 
   createCoastlines() {
-    // Add subtle coastline details
-    const coastline = new PIXI.Graphics();
+    // Add subtle coastline details - each wave segment as separate Graphics
+    const coastlineContainer = new PIXI.Container();
+    coastlineContainer.label = 'coastlines';
 
     // West coast waves
     for (let y = 20; y < 70; y += 5) {
       const x = (3 / 100) * this.mapWidth;
       const yPos = (y / 100) * this.mapHeight;
-      coastline
-        .moveTo(x - 10, yPos)
-        .quadraticCurveTo(x - 5, yPos + 10, x - 10, yPos + 20);
+
+      const wave = new PIXI.Graphics();
+      wave.moveTo(x - 10, yPos);
+      wave.quadraticCurveTo(x - 5, yPos + 10, x - 10, yPos + 20);
+      wave.stroke({ color: 0x2a4a6a, width: 1, alpha: 0.4 });
+      coastlineContainer.addChild(wave);
     }
 
     // East coast waves
     for (let y = 30; y < 65; y += 5) {
       const x = (92 / 100) * this.mapWidth;
       const yPos = (y / 100) * this.mapHeight;
-      coastline
-        .moveTo(x + 10, yPos)
-        .quadraticCurveTo(x + 5, yPos + 10, x + 10, yPos + 20);
+
+      const wave = new PIXI.Graphics();
+      wave.moveTo(x + 10, yPos);
+      wave.quadraticCurveTo(x + 5, yPos + 10, x + 10, yPos + 20);
+      wave.stroke({ color: 0x2a4a6a, width: 1, alpha: 0.4 });
+      coastlineContainer.addChild(wave);
     }
 
-    coastline.stroke({ color: 0x2a4a6a, width: 1, alpha: 0.4 });
-
-    this.addChild(coastline);
+    this.addChild(coastlineContainer);
   }
 
   createGrid() {
     // Subtle grid overlay for that retro map feel
-    const grid = new PIXI.Graphics();
+    const gridContainer = new PIXI.Container();
+    gridContainer.label = 'grid';
 
     // Vertical lines
     for (let x = 0; x <= 100; x += 10) {
       const xPos = (x / 100) * this.mapWidth;
-      grid.moveTo(xPos, 0);
-      grid.lineTo(xPos, this.mapHeight);
+      const line = new PIXI.Graphics();
+      line.moveTo(xPos, 0);
+      line.lineTo(xPos, this.mapHeight);
+      line.stroke({ color: 0x2a3a4a, width: 1, alpha: 0.15 });
+      gridContainer.addChild(line);
     }
 
     // Horizontal lines
     for (let y = 0; y <= 100; y += 10) {
       const yPos = (y / 100) * this.mapHeight;
-      grid.moveTo(0, yPos);
-      grid.lineTo(this.mapWidth, yPos);
+      const line = new PIXI.Graphics();
+      line.moveTo(0, yPos);
+      line.lineTo(this.mapWidth, yPos);
+      line.stroke({ color: 0x2a3a4a, width: 1, alpha: 0.15 });
+      gridContainer.addChild(line);
     }
 
-    grid.stroke({ color: 0x2a3a4a, width: 1, alpha: 0.15 });
-
-    this.addChild(grid);
+    this.addChild(gridContainer);
   }
 
   // Add terrain decorations based on region
