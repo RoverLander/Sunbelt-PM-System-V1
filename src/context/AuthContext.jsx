@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
 const AuthContext = createContext({});
@@ -14,30 +14,63 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const subscriptionRef = useRef(null);
 
   useEffect(() => {
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        fetchUserDetails(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
+    let isMounted = true;
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (session?.user) {
-          fetchUserDetails(session.user.id);
-        } else {
-          setUser(null);
+    const initAuth = async () => {
+      try {
+        // Check active session - wrap in try/catch for web container compatibility
+        const { data, error } = await supabase.auth.getSession();
+
+        if (error) {
+          console.warn('Auth session check failed (expected in web containers):', error.message);
+          if (isMounted) setLoading(false);
+          return;
+        }
+
+        if (data?.session?.user && isMounted) {
+          fetchUserDetails(data.session.user.id);
+        } else if (isMounted) {
           setLoading(false);
         }
+      } catch (err) {
+        console.warn('Auth init error (expected in web containers):', err.message);
+        if (isMounted) setLoading(false);
       }
-    );
+    };
 
-    return () => subscription.unsubscribe();
+    initAuth();
+
+    // Listen for auth changes - wrap in try/catch
+    try {
+      const { data } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          // Ignore TOKEN_REFRESHED events which cause navigation errors
+          if (event === 'TOKEN_REFRESHED') return;
+
+          if (session?.user && isMounted) {
+            fetchUserDetails(session.user.id);
+          } else if (isMounted) {
+            setUser(null);
+            setLoading(false);
+          }
+        }
+      );
+      subscriptionRef.current = data?.subscription;
+    } catch (err) {
+      console.warn('Auth state change listener failed:', err.message);
+    }
+
+    return () => {
+      isMounted = false;
+      try {
+        subscriptionRef.current?.unsubscribe();
+      } catch {
+        // Ignore unsubscribe errors
+      }
+    };
   }, []);
 
   const fetchUserDetails = async (userId) => {
