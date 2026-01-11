@@ -2,7 +2,7 @@ import * as PIXI from 'pixi.js';
 
 /**
  * FactorySprite - Interactive factory marker on the map
- * Updated for PIXI v8 Graphics API - using single chained calls
+ * Using PIXI v8 Graphics API with full chaining pattern
  */
 export class FactorySprite extends PIXI.Container {
   constructor(factoryData, options = {}) {
@@ -18,13 +18,13 @@ export class FactorySprite extends PIXI.Container {
     this.animationTime = Math.random() * 100;
     this.glowIntensity = 0;
 
-    // Create sprite elements with error handling
+    // Create sprite elements
     try {
       this.createBuilding();
       this.createLabel();
       console.log(`[FactorySprite] Created: ${this.label}, children: ${this.children.length}`);
     } catch (err) {
-      console.error('FactorySprite creation error for', this.label, err);
+      console.error('[FactorySprite] Error creating', this.label, ':', err.message);
       this.createFallback();
     }
 
@@ -33,79 +33,81 @@ export class FactorySprite extends PIXI.Container {
 
   createFallback() {
     console.warn(`[FactorySprite] Using fallback for ${this.label}`);
-    // Simple fallback rectangle if building fails
+    // Ultra-simple fallback - just a circle (matches PIXI v8 examples exactly)
     const fallback = new PIXI.Graphics()
-      .rect(-25, -25, 50, 50)
-      .fill(0x3a3a4a)
-      .stroke({ width: 3, color: 0xff0000 }); // RED stroke for debugging
+      .circle(0, 0, 25)
+      .fill(0xf97316);
     this.building = fallback;
     this.addChild(fallback);
   }
 
   createBuilding() {
-    // SIMPLIFIED DEBUG VERSION - single Graphics with all drawing
-    // Using exact same pattern as USMapLayer which DOES work
-    const building = new PIXI.Graphics();
+    // PIXI v8: Use chained calls like the official docs
+    // https://pixijs.com/8.x/guides/components/scene-objects/graphics
     const windowColor = this.isActive ? 0xf97316 : 0x4a4a5a;
 
-    // Draw everything in sequence like USMapLayer does
-    // Main building body
-    building.rect(-35, -30, 70, 60);
-    building.fill(0x3a3a4a);
+    // Create building body - all in one chained Graphics
+    const body = new PIXI.Graphics()
+      .rect(-35, -30, 70, 60)
+      .fill(0x3a3a4a);
+    this.addChild(body);
 
-    // Building outline
-    building.rect(-35, -30, 70, 60);
-    building.stroke({ width: 2, color: 0x2a2a3a });
+    // Roof section
+    const roof = new PIXI.Graphics()
+      .rect(-35, -30, 70, 12)
+      .fill(0x5a5a6a);
+    this.addChild(roof);
 
-    // Roof (darker top section)
-    building.rect(-35, -30, 70, 12);
-    building.fill(0x5a5a6a);
+    // Smokestacks as separate Graphics
+    const stacks = new PIXI.Graphics()
+      .rect(-30, -45, 10, 15)
+      .fill(0x5a5a6a);
+    this.addChild(stacks);
 
-    // Orange accent stripe at top
-    building.rect(-35, -32, 70, 4);
-    building.fill(0xf97316);
+    const stack2 = new PIXI.Graphics()
+      .rect(20, -42, 8, 12)
+      .fill(0x5a5a6a);
+    this.addChild(stack2);
 
-    // Smokestacks
-    building.rect(-30, -45, 10, 15);
-    building.fill(0x5a5a6a);
-    building.rect(20, -42, 8, 12);
-    building.fill(0x5a5a6a);
+    // Orange accent stripe
+    const stripe = new PIXI.Graphics()
+      .rect(-35, -32, 70, 4)
+      .fill(0xf97316);
+    this.addChild(stripe);
 
-    // Windows - Row 1
-    building.rect(-25, -15, 12, 8);
-    building.fill(windowColor);
-    building.rect(-5, -15, 12, 8);
-    building.fill(windowColor);
-    building.rect(15, -15, 12, 8);
-    building.fill(windowColor);
+    // Windows - each as separate Graphics to avoid chaining issues
+    const win1 = new PIXI.Graphics().rect(-25, -15, 12, 8).fill(windowColor);
+    const win2 = new PIXI.Graphics().rect(-5, -15, 12, 8).fill(windowColor);
+    const win3 = new PIXI.Graphics().rect(15, -15, 12, 8).fill(windowColor);
+    const win4 = new PIXI.Graphics().rect(-25, 0, 12, 8).fill(windowColor);
+    const win5 = new PIXI.Graphics().rect(-5, 0, 12, 8).fill(windowColor);
+    const win6 = new PIXI.Graphics().rect(15, 0, 12, 8).fill(windowColor);
 
-    // Windows - Row 2
-    building.rect(-25, 0, 12, 8);
-    building.fill(windowColor);
-    building.rect(-5, 0, 12, 8);
-    building.fill(windowColor);
-    building.rect(15, 0, 12, 8);
-    building.fill(windowColor);
+    this.addChild(win1, win2, win3, win4, win5, win6);
 
     // Door
-    building.rect(-8, 15, 16, 15);
-    building.fill(0x2a2a3a);
+    const door = new PIXI.Graphics()
+      .rect(-8, 15, 16, 15)
+      .fill(0x2a2a3a);
+    this.addChild(door);
 
-    this.building = building;
-    this.addChild(building);
-
-    console.log(`[FactorySprite] Building created for ${this.label}, bounds:`, building.getBounds());
+    this.building = body;
   }
 
   createLabel() {
-    // Background pill
+    // Background pill for label
     const labelBg = new PIXI.Graphics()
       .roundRect(-25, 38, 50, 18, 9)
-      .fill(0x1a1a2e)
-      .stroke({ width: 1, color: 0xf97316 });
+      .fill(0x1a1a2e);
     this.addChild(labelBg);
 
-    // Label text - PIXI v8 style
+    // Orange border on label
+    const labelBorder = new PIXI.Graphics()
+      .roundRect(-25, 38, 50, 18, 9)
+      .stroke({ width: 1, color: 0xf97316 });
+    this.addChild(labelBorder);
+
+    // Label text
     const label = new PIXI.Text({
       text: this.label,
       style: {
@@ -132,9 +134,13 @@ export class FactorySprite extends PIXI.Container {
 
     const bg = new PIXI.Graphics()
       .circle(0, 0, 12)
-      .fill(0x22c55e)
-      .stroke({ width: 2, color: 0x166534 });
+      .fill(0x22c55e);
     badge.addChild(bg);
+
+    const border = new PIXI.Graphics()
+      .circle(0, 0, 12)
+      .stroke({ width: 2, color: 0x166534 });
+    badge.addChild(border);
 
     const countText = new PIXI.Text({
       text: '0',
@@ -162,10 +168,13 @@ export class FactorySprite extends PIXI.Container {
       this.statsBadgeText.text = count > 99 ? '99+' : count.toString();
       this.statsBadge.visible = true;
 
+      // Update badge color based on count
       const bg = this.statsBadge.getChildAt(0);
-      bg.clear();
-      const color = count > 10 ? 0xf59e0b : count > 5 ? 0x84cc16 : 0x22c55e;
-      bg.circle(0, 0, 12).fill(color).stroke({ color: 0x1a1a2e, width: 2 });
+      if (bg) {
+        bg.clear();
+        const color = count > 10 ? 0xf59e0b : count > 5 ? 0x84cc16 : 0x22c55e;
+        bg.circle(0, 0, 12).fill(color);
+      }
     } else {
       this.statsBadge.visible = false;
     }
