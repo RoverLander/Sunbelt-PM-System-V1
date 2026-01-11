@@ -872,7 +872,7 @@ function Sidebar({
       { id: 'rfis', label: 'RFIs', icon: FileText },
       { id: 'submittals', label: 'Submittals', icon: ClipboardList },
       { id: 'calendar', label: 'Calendar', icon: Calendar },
-      { id: 'factory-map', label: 'Factory Map', icon: Map },
+      { id: 'factory-map', label: 'Factory Map', icon: MapIcon },
     ];
 
     switch (dashboardType) {

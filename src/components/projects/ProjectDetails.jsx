@@ -35,7 +35,7 @@ import {
   ExternalLink,
   AlertTriangle,
   Flag,
-  Map,
+  Map as MapIcon,
   GripVertical,
   GitGraph,
   Download
@@ -76,7 +76,7 @@ const TABS = [
   { id: 'submittals', label: 'Submittals', icon: ClipboardList },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'files', label: 'Files', icon: FolderOpen },
-  { id: 'floorplan', label: 'Floorplan', icon: Map },
+  { id: 'floorplan', label: 'Floorplan', icon: MapIcon },
 ];
 
 // Updated Jan 9, 2026: 'On Hold' and 'Blocked' merged into 'Awaiting Response'

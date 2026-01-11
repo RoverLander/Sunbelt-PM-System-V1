@@ -403,7 +403,7 @@ function ProjectFiles({ projectId, onUpdate }) {
         }}>
           {[
             { key: 'all', label: 'All', icon: Paperclip },
-            { key: 'floorplan', label: 'Floor Plans', icon: Map },
+            { key: 'floorplan', label: 'Floor Plans', icon: MapIcon },
             { key: 'task', label: 'Tasks', icon: CheckSquare },
             { key: 'rfi', label: 'RFIs', icon: MessageSquare },
             { key: 'submittal', label: 'Submittals', icon: ClipboardList },
