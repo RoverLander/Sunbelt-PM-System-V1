@@ -101,24 +101,29 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
       setFactories(factoriesData || []);
 
       // Get projects
-      let projectsQuery = supabase
+      // FIX: Removed .or() filter - use client-side filtering to avoid 400 errors in web containers
+      const { data: allProjectsData } = await supabase
         .from('projects')
         .select(`
           *,
           pm:owner_id(id, name),
           backup_pm:backup_pm_id(id, name)
-        `)
-        .order('updated_at', { ascending: false });
+        `);
 
-      // For PM view, only show their projects
+      // Client-side filter: For PM view, only show their projects
+      let projectsData = allProjectsData || [];
       if (!isDirectorView && userData) {
-        projectsQuery = projectsQuery.or(
-          `owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`
+        projectsData = projectsData.filter(p =>
+          p.owner_id === userData.id ||
+          p.primary_pm_id === userData.id ||
+          p.backup_pm_id === userData.id ||
+          p.created_by === userData.id
         );
       }
 
-      const { data: projectsData } = await projectsQuery;
-      setProjects(projectsData || []);
+      // Sort by updated_at descending
+      projectsData.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+      setProjects(projectsData);
 
     } catch (error) {
       console.error('Error fetching projects:', error);

@@ -350,6 +350,7 @@ function PCDashboard({ onNavigateToProject }) {
       }
 
       // Fetch projects for this factory
+      // FIX: Removed .in() filter - use client-side filtering to avoid 400 errors in web containers
       let projectsQuery = supabase
         .from('projects')
         .select(`
@@ -358,8 +359,7 @@ function PCDashboard({ onNavigateToProject }) {
           pm:primary_pm_id(id, name, email),
           backup_pm:backup_pm_id(id, name, email),
           tasks(id, title, status, due_date, priority)
-        `)
-        .in('status', ACTIVE_PROJECT_STATUSES);
+        `);
 
       // Filter by factory
       if (factoryId) {
@@ -368,10 +368,14 @@ function PCDashboard({ onNavigateToProject }) {
         projectsQuery = projectsQuery.eq('factory_code', factoryCode);
       }
 
-      const { data: projectsData, error: projectsError } = await projectsQuery;
+      const { data: allProjectsData, error: projectsError } = await projectsQuery;
       if (projectsError) throw projectsError;
 
-      setProjects(projectsData || []);
+      // Client-side filter by active statuses
+      const projectsData = (allProjectsData || []).filter(p =>
+        ACTIVE_PROJECT_STATUSES.includes(p.status)
+      );
+      setProjects(projectsData);
 
       // Extract all tasks from projects
       const allTasks = (projectsData || []).flatMap(p =>
@@ -386,15 +390,20 @@ function PCDashboard({ onNavigateToProject }) {
       setTasks(allTasks);
 
       // Fetch milestones for these projects
+      // FIX: Removed .in() filter - use client-side filtering to avoid 400 errors in web containers
       const projectIds = (projectsData || []).map(p => p.id);
+      const projectIdsSet = new Set(projectIds);
       if (projectIds.length > 0) {
-        const { data: milestonesData } = await supabase
+        const { data: allMilestonesData } = await supabase
           .from('milestones')
-          .select('*, project:project_id(id, name, project_number)')
-          .in('project_id', projectIds)
-          .neq('status', 'Completed');
+          .select('*, project:project_id(id, name, project_number)');
 
-        setMilestones((milestonesData || []).map(m => ({
+        // Client-side filter by project IDs and status
+        const milestonesData = (allMilestonesData || []).filter(m =>
+          projectIdsSet.has(m.project_id) && m.status !== 'Completed'
+        );
+
+        setMilestones(milestonesData.map(m => ({
           ...m,
           project_name: m.project?.name,
           project_number: m.project?.project_number,
@@ -403,17 +412,19 @@ function PCDashboard({ onNavigateToProject }) {
       }
 
       // Count warning emails (if table exists)
-      // Note: warning_emails_log only tracks sent emails (logged when email opens in client)
-      // There is no status column - sent_at defaults to NOW() on insert
+      // FIX: Removed .in() filter - use client-side filtering
       try {
-        const { count: sentCount } = await supabase
+        const { data: allWarningEmails } = await supabase
           .from('warning_emails_log')
-          .select('*', { count: 'exact', head: true })
-          .in('project_id', projectIds)
-          .not('sent_at', 'is', null);
+          .select('id, project_id, sent_at');
+
+        // Client-side filter and count
+        const sentCount = (allWarningEmails || []).filter(e =>
+          projectIdsSet.has(e.project_id) && e.sent_at !== null
+        ).length;
 
         setWarningEmailsCount({
-          sent: sentCount || 0,
+          sent: sentCount,
           pending: 0 // No draft tracking in current schema
         });
       } catch {

@@ -780,41 +780,48 @@ function TasksPage({
       setUsers(usersData || []);
 
       // Get projects based on view type
-      let projectsQuery = supabase.from('projects').select('id, project_number, name, color');
+      // FIX: Removed .or() filter - use client-side filtering to avoid 400 errors in web containers
+      const { data: allProjectsData } = await supabase
+        .from('projects')
+        .select('id, project_number, name, color, owner_id, primary_pm_id, backup_pm_id, created_by');
 
+      // Client-side filter for user's projects
+      let projectsData = allProjectsData || [];
       if (!isDirectorView && userData) {
-        // Build OR conditions based on includeBackupProjects setting
-        if (includeBackupProjects) {
-          // Include both primary and backup projects
-          projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
-        } else {
-          // Only include primary projects (exclude backup_pm_id)
-          projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
-        }
+        projectsData = projectsData.filter(p => {
+          if (includeBackupProjects) {
+            return p.owner_id === userData.id ||
+                   p.primary_pm_id === userData.id ||
+                   p.backup_pm_id === userData.id ||
+                   p.created_by === userData.id;
+          } else {
+            return p.owner_id === userData.id ||
+                   p.primary_pm_id === userData.id ||
+                   p.created_by === userData.id;
+          }
+        });
       }
+      setProjects(projectsData);
 
-      const { data: projectsData } = await projectsQuery;
-      setProjects(projectsData || []);
+      const projectIds = projectsData.map(p => p.id);
+      const projectIdsSet = new Set(projectIds);
 
-      const projectIds = (projectsData || []).map(p => p.id);
+      // FIX: Removed .in() filter - use client-side filtering
+      const { data: allTasksData } = await supabase
+        .from('tasks')
+        .select(`
+          *,
+          project:project_id(id, project_number, name, color),
+          assignee:assignee_id(name),
+          internal_owner:internal_owner_id(name)
+        `);
 
-      // Get tasks
-      if (projectIds.length > 0) {
-        const { data: tasksData } = await supabase
-          .from('tasks')
-          .select(`
-            *,
-            project:project_id(id, project_number, name, color),
-            assignee:assignee_id(name),
-            internal_owner:internal_owner_id(name)
-          `)
-          .in('project_id', projectIds)
-          .order('due_date', { ascending: true });
+      // Client-side filter and sort
+      const tasksData = (allTasksData || [])
+        .filter(t => projectIdsSet.has(t.project_id))
+        .sort((a, b) => new Date(a.due_date || '9999') - new Date(b.due_date || '9999'));
 
-        setTasks(tasksData || []);
-      } else {
-        setTasks([]);
-      }
+      setTasks(tasksData);
     } catch (error) {
       console.error('Error fetching tasks:', error);
     } finally {
