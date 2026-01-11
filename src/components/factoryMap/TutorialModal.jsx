@@ -9,7 +9,7 @@ import {
   Keyboard,
   Search,
   Filter,
-  Map,
+  Map as MapIcon,
   ChevronLeft,
   ChevronRight,
   HelpCircle
