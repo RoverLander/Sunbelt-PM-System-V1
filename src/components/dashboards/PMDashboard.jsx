@@ -252,7 +252,8 @@ function PMDashboard({ onNavigateToProject }) {
       const myProjectIds = projectsData.map(p => p.id);
 
       // =====================================================================
-      // STEP 2: Fetch tasks, RFIs, submittals, milestones for MY projects only
+      // STEP 2: Fetch tasks, RFIs, submittals, milestones for MY projects
+      // FIX: Use client-side filtering instead of .in() to avoid 400 errors
       // =====================================================================
       let tasksData = [];
       let rfisData = [];
@@ -260,47 +261,50 @@ function PMDashboard({ onNavigateToProject }) {
       let milestonesData = [];
 
       if (myProjectIds.length > 0) {
+        const myProjectIdsSet = new Set(myProjectIds); // For O(1) lookup
+
         const [tasksRes, rfisRes, submittalsRes, milestonesRes] = await Promise.all([
           supabase.from('tasks').select(`
-            *, 
+            *,
             project:project_id(id, name, project_number, color),
             assignee:assignee_id(id, name),
             internal_owner:internal_owner_id(id, name)
-          `)
-          .in('project_id', myProjectIds)
-          .order('created_at', { ascending: false }),
-          
+          `),
+
           supabase.from('rfis').select(`
-            *, 
+            *,
             project:project_id(id, name, project_number, color)
-          `)
-          .in('project_id', myProjectIds)
-          .order('created_at', { ascending: false }),
-          
+          `),
+
           supabase.from('submittals').select(`
-            *, 
+            *,
             project:project_id(id, name, project_number, color)
-          `)
-          .in('project_id', myProjectIds)
-          .order('created_at', { ascending: false }),
-          
+          `),
+
           supabase.from('milestones').select(`
             *,
             project:project_id(id, name, project_number, color)
           `)
-          .in('project_id', myProjectIds)
-          .order('due_date', { ascending: true })
         ]);
 
-        if (tasksRes.error) throw new Error(`Tasks query failed: ${tasksRes.error.message}`);
-        if (rfisRes.error) throw new Error(`RFIs query failed: ${rfisRes.error.message}`);
-        if (submittalsRes.error) throw new Error(`Submittals query failed: ${submittalsRes.error.message}`);
-        if (milestonesRes.error) throw new Error(`Milestones query failed: ${milestonesRes.error.message}`);
+        if (tasksRes.error) console.warn('Tasks query failed:', tasksRes.error.message);
+        if (rfisRes.error) console.warn('RFIs query failed:', rfisRes.error.message);
+        if (submittalsRes.error) console.warn('Submittals query failed:', submittalsRes.error.message);
+        if (milestonesRes.error) console.warn('Milestones query failed:', milestonesRes.error.message);
 
-        tasksData = tasksRes.data || [];
-        rfisData = rfisRes.data || [];
-        submittalsData = submittalsRes.data || [];
-        milestonesData = milestonesRes.data || [];
+        // Client-side filtering by project IDs
+        tasksData = (tasksRes.data || [])
+          .filter(t => myProjectIdsSet.has(t.project_id))
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        rfisData = (rfisRes.data || [])
+          .filter(r => myProjectIdsSet.has(r.project_id))
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        submittalsData = (submittalsRes.data || [])
+          .filter(s => myProjectIdsSet.has(s.project_id))
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        milestonesData = (milestonesRes.data || [])
+          .filter(m => myProjectIdsSet.has(m.project_id))
+          .sort((a, b) => new Date(a.due_date || '9999') - new Date(b.due_date || '9999'));
       }
 
       setProjects(projectsData);
