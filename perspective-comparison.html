@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factory Map - Perspective Comparison</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #0a0a14;
+            color: #f5f5f5;
+            font-family: 'Courier New', monospace;
+        }
+
+        h1 {
+            text-align: center;
+            color: #f97316;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #6b7280;
+            margin-bottom: 40px;
+        }
+
+        .comparison {
+            display: flex;
+            gap: 40px;
+            max-width: 1400px;
+            margin: 0 auto;
+            justify-content: center;
+        }
+
+        .option {
+            flex: 1;
+            max-width: 600px;
+        }
+
+        .option h2 {
+            color: #f97316;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .canvas-container {
+            background: #1a1a2e;
+            border: 3px solid #f97316;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .description {
+            background: rgba(249, 115, 22, 0.1);
+            border-left: 4px solid #f97316;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .description h3 {
+            margin-top: 0;
+            color: #f97316;
+            font-size: 16px;
+        }
+
+        .pros, .cons {
+            margin: 10px 0;
+        }
+
+        .pros h4 {
+            color: #22c55e;
+            margin: 5px 0;
+        }
+
+        .cons h4 {
+            color: #f59e0b;
+            margin: 5px 0;
+        }
+
+        ul {
+            margin: 5px 0;
+            padding-left: 20px;
+        }
+
+        li {
+            margin: 5px 0;
+            line-height: 1.4;
+        }
+
+        .note {
+            text-align: center;
+            color: #f97316;
+            font-size: 18px;
+            margin-top: 40px;
+            padding: 20px;
+            background: rgba(249, 115, 22, 0.1);
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Factory Map Perspective Comparison</h1>
+    <p class="subtitle">Choose the viewing angle that best matches your vision</p>
+
+    <div class="comparison">
+        <!-- Option A: Subtle Isometric -->
+        <div class="option">
+            <h2>Option A: Subtle Isometric View</h2>
+            <div class="canvas-container">
+                <canvas id="canvasA" width="500" height="400"></canvas>
+            </div>
+
+            <div class="description">
+                <h3>Description</h3>
+                <p>USA map with gentle perspective angle (~15-20°). South appears closer, north appears further away. Creates depth while keeping the country outline fully recognizable.</p>
+            </div>
+
+            <div class="pros">
+                <h4>✅ Pros</h4>
+                <ul>
+                    <li>Stunning visual impact - looks like AoE3/Civ5</li>
+                    <li>Creates sense of depth and dimension</li>
+                    <li>More immersive and game-like</li>
+                    <li>Professional, polished appearance</li>
+                    <li>Matches strategy game aesthetic perfectly</li>
+                </ul>
+            </div>
+
+            <div class="cons">
+                <h4>⚠️ Cons</h4>
+                <ul>
+                    <li>More complex coordinate transformations</li>
+                    <li>Slightly longer development time</li>
+                    <li>Need to adjust all positioning logic</li>
+                    <li>Northern states appear smaller</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Option B: Top-Down -->
+        <div class="option">
+            <h2>Option B: Standard Top-Down View</h2>
+            <div class="canvas-container">
+                <canvas id="canvasB" width="500" height="400"></canvas>
+            </div>
+
+            <div class="description">
+                <h3>Description</h3>
+                <p>Traditional flat map view from directly above. All states shown at equal scale. Isometric buildings and sprites placed on flat map.</p>
+            </div>
+
+            <div class="pros">
+                <h4>✅ Pros</h4>
+                <ul>
+                    <li>Simpler implementation (current approach)</li>
+                    <li>Easier coordinate calculations</li>
+                    <li>Familiar perspective to users</li>
+                    <li>Faster to develop and iterate</li>
+                    <li>All regions equally visible</li>
+                </ul>
+            </div>
+
+            <div class="cons">
+                <h4>⚠️ Cons</h4>
+                <ul>
+                    <li>Less visually impressive</li>
+                    <li>Doesn't match strategy game reference as closely</li>
+                    <li>Less sense of depth and immersion</li>
+                    <li>More "flat" feeling</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="note">
+        <strong>Note:</strong> Both options will have the same features, animations, and functionality. The only difference is the viewing angle. Choose based on which visual style better matches your vision!
+    </div>
+
+    <script>
+        // Option A: Subtle Isometric View
+        const canvasA = document.getElementById('canvasA');
+        const ctxA = canvasA.getContext('2d');
+
+        // Draw isometric USA outline
+        function drawIsometricMap(ctx) {
+            ctx.clearRect(0, 0, 500, 400);
+
+            // Background ocean
+            ctx.fillStyle = '#1e40af';
+            ctx.fillRect(0, 0, 500, 400);
+
+            // Simplified USA outline with isometric transform
+            // South is lower (closer), North is higher (further)
+            const isometricScale = 0.85; // North appears smaller
+
+            ctx.fillStyle = '#166534';
+            ctx.strokeStyle = '#3a4a5a';
+            ctx.lineWidth = 2;
+
+            ctx.beginPath();
+            // Approximate USA shape with perspective
+            // Pacific Northwest (further away, smaller)
+            ctx.moveTo(50, 80 * isometricScale);
+            ctx.lineTo(100, 60 * isometricScale);
+            ctx.lineTo(200, 80 * isometricScale);
+
+            // Northern border
+            ctx.lineTo(280, 100 * isometricScale);
+            ctx.lineTo(350, 110 * isometricScale);
+
+            // Northeast (further)
+            ctx.lineTo(420, 125 * isometricScale);
+            ctx.lineTo(450, 140 * isometricScale);
+
+            // East coast
+            ctx.lineTo(440, 180);
+            ctx.lineTo(420, 220);
+
+            // Southeast (closer, larger)
+            ctx.lineTo(400, 260);
+            ctx.lineTo(380, 300);
+
+            // Florida
+            ctx.lineTo(390, 340);
+            ctx.lineTo(370, 360);
+
+            // Gulf coast (closer)
+            ctx.lineTo(320, 340);
+            ctx.lineTo(270, 330);
+            ctx.lineTo(220, 350);
+
+            // Texas (closer, larger)
+            ctx.lineTo(170, 360);
+            ctx.lineTo(140, 340);
+
+            // Southwest
+            ctx.lineTo(120, 310);
+            ctx.lineTo(100, 280);
+
+            // California coast (closer)
+            ctx.lineTo(70, 250);
+            ctx.lineTo(50, 200);
+            ctx.lineTo(45, 150);
+
+            // Back to Pacific Northwest
+            ctx.lineTo(50, 80 * isometricScale);
+
+            ctx.fill();
+            ctx.stroke();
+
+            // Draw factories at different sizes based on perspective
+            drawFactory(ctxA, 140, 340, 1.0, 'DAL'); // Dallas (close, large)
+            drawFactory(ctxA, 120, 280, 1.0, 'PHX'); // Phoenix (close)
+            drawFactory(ctxA, 70, 220, 0.95, 'LAX'); // LA (medium)
+            drawFactory(ctxA, 100, 70 * isometricScale, 0.8, 'SEA'); // Seattle (far, smaller)
+            drawFactory(ctxA, 420, 200, 0.95, 'ATL'); // Atlanta (medium)
+
+            // Add label
+            ctx.fillStyle = '#f97316';
+            ctx.font = 'bold 14px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('Depth & Perspective', 250, 30);
+            ctx.fillStyle = '#6b7280';
+            ctx.font = '12px monospace';
+            ctx.fillText('North appears further away', 250, 50);
+        }
+
+        // Option B: Top-Down View
+        const canvasB = document.getElementById('canvasB');
+        const ctxB = canvasB.getContext('2d');
+
+        function drawTopDownMap(ctx) {
+            ctx.clearRect(0, 0, 500, 400);
+
+            // Background ocean
+            ctx.fillStyle = '#1e40af';
+            ctx.fillRect(0, 0, 500, 400);
+
+            // Simplified USA outline (no perspective distortion)
+            ctx.fillStyle = '#166534';
+            ctx.strokeStyle = '#3a4a5a';
+            ctx.lineWidth = 2;
+
+            ctx.beginPath();
+            // Pacific Northwest
+            ctx.moveTo(50, 80);
+            ctx.lineTo(100, 60);
+            ctx.lineTo(200, 80);
+
+            // Northern border
+            ctx.lineTo(280, 100);
+            ctx.lineTo(350, 110);
+
+            // Northeast
+            ctx.lineTo(420, 125);
+            ctx.lineTo(450, 140);
+
+            // East coast
+            ctx.lineTo(440, 180);
+            ctx.lineTo(420, 220);
+
+            // Southeast
+            ctx.lineTo(400, 260);
+            ctx.lineTo(380, 300);
+
+            // Florida
+            ctx.lineTo(390, 340);
+            ctx.lineTo(370, 360);
+
+            // Gulf coast
+            ctx.lineTo(320, 340);
+            ctx.lineTo(270, 330);
+            ctx.lineTo(220, 350);
+
+            // Texas
+            ctx.lineTo(170, 360);
+            ctx.lineTo(140, 340);
+
+            // Southwest
+            ctx.lineTo(120, 310);
+            ctx.lineTo(100, 280);
+
+            // California coast
+            ctx.lineTo(70, 250);
+            ctx.lineTo(50, 200);
+            ctx.lineTo(45, 150);
+
+            // Back to Pacific Northwest
+            ctx.lineTo(50, 80);
+
+            ctx.fill();
+            ctx.stroke();
+
+            // Draw factories all same size
+            drawFactory(ctxB, 140, 340, 1.0, 'DAL'); // Dallas
+            drawFactory(ctxB, 120, 280, 1.0, 'PHX'); // Phoenix
+            drawFactory(ctxB, 70, 220, 1.0, 'LAX'); // LA
+            drawFactory(ctxB, 100, 70, 1.0, 'SEA'); // Seattle
+            drawFactory(ctxB, 420, 200, 1.0, 'ATL'); // Atlanta
+
+            // Add label
+            ctx.fillStyle = '#f97316';
+            ctx.font = 'bold 14px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('Flat & Equal', 250, 30);
+            ctx.fillStyle = '#6b7280';
+            ctx.font = '12px monospace';
+            ctx.fillText('All regions at same scale', 250, 50);
+        }
+
+        // Draw simplified factory sprite
+        function drawFactory(ctx, x, y, scale, code) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+
+            // Shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(-12, 10, 24, 4);
+
+            // Building base (isometric)
+            ctx.fillStyle = '#3a3a4a';
+            ctx.beginPath();
+            ctx.moveTo(-10, 5);
+            ctx.lineTo(-10, -10);
+            ctx.lineTo(0, -15);
+            ctx.lineTo(0, 0);
+            ctx.closePath();
+            ctx.fill();
+
+            // Building right face
+            ctx.fillStyle = '#4a4a5a';
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, -15);
+            ctx.lineTo(10, -10);
+            ctx.lineTo(10, 5);
+            ctx.closePath();
+            ctx.fill();
+
+            // Roof
+            ctx.fillStyle = '#5a5a6a';
+            ctx.beginPath();
+            ctx.moveTo(-10, -10);
+            ctx.lineTo(0, -18);
+            ctx.lineTo(10, -10);
+            ctx.lineTo(0, -15);
+            ctx.closePath();
+            ctx.fill();
+
+            // Smokestack
+            ctx.fillStyle = '#6a6a7a';
+            ctx.fillRect(-4, -22, 3, 8);
+
+            // Smoke (active factory)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.beginPath();
+            ctx.arc(-2, -26, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Orange glow (active)
+            ctx.fillStyle = 'rgba(249, 115, 22, 0.3)';
+            ctx.beginPath();
+            ctx.arc(0, -5, 15, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Windows (glowing)
+            ctx.fillStyle = '#f97316';
+            ctx.fillRect(-7, -5, 3, 3);
+            ctx.fillRect(4, -5, 3, 3);
+
+            // Label
+            ctx.fillStyle = '#f5f5f5';
+            ctx.font = 'bold 10px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(code, 0, 20);
+
+            ctx.restore();
+        }
+
+        // Draw both maps
+        drawIsometricMap(ctxA);
+        drawTopDownMap(ctxB);
+
+        // Add subtle animation
+        let time = 0;
+        function animate() {
+            time += 0.02;
+
+            // Animate smoke on both canvases
+            drawIsometricMap(ctxA);
+            drawTopDownMap(ctxB);
+
+            requestAnimationFrame(animate);
+        }
+        animate();
+    </script>
+</body>
+</html>
