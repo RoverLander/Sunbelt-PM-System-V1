@@ -190,35 +190,46 @@ function RFIsPage({
 
       setCurrentUser(userData);
 
-      let projectsQuery = supabase.from('projects').select('id, project_number, name, color');
+      // FIX: Removed .or() filter - use client-side filtering to avoid 400 errors in web containers
+      const { data: allProjectsData } = await supabase
+        .from('projects')
+        .select('id, project_number, name, color, owner_id, primary_pm_id, backup_pm_id, created_by');
 
+      // Client-side filter for user's projects
+      let projectsData = allProjectsData || [];
       if (!isDirectorView && userData) {
-        if (includeBackupProjects) {
-          projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},backup_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
-        } else {
-          projectsQuery = projectsQuery.or(`owner_id.eq.${userData.id},primary_pm_id.eq.${userData.id},created_by.eq.${userData.id}`);
-        }
+        projectsData = projectsData.filter(p => {
+          if (includeBackupProjects) {
+            return p.owner_id === userData.id ||
+                   p.primary_pm_id === userData.id ||
+                   p.backup_pm_id === userData.id ||
+                   p.created_by === userData.id;
+          } else {
+            return p.owner_id === userData.id ||
+                   p.primary_pm_id === userData.id ||
+                   p.created_by === userData.id;
+          }
+        });
       }
+      setProjects(projectsData);
 
-      const { data: projectsData } = await projectsQuery;
-      setProjects(projectsData || []);
+      const projectIds = projectsData.map(p => p.id);
+      const projectIdsSet = new Set(projectIds);
 
-      const projectIds = (projectsData || []).map(p => p.id);
+      // FIX: Removed .in() filter - use client-side filtering
+      const { data: allRfisData } = await supabase
+        .from('rfis')
+        .select(`
+          *,
+          project:project_id(id, project_number, name, color)
+        `);
 
-      if (projectIds.length > 0) {
-        const { data: rfisData } = await supabase
-          .from('rfis')
-          .select(`
-            *,
-            project:project_id(id, project_number, name, color)
-          `)
-          .in('project_id', projectIds)
-          .order('created_at', { ascending: false });
+      // Client-side filter and sort
+      const rfisData = (allRfisData || [])
+        .filter(r => projectIdsSet.has(r.project_id))
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-        setRFIs(rfisData || []);
-      } else {
-        setRFIs([]);
-      }
+      setRFIs(rfisData);
     } catch (error) {
       console.error('Error fetching RFIs:', error);
     } finally {
