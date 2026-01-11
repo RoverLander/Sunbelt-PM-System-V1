@@ -2,7 +2,7 @@ import * as PIXI from 'pixi.js';
 
 /**
  * FactorySprite - Interactive factory marker on the map
- * Updated for PIXI v8 Graphics API with proper path handling
+ * Updated for PIXI v8 Graphics API - using GraphicsContext pattern
  */
 export class FactorySprite extends PIXI.Container {
   constructor(factoryData, options = {}) {
@@ -23,6 +23,7 @@ export class FactorySprite extends PIXI.Container {
       this.createBuilding();
       this.createSmokestacks();
       this.createLabel();
+      console.debug(`[FactorySprite] Created building for ${this.label}`);
     } catch (err) {
       console.error('FactorySprite creation error for', this.label, err);
       this.createFallback();
@@ -33,11 +34,11 @@ export class FactorySprite extends PIXI.Container {
   }
 
   createFallback() {
-    // Simple fallback square if building fails
-    const fallback = new PIXI.Graphics();
-    fallback.rect(-25, -25, 50, 50);
-    fallback.fill({ color: 0x3a3a4a });
-    fallback.stroke({ color: 0xf97316, width: 2 });
+    // Simple fallback rectangle if building fails
+    const fallback = new PIXI.Graphics()
+      .rect(-25, -25, 50, 50)
+      .fill({ color: 0x3a3a4a })
+      .stroke({ color: 0xf97316, width: 2 });
     this.building = fallback;
     this.addChild(fallback);
   }
@@ -45,45 +46,43 @@ export class FactorySprite extends PIXI.Container {
   createBuilding() {
     const building = new PIXI.Graphics();
 
-    // Build each shape separately with explicit fills
-    // Base platform (isometric diamond)
-    building.poly([-40, 20, 0, 35, 40, 20, 0, 5]);
-    building.fill({ color: 0x2a2a3a });
+    // PIXI v8 Graphics API - simplified building using rects for reliability
+    // Main building body (tall rectangle)
+    building
+      .rect(-35, -30, 70, 60)
+      .fill({ color: 0x3a3a4a })
+      .stroke({ color: 0x2a2a3a, width: 2 });
 
-    // Main building body - left face
-    building.poly([-40, 20, -40, -15, 0, 0, 0, 35]);
-    building.fill({ color: 0x3a3a4a });
+    // Roof (darker top section)
+    building
+      .rect(-35, -30, 70, 12)
+      .fill({ color: 0x5a5a6a });
 
-    // Main building body - right face
-    building.poly([0, 35, 0, 0, 40, -15, 40, 20]);
-    building.fill({ color: 0x4a4a5a });
-
-    // Roof
-    building.poly([-40, -15, 0, -30, 40, -15, 0, 0]);
-    building.fill({ color: 0x5a5a6a });
-
-    // Windows (orange glow)
+    // Windows (orange glow when active) - 2x3 grid
     const windowColor = this.isActive ? 0xf97316 : 0x4a4a5a;
+    const windowW = 12;
+    const windowH = 8;
+    const windowGap = 6;
 
-    // Left face windows
-    building.rect(-30, -5, 8, 10);
-    building.fill({ color: windowColor });
-    building.rect(-18, -5, 8, 10);
-    building.fill({ color: windowColor });
+    // Row 1 of windows
+    building.rect(-25, -15, windowW, windowH).fill({ color: windowColor });
+    building.rect(-5, -15, windowW, windowH).fill({ color: windowColor });
+    building.rect(15, -15, windowW, windowH).fill({ color: windowColor });
 
-    // Right face windows
-    building.rect(12, -5, 8, 10);
-    building.fill({ color: windowColor, alpha: 0.8 });
-    building.rect(24, -5, 8, 10);
-    building.fill({ color: windowColor, alpha: 0.8 });
+    // Row 2 of windows
+    building.rect(-25, 0, windowW, windowH).fill({ color: windowColor });
+    building.rect(-5, 0, windowW, windowH).fill({ color: windowColor });
+    building.rect(15, 0, windowW, windowH).fill({ color: windowColor });
 
-    // Door
-    building.rect(-6, 10, 12, 18);
-    building.fill({ color: 0x2a2a3a });
+    // Door (center bottom)
+    building.rect(-8, 15, 16, 15).fill({ color: 0x2a2a3a });
 
-    // Sunbelt accent stripe
-    building.rect(-40, -17, 80, 3);
-    building.fill({ color: 0xf97316 });
+    // Sunbelt accent stripe at top
+    building.rect(-35, -32, 70, 4).fill({ color: 0xf97316 });
+
+    // Smokestack (simple rectangle)
+    building.rect(-30, -45, 10, 15).fill({ color: 0x5a5a6a });
+    building.rect(20, -42, 8, 12).fill({ color: 0x5a5a6a });
 
     this.building = building;
     this.addChild(building);
