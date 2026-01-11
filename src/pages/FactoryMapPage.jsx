@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Factory, Truck, Package, TrendingUp, Search, Filter, X, CheckCircle, HelpCircle, Maximize2 } from 'lucide-react';
-import SVGMapCanvas from '../components/factoryMap/SVGMapCanvas';
+import PixiMapCanvas from '../components/factoryMap/PixiMapCanvas';
 import MapControls from '../components/factoryMap/MapControls';
 import MapTooltip from '../components/factoryMap/MapTooltip';
 import MiniMap from '../components/factoryMap/MiniMap';
@@ -465,14 +465,22 @@ const FactoryMapPage = ({ onNavigateToProject, onOpenFullscreen, isFullscreen = 
           <div className={`absolute inset-0 pointer-events-none bg-gradient-to-b ${timeOfDay.tint} to-transparent z-5`} />
         )}
 
-        {/* SVG Map Canvas - Works in WebContainer */}
+        {/* Pixi.js Canvas */}
         <div ref={canvasRef} className="absolute inset-0">
-          <SVGMapCanvas
+          <PixiMapCanvas
             onZoomChange={setCurrentZoom}
             onViewportChange={handleViewportChange}
             onFactoryHover={handleFactoryHover}
             onFactoryHoverEnd={handleFactoryHoverEnd}
             onFactoryClick={handleFactoryClick}
+            onJobSiteHover={handleJobSiteHover}
+            onJobSiteHoverEnd={handleJobSiteHoverEnd}
+            onJobSiteClick={handleJobSiteClick}
+            onTruckHover={handleTruckHover}
+            onTruckHoverEnd={handleTruckHoverEnd}
+            onTruckClick={handleTruckClick}
+            onTruckArrived={handleTruckArrived}
+            onFactoryJump={handleFactoryJump}
             factoryStats={factoryStats}
             projects={projects}
             deliveries={filteredDeliveries}

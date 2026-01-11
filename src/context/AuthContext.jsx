@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
-import { supabase, isWebContainer } from '../utils/supabaseClient';
+import { supabase } from '../utils/supabaseClient';
 
 const AuthContext = createContext({});
 
@@ -26,19 +26,7 @@ export const AuthProvider = ({ children }) => {
       initializingRef.current = true;
 
       try {
-        // CRITICAL: In WebContainer, getSession() can trigger token refresh
-        // which causes "Cannot navigate to URL" errors
-        // See: https://github.com/orgs/supabase/discussions/17788
-
-        if (isWebContainer) {
-          // In WebContainer, skip automatic session recovery
-          // User will need to sign in fresh each time
-          console.info('[Auth] WebContainer detected - skipping session recovery');
-          if (isMounted) setLoading(false);
-          return;
-        }
-
-        // Normal environment - safe to check session
+        // Check for existing session
         const { data, error } = await supabase.auth.getSession();
 
         if (error) {
@@ -53,54 +41,32 @@ export const AuthProvider = ({ children }) => {
           setLoading(false);
         }
       } catch (err) {
-        // Catch "Cannot navigate to URL" and similar errors
-        if (err.message?.includes('navigate') || err.message?.includes('URL')) {
-          console.warn('[Auth] Navigation error suppressed (WebContainer)');
-        } else {
-          console.warn('Auth init error:', err.message);
-        }
+        console.warn('Auth init error:', err.message);
         if (isMounted) setLoading(false);
       }
     };
 
     initAuth();
 
-    // Set up auth state listener with error suppression
-    try {
-      const { data } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
-          // Ignore TOKEN_REFRESHED - this is what causes the navigation errors
-          if (event === 'TOKEN_REFRESHED') {
-            console.info('[Auth] TOKEN_REFRESHED event ignored');
-            return;
-          }
+    // Set up auth state listener
+    const { data } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('[Auth] State change:', event);
 
-          // Ignore SIGNED_OUT in WebContainer if we never signed in
-          if (event === 'SIGNED_OUT' && isWebContainer && !user) {
-            return;
-          }
-
-          if (session?.user && isMounted) {
-            fetchUserDetails(session.user.id);
-          } else if (isMounted && event === 'SIGNED_OUT') {
-            setUser(null);
-            setLoading(false);
-          }
+        if (session?.user && isMounted) {
+          fetchUserDetails(session.user.id);
+        } else if (isMounted && event === 'SIGNED_OUT') {
+          setUser(null);
+          setLoading(false);
         }
-      );
-      subscriptionRef.current = data?.subscription;
-    } catch (err) {
-      console.warn('Auth state listener setup failed:', err.message);
-    }
+      }
+    );
+    subscriptionRef.current = data?.subscription;
 
     return () => {
       isMounted = false;
       initializingRef.current = false;
-      try {
-        subscriptionRef.current?.unsubscribe();
-      } catch {
-        // Ignore cleanup errors
-      }
+      subscriptionRef.current?.unsubscribe();
     };
   }, []);
 
