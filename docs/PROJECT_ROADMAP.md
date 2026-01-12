@@ -1,6 +1,6 @@
 # Project Roadmap
 
-**Last Updated:** January 10, 2026
+**Last Updated:** January 12, 2026
 
 This document outlines planned features, improvements, and technical debt items for the Sunbelt PM System.
 
@@ -16,6 +16,51 @@ This document outlines planned features, improvements, and technical debt items 
 ---
 
 ## Upcoming Features
+
+### Factory Map Visualization (P1) 🚧
+
+**Status:** Architecture pivot in progress - migrating to standalone implementation
+
+**Standalone Repository**
+- [ ] Create separate GitHub repo: `sunbelt-factory-map`
+- [ ] Extract PIXI.js code from main app (layers, sprites, systems)
+- [ ] Build vanilla JavaScript entry point
+- [ ] Implement data fetching via Supabase API
+- [ ] Deploy as standalone web app
+
+**Core Features**
+- [ ] Interactive USA map with 14 factory locations
+- [ ] Real-time project status visualization
+- [ ] Delivery routes and animated trucks
+- [ ] Construction site progression tracking
+- [ ] Zoom/pan controls (working!)
+- [ ] LOD (Level of Detail) system for performance
+
+**Visual Features**
+- [ ] Studio Ghibli-style factory sprites (AI-generated)
+- [ ] Animated smoke from factories
+- [ ] Day/night cycle (optional)
+- [ ] Weather effects (optional)
+- [ ] Celebration particles on delivery completion
+
+**Integration**
+- [ ] Link from main app dashboard
+- [ ] OR: Embed via iframe
+- [ ] Authentication token passing
+- [ ] Data sync with main Supabase database
+
+**Documentation**
+- ✅ Design specifications completed
+- ✅ Sprite generation guides completed
+- ✅ Standalone implementation plan completed
+- [ ] Developer setup guide
+- [ ] Deployment guide
+
+**Timeline:** Estimated 1-2 weeks for MVP (8-12 hours focused development)
+
+See: [FACTORY_MAP_STANDALONE_PLAN.md](FACTORY_MAP_STANDALONE_PLAN.md) for complete implementation details
+
+---
 
 ### Notifications & Alerts (P1)
 

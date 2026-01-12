@@ -1,8 +1,21 @@
 # Factory Map System - Documentation Index
 
+## ⚠️ ARCHITECTURE PIVOT - January 2026
+
+**Status:** Under Construction - Migrating to Standalone Implementation
+
+The Factory Map is being reimplemented as a **standalone vanilla JavaScript + PIXI.js application** due to React integration challenges. The original React-integrated version encountered persistent issues with event handling and component lifecycle management that prevented proper PIXI canvas functionality.
+
+**New Approach:** Vanilla JS + PIXI.js (No React)
+**Reason:** Eliminate React-specific complications (StrictMode, synthetic events, lifecycle issues)
+**Timeline:** TBD
+**Current React Implementation:** Deprecated - preserved for reference only
+
+---
+
 ## Overview
 
-The Factory Map is a gamified, interactive visualization of the Sunbelt PM network built with PIXI.js and React. It transforms project management into an engaging strategy game-style interface where users can track factories, deliveries, and project progress in real-time.
+The Factory Map is a gamified, interactive visualization of the Sunbelt PM network built with PIXI.js. It transforms project management into an engaging strategy game-style interface where users can track factories, deliveries, and project progress in real-time.
 
 **Style Inspiration:** Age of Empires III + Civilization V + SimCity 4
 
@@ -10,46 +23,56 @@ The Factory Map is a gamified, interactive visualization of the Sunbelt PM netwo
 
 ## Quick Links
 
-### 📚 Documentation
+### 📚 Documentation (Design Specs - Still Valid)
 - **[FACTORY_MAP_DESIGN_DOC.md](./FACTORY_MAP_DESIGN_DOC.md)** - Complete design vision (500+ lines)
-- **[FACTORY_MAP_TECHNICAL_ARCHITECTURE.md](./FACTORY_MAP_TECHNICAL_ARCHITECTURE.md)** - System architecture
-- **[FACTORY_MAP_WORKFLOW.md](./FACTORY_MAP_WORKFLOW.md)** - Development process & workflow
 - **[FACTORY_MAP_SPRITE_SPECS.md](./FACTORY_MAP_SPRITE_SPECS.md)** - AI-ready sprite specifications
 
-### 🎮 Implementation
-- **Source Code:** `src/components/factoryMap/`
-- **Dev Server:** `npm run dev` → http://localhost:5174
-- **Main Route:** `/factory-map-fullscreen`
+### 🗂️ Archived Documentation (React Implementation)
+- **[FACTORY_MAP_TECHNICAL_ARCHITECTURE.md](./FACTORY_MAP_TECHNICAL_ARCHITECTURE.md)** - React architecture (deprecated)
+- **[FACTORY_MAP_WORKFLOW.md](./FACTORY_MAP_WORKFLOW.md)** - React workflow (deprecated)
+
+### 🎮 Current Implementation Status
+- **React Version:** `src/components/factoryMap/` (DEPRECATED - Under Construction)
+- **Standalone Version:** Not yet started
+- **Main Route:** `/factory-map-fullscreen` (shows "Under Construction" notice)
 
 ---
 
 ## Project Status
 
-### ✅ Completed (Phase 1)
-- PIXI.js v8 initialization
-- Basic map rendering (USA outline)
-- Factory sprite system (isometric 3D)
-- Pan/zoom controls
-- LOD system foundation
-- Route rendering system
-- Truck sprite system
-- Job site sprites
+### ⏸️ Current State: PAUSED FOR ARCHITECTURE CHANGE
 
-### 🚧 Current Phase: Phase 2
-**Goal:** Build working functional system with programmatic graphics
+**React Implementation Issues (Why We're Pivoting):**
+- ❌ React StrictMode double-mounting breaks PIXI event listeners
+- ❌ React synthetic events block PIXI canvas wheel/mouse events
+- ❌ Sprite positioning issues with filters and React reconciliation
+- ❌ Hot Module Reload (HMR) inconsistently updates PIXI components
+- ❌ Complex debugging due to React + PIXI interaction
 
-**Next Steps:**
-1. Verify current rendering (check for errors)
-2. Fix any broken visuals
-3. Implement full interactions (hover, click)
-4. Add animations (smoke, trucks, particles)
-5. Connect to real project data
+**Decision:** Build standalone vanilla JS version, then optionally integrate via iframe if needed.
 
-### 📋 Upcoming Phases
-- **Phase 3:** Job site progression system
-- **Phase 4:** UI polish and detail panels
-- **Phase 5:** Ambient effects (weather, day/night)
-- **Phase 6:** Art replacement with AI-generated sprites
+### ✅ Completed Work (React Version - Reusable)
+- ✓ PIXI.js v8 setup and configuration
+- ✓ All layer classes (USMapLayer, FactoriesLayer, RoutesLayer, etc.) - Pure JS, reusable!
+- ✓ All sprite classes (FactorySprite, TruckSprite, JobSiteSprite) - Pure JS, reusable!
+- ✓ ViewportController system (pan/zoom) - Pure JS, reusable!
+- ✓ LOD system - Pure JS, reusable!
+- ✓ AI-generated factory sprites (Studio Ghibli style)
+- ✓ Comprehensive design documentation
+
+**Key Insight:** 90% of the code is already vanilla JavaScript! Only the React wrapper needs to be replaced.
+
+### 🚀 Next Phase: Standalone Implementation
+**Goal:** Extract PIXI code into standalone HTML/JS application
+
+**Tasks:**
+1. Create `/public/factory-map-standalone/` directory structure
+2. Copy all PIXI layers/sprites/systems (already vanilla JS)
+3. Create simple `index.html` entry point
+4. Implement data fetching (replace React hooks with fetch API)
+5. Add authentication token passing
+6. Test zoom, pan, sprite rendering without React
+7. Integrate with main app (link or iframe)
 
 ---
 

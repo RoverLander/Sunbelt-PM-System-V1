@@ -1,8 +1,8 @@
 # Project Status
 
-**Last Updated:** January 10, 2026
+**Last Updated:** January 12, 2026
 **Version:** 1.0.0
-**Status:** Production Ready (Beta)
+**Status:** Production Ready (Beta) + Factory Map In Development
 
 ---
 
@@ -138,6 +138,16 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ## Recent Updates (January 2026)
 
+### January 12, 2026
+- **Factory Map: Architecture Pivot**
+  - Identified React + PIXI.js integration issues (event handling, StrictMode conflicts)
+  - Decided to pivot to standalone vanilla JavaScript + PIXI.js implementation
+  - Created comprehensive standalone implementation plan (8-12 hour estimate)
+  - Updated Factory Map page to show "Under Construction" notice
+  - Added Factory Map to project roadmap as P1 priority
+  - Documented 90% code reusability (all layers/sprites already vanilla JS)
+  - See: [FACTORY_MAP_STANDALONE_PLAN.md](FACTORY_MAP_STANDALONE_PLAN.md) for details
+
 ### January 10, 2026
 - Added Excel export for RFI and Submittal logs
 - Added "My Tasks" / "All Tasks" toggle
@@ -210,6 +220,7 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 3. **Limited mobile optimization** - Best experienced on desktop/tablet
 4. **No offline support** - Requires internet connection
 5. **Single file upload** - Can only upload one file at a time
+6. **Factory Map unavailable** - Under reconstruction as standalone app (see roadmap)
 
 ---
 
