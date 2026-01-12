@@ -198,3 +198,4 @@ sunbelt-factory-map/
 ---
 
 *This is the fast-track version. For detailed explanations, see [FACTORY_MAP_GITHUB_SETUP.md](docs/FACTORY_MAP_GITHUB_SETUP.md)*
+
