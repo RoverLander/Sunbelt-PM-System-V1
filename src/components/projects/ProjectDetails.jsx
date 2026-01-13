@@ -62,6 +62,7 @@ import ProjectCalendarWeek from './ProjectCalendarWeek';
 // ✅ ADDED: Workflow imports
 import WorkflowTracker from './WorkflowTracker';
 import StationDetailModal from '../workflow/StationDetailModal';
+import { WorkflowCanvas } from '../workflow';
 
 // ============================================================================
 // CONSTANTS
@@ -176,6 +177,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
   // Workflow station modal
   const [selectedStation, setSelectedStation] = useState(null);
   const [prefilledStationKey, setPrefilledStationKey] = useState(null);
+  const [workflowView, setWorkflowView] = useState('canvas'); // 'canvas' or 'list'
 
   // Kanban drag state
   const [draggedTask, setDraggedTask] = useState(null);
@@ -451,22 +453,88 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
 
               {/* WORKFLOW TAB - ✅ NEW: Visual workflow progress tracker */}
               {activeTab === 'workflow' && (
-                <WorkflowTracker
-                  projectId={project.id}
-                  stations={workflowStations}
-                  tasks={tasks}
-                  projectStatuses={projectWorkflowStatus}
-                  onStationClick={(station, status, deadline, taskCount) => {
-                    // If no tasks linked, open add task modal with station pre-filled
-                    if (taskCount === 0) {
-                      setPrefilledStationKey(station.station_key);
-                      setShowAddTask(true);
-                    } else {
-                      // Open station detail modal to view/manage linked tasks
-                      setSelectedStation(station);
-                    }
-                  }}
-                />
+                <div>
+                  {/* View Toggle */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    marginBottom: '16px',
+                    gap: '4px'
+                  }}>
+                    <button
+                      onClick={() => setWorkflowView('canvas')}
+                      style={{
+                        padding: '6px 14px',
+                        background: workflowView === 'canvas' ? 'var(--sunbelt-orange)' : 'var(--bg-tertiary)',
+                        border: 'none',
+                        borderRadius: '6px 0 0 6px',
+                        color: workflowView === 'canvas' ? 'white' : 'var(--text-secondary)',
+                        fontSize: '0.8rem',
+                        fontWeight: '500',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <GitGraph size={14} />
+                      Canvas
+                    </button>
+                    <button
+                      onClick={() => setWorkflowView('list')}
+                      style={{
+                        padding: '6px 14px',
+                        background: workflowView === 'list' ? 'var(--sunbelt-orange)' : 'var(--bg-tertiary)',
+                        border: 'none',
+                        borderRadius: '0 6px 6px 0',
+                        color: workflowView === 'list' ? 'white' : 'var(--text-secondary)',
+                        fontSize: '0.8rem',
+                        fontWeight: '500',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <List size={14} />
+                      List
+                    </button>
+                  </div>
+
+                  {/* Canvas View */}
+                  {workflowView === 'canvas' && (
+                    <WorkflowCanvas
+                      projectId={project.id}
+                      height="calc(100vh - 280px)"
+                      onStationClick={(station, status, deadline, taskCount) => {
+                        if (taskCount === 0) {
+                          setPrefilledStationKey(station.station_key);
+                          setShowAddTask(true);
+                        } else {
+                          setSelectedStation(station);
+                        }
+                      }}
+                    />
+                  )}
+
+                  {/* List View */}
+                  {workflowView === 'list' && (
+                    <WorkflowTracker
+                      projectId={project.id}
+                      stations={workflowStations}
+                      tasks={tasks}
+                      projectStatuses={projectWorkflowStatus}
+                      onStationClick={(station, status, deadline, taskCount) => {
+                        if (taskCount === 0) {
+                          setPrefilledStationKey(station.station_key);
+                          setShowAddTask(true);
+                        } else {
+                          setSelectedStation(station);
+                        }
+                      }}
+                    />
+                  )}
+                </div>
               )}
 
               {/* TASKS TAB */}

@@ -134,7 +134,8 @@ function Sidebar({
     activeQuotes: 0,
     pipelineValue: 0,
     wonThisMonth: 0,
-    conversionRate: 0
+    conversionRate: 0,
+    teamMembers: 0
   });
 
   // ==========================================================================
@@ -368,11 +369,18 @@ function Sidebar({
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
 
-      const { data: allQuotes } = await supabase
-        .from('sales_quotes')
-        .select('id, status, total_price, won_date, created_at');
+      const [quotesRes, teamRes] = await Promise.all([
+        supabase
+          .from('sales_quotes')
+          .select('id, status, total_price, won_date, created_at'),
+        supabase
+          .from('users')
+          .select('id', { count: 'exact', head: true })
+          .in('role', ['Sales_Rep', 'Sales_Manager'])
+          .eq('is_active', true)
+      ]);
 
-      const quotes = allQuotes || [];
+      const quotes = quotesRes.data || [];
 
       const activeQuotes = quotes.filter(q => activeStatuses.includes(q.status));
 
@@ -394,7 +402,8 @@ function Sidebar({
         activeQuotes: activeQuotes.length,
         pipelineValue,
         wonThisMonth,
-        conversionRate
+        conversionRate,
+        teamMembers: teamRes.count || 0
       });
 
     } catch (err) {
@@ -903,6 +912,7 @@ function Sidebar({
         );
 
       case 'sales':
+        const showTeamStats = currentUser?.role === 'Sales_Manager' || currentUser?.role === 'VP' || currentUser?.role === 'Admin';
         return (
           <div style={{ padding: '0 var(--space-md)', marginBottom: 'var(--space-sm)' }}>
             {/* Pipeline value */}
@@ -954,6 +964,22 @@ function Sidebar({
                 <div style={{ fontSize: '0.5625rem', color: 'var(--text-tertiary)' }}>Win Rate</div>
               </div>
             </div>
+
+            {/* Team row - only for Sales Managers */}
+            {showTeamStats && salesStats.teamMembers > 0 && (
+              <div style={{
+                padding: '6px 10px',
+                background: 'var(--bg-tertiary)',
+                borderRadius: 'var(--radius-sm)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <Users size={14} style={{ color: 'var(--text-secondary)' }} />
+                <span style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--text-primary)' }}>{salesStats.teamMembers}</span>
+                <span style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>Team Members</span>
+              </div>
+            )}
           </div>
         );
 
@@ -1028,10 +1054,13 @@ function Sidebar({
         ];
 
       case 'sales':
-        // Sales: Dashboard → Projects (read-only), Calendar
+        // Sales: Dashboard → Team (for managers) → Projects (read-only), Calendar
         // Note: Sales dashboard has quotes management built-in
+        // Team nav item shows for Sales Managers to access team performance tracking
+        const isSalesManager = currentUser?.role === 'Sales_Manager' || currentUser?.role === 'VP' || currentUser?.role === 'Admin';
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          ...(isSalesManager ? [{ id: 'team', label: 'Team', icon: Users }] : []),
           { id: 'projects', label: 'PM Projects', icon: FolderKanban },
           { id: 'calendar', label: 'Calendar', icon: Calendar },
         ];

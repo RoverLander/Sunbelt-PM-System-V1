@@ -20,12 +20,14 @@ import {
   User,
   Building2,
   Filter,
-  ArrowUpDown
+  ArrowUpDown,
+  FileUp
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import ProjectDetails from '../projects/ProjectDetails';
 import CreateProjectModal from '../projects/CreateProjectModal';
+import PraxisImportModal from '../projects/PraxisImportModal';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -47,6 +49,7 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
   // ==========================================================================
   const [selectedProject, setSelectedProject] = useState(null);
   const [showCreateProject, setShowCreateProject] = useState(false);
+  const [showPraxisImport, setShowPraxisImport] = useState(false);
   const [toast, setToast] = useState(null);
 
   // ==========================================================================
@@ -337,25 +340,55 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowCreateProject(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '10px 16px',
-            background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
-            border: 'none',
-            borderRadius: 'var(--radius-md)',
-            color: 'white',
-            fontWeight: '600',
-            fontSize: '0.875rem',
-            cursor: 'pointer'
-          }}
-        >
-          <Plus size={18} />
-          New Project
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={() => setShowPraxisImport(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '10px 16px',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-primary)',
+              fontWeight: '600',
+              fontSize: '0.875rem',
+              cursor: 'pointer',
+              transition: 'all 0.15s'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.borderColor = 'var(--sunbelt-orange)';
+              e.currentTarget.style.color = 'var(--sunbelt-orange)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border-color)';
+              e.currentTarget.style.color = 'var(--text-primary)';
+            }}
+          >
+            <FileUp size={18} />
+            Import from Praxis
+          </button>
+          <button
+            onClick={() => setShowCreateProject(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '10px 16px',
+              background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+              border: 'none',
+              borderRadius: 'var(--radius-md)',
+              color: 'white',
+              fontWeight: '600',
+              fontSize: '0.875rem',
+              cursor: 'pointer'
+            }}
+          >
+            <Plus size={18} />
+            New Project
+          </button>
+        </div>
       </div>
 
       {/* ================================================================== */}
@@ -714,6 +747,28 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
             setProjects(prev => [newProject, ...prev]);
             setShowCreateProject(false);
             showToast('Project created');
+          }}
+          currentUserId={currentUser?.id}
+        />
+      )}
+
+      {/* ================================================================== */}
+      {/* PRAXIS IMPORT MODAL                                               */}
+      {/* ================================================================== */}
+      {showPraxisImport && (
+        <PraxisImportModal
+          isOpen={showPraxisImport}
+          onClose={() => setShowPraxisImport(false)}
+          onSuccess={(importedProjects) => {
+            // Handle both single project and array of projects
+            const newProjects = Array.isArray(importedProjects)
+              ? importedProjects
+              : [importedProjects];
+            setProjects(prev => [...newProjects, ...prev]);
+            setShowPraxisImport(false);
+            showToast(`${newProjects.length} project(s) imported from Praxis`);
+            // Refresh data to ensure we have complete project info
+            fetchData();
           }}
           currentUserId={currentUser?.id}
         />

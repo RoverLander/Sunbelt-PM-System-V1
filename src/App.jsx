@@ -45,6 +45,7 @@ import { ExecutiveReports } from './components/reports';
 
 // Sales
 import { SalesDashboard } from './components/sales';
+import SalesTeamPage from './components/sales/SalesTeamPage';
 
 import { supabase } from './utils/supabaseClient';
 import './App.css';
@@ -406,6 +407,9 @@ function AppContent() {
       switch (currentView) {
         case 'dashboard':
           return <SalesDashboard onNavigateToProject={handleNavigateToProject} />;
+        case 'team':
+          // Sales team view - dedicated team page for Sales Managers
+          return <SalesTeamPage onNavigateToProject={handleNavigateToProject} />;
         case 'projects':
           return <ProjectsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
         case 'calendar':

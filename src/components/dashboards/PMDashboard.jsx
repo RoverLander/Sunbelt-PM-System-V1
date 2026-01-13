@@ -1,5 +1,5 @@
 // ============================================================================
-// PMDashboard.jsx - Project Manager Command Center
+// PMDashboard.jsx - Project Manager Command Center (Praxis Enhanced)
 // ============================================================================
 // Full-featured dashboard with:
 // - Status indicators (portfolio health)
@@ -7,6 +7,11 @@
 // - Weekly calendar view
 // - Gantt chart timeline
 // - Active projects table
+//
+// PRAXIS ENHANCEMENTS (Jan 13, 2026):
+// - Praxis fields in project cards (building type, sqft, modules, dealer)
+// - Delivery Timeline view (30/60/90 days)
+// - Urgent Delivery Alerts (next 14 days)
 //
 // FIXES (Jan 9, 2026):
 // - ✅ FIXED: Now checks owner_id, primary_pm_id, AND backup_pm_id for projects
@@ -40,12 +45,18 @@ import {
   DollarSign,
   Flag,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  FileUp,
+  Truck,
+  Package,
+  Star,
+  Building2
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import ProjectDetails from '../projects/ProjectDetails';
 import CreateProjectModal from '../projects/CreateProjectModal';
+import PraxisImportModal from '../projects/PraxisImportModal';
 
 // ============================================================================
 // CONSTANTS
@@ -55,6 +66,14 @@ const TOAST_DURATION = 3000;
 
 // Active project statuses for filtering
 const ACTIVE_STATUSES = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
+
+// Building type colors for Praxis fields
+const BUILDING_TYPE_COLORS = {
+  'CUSTOM': '#f59e0b',
+  'FLEET/STOCK': '#3b82f6',
+  'GOVERNMENT': '#22c55e',
+  'Business': '#8b5cf6'
+};
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -70,6 +89,11 @@ const formatCurrency = (amount) => {
   if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
   if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
   return `$${amount.toLocaleString()}`;
+};
+
+const formatSqft = (sqft) => {
+  if (!sqft) return '';
+  return `${sqft.toLocaleString()} sqft`;
 };
 
 const getDaysUntilDue = (dueDate) => {
@@ -163,8 +187,10 @@ function PMDashboard({ onNavigateToProject }) {
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedProjectTab, setSelectedProjectTab] = useState(null);
   const [showCreateProject, setShowCreateProject] = useState(false);
+  const [showPraxisImport, setShowPraxisImport] = useState(false);
   const [showNewDropdown, setShowNewDropdown] = useState(false);
   const [calendarWeekOffset, setCalendarWeekOffset] = useState(0);
+  const [deliveryTimelineRange, setDeliveryTimelineRange] = useState(30); // 30, 60, 90 days
   const [toast, setToast] = useState(null);
 
   // ==========================================================================
@@ -427,6 +453,42 @@ function PMDashboard({ onNavigateToProject }) {
   }, [projects]);
 
   // ==========================================================================
+  // COMPUTED: URGENT DELIVERIES (next 14 days)
+  // ==========================================================================
+  const urgentDeliveries = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return activeProjects
+      .filter(p => p.delivery_date || p.target_online_date)
+      .map(p => {
+        const deliveryDate = new Date((p.delivery_date || p.target_online_date) + 'T00:00:00');
+        const daysUntil = Math.ceil((deliveryDate - today) / (1000 * 60 * 60 * 24));
+        return { ...p, deliveryDate, daysUntil };
+      })
+      .filter(p => p.daysUntil >= 0 && p.daysUntil <= 14)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+  }, [activeProjects]);
+
+  // ==========================================================================
+  // COMPUTED: DELIVERY TIMELINE (30/60/90 days based on toggle)
+  // ==========================================================================
+  const deliveryTimeline = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return activeProjects
+      .filter(p => p.delivery_date || p.target_online_date)
+      .map(p => {
+        const deliveryDate = new Date((p.delivery_date || p.target_online_date) + 'T00:00:00');
+        const daysUntil = Math.ceil((deliveryDate - today) / (1000 * 60 * 60 * 24));
+        return { ...p, deliveryDate, daysUntil };
+      })
+      .filter(p => p.daysUntil >= 0 && p.daysUntil <= deliveryTimelineRange)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+  }, [activeProjects, deliveryTimelineRange]);
+
+  // ==========================================================================
   // COMPUTED: CALENDAR ITEMS BY DATE
   // ==========================================================================
   const calendarItemsByDate = useMemo(() => {
@@ -679,6 +741,24 @@ function PMDashboard({ onNavigateToProject }) {
                   <FolderKanban size={16} />
                   New Project
                 </button>
+                <button
+                  onClick={() => { setShowPraxisImport(true); setShowNewDropdown(false); }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-sm)',
+                    padding: 'var(--space-sm) var(--space-md)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.875rem'
+                  }}
+                >
+                  <FileUp size={16} />
+                  Import from Praxis
+                </button>
               </div>
             )}
           </div>
@@ -722,6 +802,86 @@ function PMDashboard({ onNavigateToProject }) {
       </div>
 
       {/* ================================================================== */}
+      {/* URGENT DELIVERIES ALERT                                           */}
+      {/* ================================================================== */}
+      {urgentDeliveries.length > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(245, 158, 11, 0.1))',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          borderRadius: 'var(--radius-lg)',
+          padding: 'var(--space-md)',
+          marginBottom: 'var(--space-lg)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
+            <Truck size={20} style={{ color: '#ef4444' }} />
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: '#ef4444' }}>
+              Urgent Deliveries ({urgentDeliveries.length})
+            </h3>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginLeft: '4px' }}>Next 14 days</span>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+            {urgentDeliveries.map(project => {
+              const buildingTypeColor = BUILDING_TYPE_COLORS[project.building_type] || 'var(--text-tertiary)';
+              return (
+                <div
+                  key={project.id}
+                  onClick={() => handleProjectClick(project)}
+                  style={{
+                    flex: '0 0 auto',
+                    minWidth: '200px',
+                    padding: '12px',
+                    background: 'var(--bg-secondary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: project.daysUntil <= 3 ? '2px solid #ef4444' : '1px solid var(--border-color)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                    <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                      {project.project_number}
+                    </div>
+                    <div style={{
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      fontSize: '0.6875rem',
+                      fontWeight: '700',
+                      background: project.daysUntil <= 3 ? 'rgba(239, 68, 68, 0.2)' : project.daysUntil <= 7 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(34, 197, 94, 0.2)',
+                      color: project.daysUntil <= 3 ? '#ef4444' : project.daysUntil <= 7 ? '#f59e0b' : '#22c55e'
+                    }}>
+                      {project.daysUntil === 0 ? 'Today' : project.daysUntil === 1 ? 'Tomorrow' : `${project.daysUntil}d`}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
+                    {project.name}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {project.building_type && (
+                      <span style={{
+                        padding: '2px 6px',
+                        borderRadius: '3px',
+                        fontSize: '0.625rem',
+                        fontWeight: '600',
+                        background: `${buildingTypeColor}20`,
+                        color: buildingTypeColor
+                      }}>
+                        {project.building_type}
+                      </span>
+                    )}
+                    {project.square_footage && (
+                      <span style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
+                        {formatSqft(project.square_footage)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================== */}
       {/* ATTENTION SECTIONS (OVERDUE & DUE SOON)                           */}
       {/* ================================================================== */}
       <div style={{
@@ -743,7 +903,7 @@ function PMDashboard({ onNavigateToProject }) {
               Overdue ({overdueItems.length})
             </h3>
           </div>
-          
+
           {overdueItems.length === 0 ? (
             <p style={{ color: 'var(--text-tertiary)', fontSize: '0.8125rem', margin: 0 }}>
               No overdue items
@@ -948,6 +1108,154 @@ function PMDashboard({ onNavigateToProject }) {
       </div>
 
       {/* ================================================================== */}
+      {/* DELIVERY TIMELINE                                                 */}
+      {/* ================================================================== */}
+      <div style={{
+        background: 'var(--bg-secondary)',
+        borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--border-color)',
+        padding: 'var(--space-md)',
+        marginBottom: 'var(--space-lg)'
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 'var(--space-md)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+            <Truck size={18} style={{ color: 'var(--sunbelt-orange)' }} />
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)' }}>
+              Delivery Timeline ({deliveryTimeline.length})
+            </h3>
+          </div>
+
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {[30, 60, 90].map(days => (
+              <button
+                key={days}
+                onClick={() => setDeliveryTimelineRange(days)}
+                style={{
+                  padding: '4px 12px',
+                  background: deliveryTimelineRange === days ? 'var(--sunbelt-orange)' : 'var(--bg-primary)',
+                  color: deliveryTimelineRange === days ? 'white' : 'var(--text-secondary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  fontSize: '0.75rem',
+                  fontWeight: '600'
+                }}
+              >
+                {days}d
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {deliveryTimeline.length === 0 ? (
+          <p style={{ color: 'var(--text-tertiary)', fontSize: '0.8125rem', margin: 0 }}>
+            No deliveries in the next {deliveryTimelineRange} days
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {deliveryTimeline.map(project => {
+              const buildingTypeColor = BUILDING_TYPE_COLORS[project.building_type] || 'var(--text-tertiary)';
+              const urgencyColor = project.daysUntil <= 7 ? '#ef4444' : project.daysUntil <= 14 ? '#f59e0b' : '#22c55e';
+
+              return (
+                <div
+                  key={project.id}
+                  onClick={() => handleProjectClick(project)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '10px 12px',
+                    background: 'var(--bg-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-primary)'}
+                >
+                  {/* Days indicator */}
+                  <div style={{
+                    minWidth: '50px',
+                    textAlign: 'center',
+                    padding: '6px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: `${urgencyColor}15`,
+                    border: `1px solid ${urgencyColor}30`
+                  }}>
+                    <div style={{ fontSize: '1rem', fontWeight: '700', color: urgencyColor }}>
+                      {project.daysUntil}
+                    </div>
+                    <div style={{ fontSize: '0.5625rem', color: urgencyColor, textTransform: 'uppercase' }}>
+                      days
+                    </div>
+                  </div>
+
+                  {/* Project info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                        {project.project_number}
+                      </span>
+                      {project.building_type && (
+                        <span style={{
+                          padding: '2px 6px',
+                          borderRadius: '3px',
+                          fontSize: '0.625rem',
+                          fontWeight: '600',
+                          background: `${buildingTypeColor}20`,
+                          color: buildingTypeColor
+                        }}>
+                          {project.building_type}
+                        </span>
+                      )}
+                      {project.difficulty_rating && (
+                        <span style={{ display: 'flex', gap: '1px' }}>
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <Star
+                              key={n}
+                              size={10}
+                              fill={n <= project.difficulty_rating ? '#f59e0b' : 'transparent'}
+                              style={{ color: n <= project.difficulty_rating ? '#f59e0b' : 'var(--text-tertiary)' }}
+                            />
+                          ))}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                      {project.name}
+                    </div>
+                  </div>
+
+                  {/* Specs */}
+                  <div style={{ textAlign: 'right' }}>
+                    {(project.square_footage || project.module_count) && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        {project.square_footage ? formatSqft(project.square_footage) : ''}
+                        {project.square_footage && project.module_count ? ' • ' : ''}
+                        {project.module_count ? `${project.module_count} mod` : ''}
+                      </div>
+                    )}
+                    <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
+                      {formatDate(project.delivery_date || project.target_online_date)}
+                    </div>
+                  </div>
+
+                  <ChevronRight size={16} style={{ color: 'var(--text-tertiary)' }} />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ================================================================== */}
       {/* PROJECTS TABLE                                                    */}
       {/* ================================================================== */}
       {activeProjects.length > 0 && (
@@ -970,7 +1278,7 @@ function PMDashboard({ onNavigateToProject }) {
                 Active Projects
               </h3>
             </div>
-            
+
             {/* Include Secondary Toggle */}
             <button
               onClick={toggleIncludeSecondary}
@@ -988,8 +1296,8 @@ function PMDashboard({ onNavigateToProject }) {
               }}
             >
               <span>Include backup projects</span>
-              {includeSecondary ? 
-                <ToggleRight size={18} style={{ color: 'var(--sunbelt-orange)' }} /> : 
+              {includeSecondary ?
+                <ToggleRight size={18} style={{ color: 'var(--sunbelt-orange)' }} /> :
                 <ToggleLeft size={18} />
               }
             </button>
@@ -1000,6 +1308,7 @@ function PMDashboard({ onNavigateToProject }) {
               <thead>
                 <tr style={{ background: 'var(--bg-primary)' }}>
                   <th style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'left', fontSize: '0.75rem', color: 'var(--text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>Project</th>
+                  <th style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'left', fontSize: '0.75rem', color: 'var(--text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>Type</th>
                   <th style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'left', fontSize: '0.75rem', color: 'var(--text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>Status</th>
                   <th style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>Tasks</th>
                   <th style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-tertiary)', fontWeight: '600', textTransform: 'uppercase' }}>RFIs</th>
@@ -1013,7 +1322,8 @@ function PMDashboard({ onNavigateToProject }) {
                   const projectRFIs = rfis.filter(r => r.project_id === project.id);
                   const openTasks = projectTasks.filter(t => !['Completed', 'Cancelled'].includes(t.status)).length;
                   const openRFIs = projectRFIs.filter(r => !['Closed', 'Answered'].includes(r.status)).length;
-                  
+                  const buildingTypeColor = BUILDING_TYPE_COLORS[project.building_type] || 'var(--text-tertiary)';
+
                   return (
                     <tr
                       key={project.id}
@@ -1037,8 +1347,27 @@ function PMDashboard({ onNavigateToProject }) {
                           <div>
                             <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{project.project_number}</div>
                             <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{project.name}</div>
+                            {project.dealer_name && (
+                              <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>{project.dealer_name}</div>
+                            )}
                           </div>
                         </div>
+                      </td>
+                      <td style={{ padding: 'var(--space-md)' }}>
+                        {project.building_type ? (
+                          <span style={{
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.6875rem',
+                            fontWeight: '600',
+                            background: `${buildingTypeColor}20`,
+                            color: buildingTypeColor
+                          }}>
+                            {project.building_type}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>-</span>
+                        )}
                       </td>
                       <td style={{ padding: 'var(--space-md)' }}>
                         <span style={{
@@ -1062,8 +1391,15 @@ function PMDashboard({ onNavigateToProject }) {
                           {openRFIs}
                         </span>
                       </td>
-                      <td style={{ padding: 'var(--space-md)', textAlign: 'right', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                        {formatDate(project.target_online_date)}
+                      <td style={{ padding: 'var(--space-md)', textAlign: 'right' }}>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                          {formatDate(project.delivery_date || project.target_online_date)}
+                        </div>
+                        {project.promised_delivery_date && project.promised_delivery_date !== project.delivery_date && (
+                          <div style={{ fontSize: '0.6875rem', color: '#f59e0b' }}>
+                            Promised: {formatDate(project.promised_delivery_date)}
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: 'var(--space-md)', textAlign: 'right' }}>
                         <ChevronRight size={16} style={{ color: 'var(--text-tertiary)' }} />
@@ -1087,6 +1423,17 @@ function PMDashboard({ onNavigateToProject }) {
           setShowCreateProject(false);
           fetchDashboardData();
           showToast('Project created successfully');
+        }}
+      />
+
+      <PraxisImportModal
+        isOpen={showPraxisImport}
+        onClose={() => setShowPraxisImport(false)}
+        onSuccess={(importedProjects) => {
+          setShowPraxisImport(false);
+          fetchDashboardData();
+          const count = Array.isArray(importedProjects) ? importedProjects.length : 1;
+          showToast(`${count} project(s) imported from Praxis`);
         }}
       />
 

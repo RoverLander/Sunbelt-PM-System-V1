@@ -1,5 +1,5 @@
 // ============================================================================
-// VPDashboard Component
+// VPDashboard Component (Praxis Enhanced)
 // ============================================================================
 // Executive-level dashboard for VP showing:
 // - High-level KPIs (on-time %, budget health, total value)
@@ -9,6 +9,13 @@
 // - Delivery timeline (upcoming milestones)
 // - Team utilization summary
 // - Trend charts (projects completed over time)
+//
+// PRAXIS ENHANCEMENTS:
+// - Sales Pipeline Summary (read-only view of quotes)
+// - PM-Flagged Quotes Section (quotes needing PM attention)
+// - Recently Converted Projects (quotes → projects)
+// - Weighted Pipeline Forecast (by expected close date)
+// - Building Type Breakdown by Factory
 //
 // This is a READ-ONLY strategic view - no project editing capabilities
 // ============================================================================
@@ -36,10 +43,20 @@ import {
   Award,
   Activity,
   Layers,
-  Factory
+  Factory,
+  FileUp,
+  Plus,
+  ChevronDown,
+  Flag,
+  FileText,
+  Percent,
+  ArrowRight,
+  Package
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
+import CreateProjectModal from '../projects/CreateProjectModal';
+import PraxisImportModal from '../projects/PraxisImportModal';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -93,8 +110,13 @@ function VPDashboard() {
   const [submittals, setSubmittals] = useState([]);
   const [milestones, setMilestones] = useState([]);
   const [users, setUsers] = useState([]);
+  const [quotes, setQuotes] = useState([]); // Sales quotes for pipeline visibility
   const [timeRange, setTimeRange] = useState('quarter'); // month, quarter, year
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [showPraxisImport, setShowPraxisImport] = useState(false);
+  const [showNewDropdown, setShowNewDropdown] = useState(false);
+  const [toast, setToast] = useState(null);
 
   // ==========================================================================
   // FETCH DATA
@@ -106,13 +128,19 @@ function VPDashboard() {
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      const [projectsRes, tasksRes, rfisRes, submittalsRes, milestonesRes, usersRes] = await Promise.all([
+      const [projectsRes, tasksRes, rfisRes, submittalsRes, milestonesRes, usersRes, quotesRes] = await Promise.all([
         supabase.from('projects').select('*').order('created_at', { ascending: false }),
         supabase.from('tasks').select('id, project_id, status, due_date, created_at, completed_at'),
         supabase.from('rfis').select('id, project_id, status, due_date, created_at'),
         supabase.from('submittals').select('id, project_id, status, due_date, created_at'),
         supabase.from('milestones').select('*, project:project_id(id, project_number, name)'),
-        supabase.from('users').select('*').eq('is_active', true)
+        supabase.from('users').select('*').eq('is_active', true),
+        // Fetch sales quotes for pipeline visibility
+        supabase.from('sales_quotes').select(`
+          *,
+          customer:customer_id(id, company_name, contact_name),
+          dealer:dealer_id(id, code, name, branch_name)
+        `).eq('is_latest_version', true).order('created_at', { ascending: false })
       ]);
 
       setProjects(projectsRes.data || []);
@@ -121,6 +149,7 @@ function VPDashboard() {
       setSubmittals(submittalsRes.data || []);
       setMilestones(milestonesRes.data || []);
       setUsers(usersRes.data || []);
+      setQuotes(quotesRes.data || []);
       setLastRefresh(new Date());
     } catch (error) {
       console.error('Error fetching VP data:', error);
@@ -237,8 +266,9 @@ function VPDashboard() {
       .slice(0, 8);
 
     // ===== TEAM STATS =====
-    const pms = users.filter(u => ['Project Manager', 'Director', 'Admin'].includes(u.role));
-    const avgProjectsPerPM = pms.length > 0 
+    // Roles: 'PM', 'Director' (not 'Project Manager')
+    const pms = users.filter(u => ['PM', 'Director'].includes(u.role));
+    const avgProjectsPerPM = pms.length > 0
       ? (activeProjects.length / pms.length).toFixed(1)
       : 0;
 
@@ -299,6 +329,92 @@ function VPDashboard() {
   }, [projects, tasks, rfis, submittals, users]);
 
   // ==========================================================================
+  // CALCULATE SALES PIPELINE METRICS
+  // ==========================================================================
+  const salesPipelineMetrics = useMemo(() => {
+    const ACTIVE_STATUSES = ['draft', 'sent', 'negotiating', 'awaiting_po', 'po_received'];
+
+    const activeQuotes = quotes.filter(q => ACTIVE_STATUSES.includes(q.status));
+    const wonQuotes = quotes.filter(q => q.status === 'won');
+    const lostQuotes = quotes.filter(q => q.status === 'lost');
+    const pmFlaggedQuotes = quotes.filter(q => q.pm_flagged && ACTIVE_STATUSES.includes(q.status));
+
+    // Raw pipeline value
+    const pipelineValue = activeQuotes.reduce((sum, q) => sum + (q.total_price || 0), 0);
+
+    // Weighted pipeline (value × outlook_percentage)
+    const weightedPipelineValue = activeQuotes.reduce((sum, q) => {
+      const outlook = q.outlook_percentage || 50; // Default to 50% if not set
+      return sum + ((q.total_price || 0) * (outlook / 100));
+    }, 0);
+
+    const wonValue = wonQuotes.reduce((sum, q) => sum + (q.total_price || 0), 0);
+    const closedQuotes = wonQuotes.length + lostQuotes.length;
+    const winRate = closedQuotes > 0 ? Math.round((wonQuotes.length / closedQuotes) * 100) : 0;
+
+    // Recently converted to projects (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const recentlyConverted = quotes.filter(q =>
+      q.converted_to_project_id &&
+      q.converted_at &&
+      new Date(q.converted_at) >= thirtyDaysAgo
+    ).map(q => {
+      const project = projects.find(p => p.id === q.converted_to_project_id);
+      return {
+        ...q,
+        project,
+        daysAgo: Math.floor((new Date() - new Date(q.converted_at)) / (1000 * 60 * 60 * 24))
+      };
+    }).sort((a, b) => new Date(b.converted_at) - new Date(a.converted_at));
+
+    // Weighted forecast by expected close (next 30/60/90 days)
+    const now = new Date();
+    const forecast30 = activeQuotes.filter(q => {
+      if (!q.expected_close_timeframe) return false;
+      const closeText = q.expected_close_timeframe.toLowerCase();
+      return closeText.includes('week') || closeText.includes('30') || closeText.includes('asap') || closeText.includes('soon');
+    }).reduce((sum, q) => sum + ((q.total_price || 0) * ((q.outlook_percentage || 50) / 100)), 0);
+
+    const forecast60 = activeQuotes.filter(q => {
+      if (!q.expected_close_timeframe) return false;
+      const closeText = q.expected_close_timeframe.toLowerCase();
+      return closeText.includes('60') || closeText.includes('month') || closeText.includes('2 week');
+    }).reduce((sum, q) => sum + ((q.total_price || 0) * ((q.outlook_percentage || 50) / 100)), 0);
+
+    const forecast90 = activeQuotes.filter(q => {
+      if (!q.expected_close_timeframe) return false;
+      const closeText = q.expected_close_timeframe.toLowerCase();
+      return closeText.includes('90') || closeText.includes('quarter') || closeText.includes('3 month');
+    }).reduce((sum, q) => sum + ((q.total_price || 0) * ((q.outlook_percentage || 50) / 100)), 0);
+
+    // Building type breakdown by factory
+    const factoryBuildingTypes = {};
+    activeQuotes.forEach(q => {
+      const factory = q.factory || q.praxis_source_factory || 'Unknown';
+      const buildingType = q.building_type || 'Unknown';
+      if (!factoryBuildingTypes[factory]) {
+        factoryBuildingTypes[factory] = { CUSTOM: 0, 'FLEET/STOCK': 0, GOVERNMENT: 0, Business: 0, Unknown: 0 };
+      }
+      factoryBuildingTypes[factory][buildingType] = (factoryBuildingTypes[factory][buildingType] || 0) + 1;
+    });
+
+    return {
+      pipelineValue,
+      weightedPipelineValue,
+      pipelineCount: activeQuotes.length,
+      wonValue,
+      wonCount: wonQuotes.length,
+      winRate,
+      pmFlaggedQuotes,
+      pmFlaggedCount: pmFlaggedQuotes.length,
+      recentlyConverted,
+      forecast: { next30: forecast30, next60: forecast60, next90: forecast90 },
+      factoryBuildingTypes
+    };
+  }, [quotes, projects]);
+
+  // ==========================================================================
   // RENDER - LOADING
   // ==========================================================================
   if (loading) {
@@ -344,24 +460,102 @@ function VPDashboard() {
           </p>
         </div>
 
-        <button
-          onClick={() => fetchAllData()}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 14px',
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontSize: '0.8125rem'
-          }}
-        >
-          <RefreshCw size={14} />
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => fetchAllData()}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 14px',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '0.8125rem'
+            }}
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
+
+          {/* New Dropdown */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowNewDropdown(!showNewDropdown)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 16px',
+                background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '0.8125rem'
+              }}
+            >
+              <Plus size={14} />
+              New
+              <ChevronDown size={12} />
+            </button>
+
+            {showNewDropdown && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '4px',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-lg)',
+                minWidth: '180px',
+                zIndex: 100
+              }}>
+                <button
+                  onClick={() => { setShowCreateProject(true); setShowNewDropdown(false); }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-sm)',
+                    padding: 'var(--space-sm) var(--space-md)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.875rem'
+                  }}
+                >
+                  <Building2 size={16} />
+                  New Project
+                </button>
+                <button
+                  onClick={() => { setShowPraxisImport(true); setShowNewDropdown(false); }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-sm)',
+                    padding: 'var(--space-sm) var(--space-md)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.875rem'
+                  }}
+                >
+                  <FileUp size={16} />
+                  Import from Praxis
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ================================================================== */}
@@ -527,6 +721,246 @@ function VPDashboard() {
               <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Factories</div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ================================================================== */}
+      {/* SALES PIPELINE SUMMARY                                            */}
+      {/* ================================================================== */}
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1))',
+        borderRadius: 'var(--radius-lg)',
+        padding: '20px',
+        border: '1px solid rgba(59, 130, 246, 0.2)',
+        marginBottom: 'var(--space-lg)'
+      }}>
+        <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <FileText size={18} style={{ color: '#3b82f6' }} />
+          Sales Pipeline Overview
+          <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--text-tertiary)', marginLeft: '8px' }}>Read-Only</span>
+        </h3>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
+          {/* Pipeline Value */}
+          <div style={{
+            padding: '14px',
+            background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-color)',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#3b82f6' }}>
+              {formatCurrency(salesPipelineMetrics.pipelineValue)}
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginTop: '4px' }}>
+              Pipeline ({salesPipelineMetrics.pipelineCount})
+            </div>
+          </div>
+
+          {/* Weighted Pipeline */}
+          <div style={{
+            padding: '14px',
+            background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-color)',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#8b5cf6' }}>
+              {formatCurrency(salesPipelineMetrics.weightedPipelineValue)}
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginTop: '4px' }}>
+              Weighted Value
+            </div>
+          </div>
+
+          {/* Won Revenue */}
+          <div style={{
+            padding: '14px',
+            background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-color)',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#22c55e' }}>
+              {formatCurrency(salesPipelineMetrics.wonValue)}
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginTop: '4px' }}>
+              Won ({salesPipelineMetrics.wonCount})
+            </div>
+          </div>
+
+          {/* Win Rate */}
+          <div style={{
+            padding: '14px',
+            background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-color)',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+              {salesPipelineMetrics.winRate}%
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginTop: '4px' }}>
+              Win Rate
+            </div>
+          </div>
+
+          {/* PM Flagged */}
+          <div style={{
+            padding: '14px',
+            background: salesPipelineMetrics.pmFlaggedCount > 0 ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-md)',
+            border: salesPipelineMetrics.pmFlaggedCount > 0 ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid var(--border-color)',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: '700', color: salesPipelineMetrics.pmFlaggedCount > 0 ? '#8b5cf6' : 'var(--text-primary)' }}>
+              {salesPipelineMetrics.pmFlaggedCount}
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginTop: '4px' }}>
+              PM Flagged
+            </div>
+          </div>
+        </div>
+
+        {/* Forecast Section */}
+        <div style={{ marginTop: '16px', display: 'flex', gap: '12px' }}>
+          <div style={{ flex: 1, padding: '12px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Next 30d</span>
+              <span style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)' }}>{formatCurrency(salesPipelineMetrics.forecast.next30)}</span>
+            </div>
+          </div>
+          <div style={{ flex: 1, padding: '12px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Next 60d</span>
+              <span style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)' }}>{formatCurrency(salesPipelineMetrics.forecast.next60)}</span>
+            </div>
+          </div>
+          <div style={{ flex: 1, padding: '12px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Next 90d</span>
+              <span style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)' }}>{formatCurrency(salesPipelineMetrics.forecast.next90)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ================================================================== */}
+      {/* PM FLAGGED & RECENTLY CONVERTED ROW                               */}
+      {/* ================================================================== */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '16px',
+        marginBottom: 'var(--space-lg)'
+      }}>
+        {/* PM Flagged Quotes */}
+        <div style={{
+          background: salesPipelineMetrics.pmFlaggedCount > 0 ? 'rgba(139, 92, 246, 0.1)' : 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '20px',
+          border: salesPipelineMetrics.pmFlaggedCount > 0 ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid var(--border-color)'
+        }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: '700', color: salesPipelineMetrics.pmFlaggedCount > 0 ? '#8b5cf6' : 'var(--text-primary)', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Flag size={18} style={{ color: '#8b5cf6' }} />
+            Needs PM Attention ({salesPipelineMetrics.pmFlaggedCount})
+          </h3>
+
+          {salesPipelineMetrics.pmFlaggedQuotes.length === 0 ? (
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>No quotes flagged for PM</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {salesPipelineMetrics.pmFlaggedQuotes.slice(0, 5).map(quote => (
+                <div
+                  key={quote.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    padding: '12px',
+                    background: 'var(--bg-secondary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)'
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                      {quote.project_name || quote.quote_number}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                      {quote.dealer?.name || quote.customer?.company_name || 'Unknown'}
+                    </div>
+                    {quote.pm_flagged_reason && (
+                      <div style={{ fontSize: '0.75rem', color: '#8b5cf6', marginTop: '4px', fontStyle: 'italic' }}>
+                        "{quote.pm_flagged_reason}"
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: '700', color: 'var(--sunbelt-orange)', fontSize: '0.9rem' }}>
+                      {formatCurrency(quote.total_price)}
+                    </div>
+                    {quote.pm_flagged_at && (
+                      <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                        {Math.floor((new Date() - new Date(quote.pm_flagged_at)) / (1000 * 60 * 60 * 24))}d ago
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Recently Converted */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '20px',
+          border: '1px solid var(--border-color)'
+        }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ArrowRight size={18} style={{ color: '#10b981' }} />
+            Recently Converted (30 days)
+          </h3>
+
+          {salesPipelineMetrics.recentlyConverted.length === 0 ? (
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>No quotes converted recently</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {salesPipelineMetrics.recentlyConverted.slice(0, 5).map(quote => (
+                <div
+                  key={quote.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    padding: '12px',
+                    background: 'var(--bg-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)'
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                      {quote.project?.project_number || 'Project'}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                      From: {quote.quote_number || 'Quote'}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: '600', color: '#10b981', fontSize: '0.875rem' }}>
+                      {formatCurrency(quote.project?.contract_value || quote.total_price)}
+                    </div>
+                    <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                      {quote.daysAgo === 0 ? 'Today' : `${quote.daysAgo}d ago`}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -747,6 +1181,57 @@ function VPDashboard() {
           })}
         </div>
       </div>
+
+      {/* ================================================================== */}
+      {/* MODALS                                                            */}
+      {/* ================================================================== */}
+      {showCreateProject && (
+        <CreateProjectModal
+          isOpen={showCreateProject}
+          onClose={() => setShowCreateProject(false)}
+          onSuccess={() => {
+            setShowCreateProject(false);
+            fetchAllData();
+            setToast({ message: 'Project created successfully', type: 'success' });
+            setTimeout(() => setToast(null), 3000);
+          }}
+        />
+      )}
+
+      {showPraxisImport && (
+        <PraxisImportModal
+          isOpen={showPraxisImport}
+          onClose={() => setShowPraxisImport(false)}
+          onSuccess={(importedProjects) => {
+            setShowPraxisImport(false);
+            fetchAllData();
+            const count = Array.isArray(importedProjects) ? importedProjects.length : 1;
+            setToast({ message: `${count} project(s) imported from Praxis`, type: 'success' });
+            setTimeout(() => setToast(null), 3000);
+          }}
+        />
+      )}
+
+      {/* ================================================================== */}
+      {/* TOAST                                                             */}
+      {/* ================================================================== */}
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          padding: '12px 20px',
+          background: toast.type === 'error' ? 'var(--danger)' : 'var(--success)',
+          color: 'white',
+          borderRadius: 'var(--radius-md)',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          zIndex: 1000,
+          fontWeight: '500',
+          fontSize: '0.875rem'
+        }}>
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }

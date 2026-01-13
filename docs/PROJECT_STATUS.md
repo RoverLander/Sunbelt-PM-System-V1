@@ -1,8 +1,8 @@
 # Project Status
 
-**Last Updated:** January 12, 2026
-**Version:** 1.0.0
-**Status:** Production Ready (Beta) + Factory Map In Development
+**Last Updated:** January 13, 2026
+**Version:** 1.1.0
+**Status:** Production Ready (Beta) + Praxis Integration In Progress
 
 ---
 
@@ -101,14 +101,21 @@ The Sunbelt PM System is a comprehensive project management platform built for S
   - Total projects, revenue, task metrics
   - Factory breakdown charts
   - Overdue items highlighting
+  - **Praxis Enhanced:** Sales pipeline visibility, PM-flagged quotes, recently converted, weighted forecast
 - [x] **Director Dashboard** - Factory oversight
   - Factory-specific metrics
   - PM workload distribution
   - Project status breakdown
+  - **Praxis Enhanced:** Building type/specs in table, incoming projects (95%+ quotes), weighted workload toggle
 - [x] **PM Dashboard** - Project manager view
   - Personal task list
   - Project assignments
   - Upcoming deadlines
+  - **Praxis Enhanced:** Urgent delivery alerts, delivery timeline (30/60/90d), building type badges, difficulty ratings
+- [x] **Sales Dashboard** - Sales manager view
+  - Quote pipeline management
+  - Customer/dealer tracking
+  - **Praxis Enhanced:** Weighted pipeline, visual funnel, quote aging, PM flagging, building type analytics
 - [x] **PC Dashboard** - Plant controller view
   - Factory-specific projects
   - Financial metrics
@@ -139,7 +146,145 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ## Recent Updates (January 2026)
 
-### January 13, 2026
+### January 13, 2026 (Praxis Integration - In Progress)
+
+- **Workflow Canvas Visualization - Complete**
+  - Implemented React Flow (@xyflow/react) based workflow canvas
+  - Created custom StationNode component with status animations (pulse, glow)
+  - Created custom PulsingEdge component with animated connectors
+  - Added useWorkflowGraph hook for Supabase data integration
+  - WorkflowCanvas component with:
+    - Subway/Metro map style visualization
+    - Phase zones with color coding
+    - Progress indicator with percentage
+    - MiniMap and zoom controls
+    - Fullscreen mode
+    - Real-time updates (optional)
+  - Integrated into ProjectDetails with Canvas/List view toggle
+  - Files created:
+    - `src/components/workflow/components/StationNode.jsx`
+    - `src/components/workflow/components/PulsingEdge.jsx`
+    - `src/components/workflow/hooks/useWorkflowGraph.js`
+    - `src/components/workflow/visualizers/WorkflowCanvas.jsx`
+
+- **Sales Team Page - Complete**
+  - Created dedicated SalesTeamPage component for Sales Managers
+  - Shows team performance metrics, pipeline distribution, win rates
+  - Sortable by pipeline, active quotes, win rate, or stale quotes
+  - Team member cards with capacity indicators
+  - Updated App.jsx routing for /team -> SalesTeamPage
+  - Added compact team overview to Sales Dashboard
+
+- **Calendar & Dashboard Role Filtering - Complete**
+  - Added PM-specific calendar filtering (only shows items from assigned projects)
+  - PMs now see only projects where they are owner_id, primary_pm_id, or backup_pm_id
+  - Sales Managers see only items from their factory's projects
+  - Sales Reps see only items from projects where they have assigned quotes
+  - Fixed Team section navigation for Sales Dashboard - now shows empty state when no team members exist
+
+- **Praxis Integration - Phase 1 Complete**
+  - Analyzed Sunbelt Sales & Praxis Training Materials folder
+  - Created comprehensive analysis document: `docs/PRAXIS_INTEGRATION_ANALYSIS.md`
+  - Designed database schema for Praxis data integration
+  - Documented 8-phase project lifecycle from Praxis workflow
+
+- **Database Schema Migration Applied**
+  - Migration: `supabase/migrations/20260113_praxis_integration.sql`
+  - **New Tables Created:**
+    - `dealers` - Praxis dealer/customer tracking (PMSI, MMG, US MOD, United Rentals seeded)
+    - `project_documents_checklist` - Order processing document tracking
+    - `praxis_import_log` - Import audit trail
+  - **Projects Table Extended (~40 new columns):**
+    - Praxis identification (quote_number, serial_number)
+    - Building specs (dimensions, stories, modules)
+    - Cost breakdown (material, markup, engineering, approvals)
+    - Compliance (climate_zone, loads, occupancy, WUI)
+    - Dealer reference (dealer_id FK, branch, contact)
+    - Schedule (promised_delivery, drawings_due)
+    - Pipeline tracking (outlook_percentage, waiting_on)
+    - Approval dates (customer, state)
+  - RLS policies configured for all new tables
+
+- **Import Functionality Created**
+  - `src/utils/praxisImport.js` - CSV/Excel parsing, validation, field mapping
+  - `src/components/projects/PraxisImportModal.jsx` - Dual-mode import UI
+    - Manual Entry tab with collapsible form sections
+    - CSV Import tab with drag-and-drop, validation preview
+    - Template download (CSV and Excel formats)
+  - "Import from Praxis" button added to Projects page
+
+- **Field Consolidation Analysis (In Progress)**
+  - Identified conflicts between existing schema and Praxis fields:
+    - `delivery_date` vs `promised_delivery_date` → Standardize to Praxis naming
+    - `dealer` (text) vs `dealer_id` (FK) → Migrate to FK
+    - `client_name` vs `dealer_contact_name` → Standardize to Praxis naming
+    - `building_type` taxonomy → Use Praxis values (CUSTOM, FLEET/STOCK, GOVERNMENT, Business)
+    - `site_address` → Decompose to city/state/zip fields
+
+- **Architecture Decision: Separate Sales Quotes Table**
+  - Sales quotes will live in separate `sales_quotes` table (not projects)
+  - Quote statuses: Open Quote → Awaiting PO → PO Received → Convert to Project
+  - Sales can flag quotes for PM assistance (VP visibility)
+  - PMs only see projects, not sales pipeline quotes
+  - VP has full visibility across quotes and projects
+
+- **Sales Quote Praxis Integration - Complete**
+  - Migration: `supabase/migrations/20260113_sales_quotes_praxis_fields.sql`
+  - **sales_quotes Table Extended with Praxis Fields:**
+    - Praxis identification (praxis_quote_number, praxis_source_factory)
+    - Dealer reference (dealer_id FK, branch, contact)
+    - Building specs (type, dimensions, modules, stories)
+    - Compliance (climate_zone, occupancy, set_type, WUI)
+    - Pipeline tracking (outlook_percentage, waiting_on, difficulty_rating)
+    - PM flagging (pm_flagged, pm_flagged_at, pm_flagged_by, pm_flagged_reason)
+    - Conversion tracking (converted_to_project_id, converted_at, converted_by)
+  - `src/components/sales/PraxisQuoteImportModal.jsx` - Sales-specific import UI
+    - Manual Entry and CSV Import tabs
+    - Imports to sales_quotes table (not projects)
+    - PM flagging capability for sales assistance requests
+  - "Import Quote from Praxis" button added to Sales Dashboard
+
+- **Dashboard Enhancements - Complete**
+  - All role-based dashboards enhanced to leverage new Praxis data fields
+  - Reference: `docs/DASHBOARD_ENHANCEMENT_PLAN.md` for detailed specifications
+
+  - **Sales Dashboard Enhancements:**
+    - Updated STATUS_CONFIG with 9 Praxis-aligned statuses (draft, sent, negotiating, awaiting_po, po_received, won, lost, expired, converted)
+    - Added weighted pipeline metric (value × outlook_percentage)
+    - Added visual sales funnel (Open → Awaiting PO → PO Received → Converted)
+    - Added building type breakdown chart with filter
+    - Enhanced quote cards with Praxis fields (outlook%, waiting_on, difficulty_rating, sqft, modules, dealer)
+    - Added quote aging indicators (30-day scale: green 0-15d, yellow 16-25d, red 26-30+)
+    - Added PM flagging UI (badge, filter, dedicated section)
+    - Compact metrics bar layout for better real estate usage
+
+  - **VP Dashboard Enhancements:**
+    - Added Sales Pipeline Overview section (read-only visibility)
+    - Pipeline metrics: raw value, weighted value, won revenue, win rate
+    - PM-flagged quotes section ("Needs PM Attention")
+    - Recently Converted section (quotes → projects in last 30 days)
+    - Weighted pipeline forecast (next 30/60/90 days)
+
+  - **Director Dashboard Enhancements:**
+    - Enhanced project table with Praxis fields (building type, sqft, modules, promised delivery)
+    - Added "Incoming Projects" section (quotes at 95%+ outlook)
+    - PM Workload with toggle (Simple vs Weighted by difficulty rating)
+    - Workload bars with capacity indicators
+
+  - **PM Dashboard Enhancements:**
+    - Added Urgent Deliveries alert (projects with delivery in next 14 days)
+    - Added Delivery Timeline view with 30/60/90 day toggle
+    - Enhanced project table with building type column
+    - Added dealer info and promised delivery date display
+    - Timeline cards show difficulty rating (5-star visual)
+
+- **Phase 1 Complete:**
+  - [x] Add "Import from Praxis" button to PM, Director, VP dashboards ✅
+  - [x] Add "Import Quote from Praxis" button to Sales dashboard ✅
+  - [x] Create sales_quotes Praxis fields migration ✅
+  - [x] Dashboard enhancements for all roles ✅
+  - [ ] Update CreateProjectModal with Praxis field structure
+  - [ ] Create field consolidation migration
 
 - **PC/Plant Manager Factory Filtering - Complete Fix**
   - Fixed factory-based data filtering for Project Coordinator and Plant Manager roles

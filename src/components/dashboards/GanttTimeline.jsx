@@ -41,7 +41,9 @@ const ZOOM_LEVELS = {
   month: { label: 'Month', daysVisible: 30, dayWidth: 24 },
   quarter: { label: 'Quarter', daysVisible: 90, dayWidth: 8 },
   halfYear: { label: '6 Months', daysVisible: 180, dayWidth: 4 },
-  year: { label: 'Year', daysVisible: 365, dayWidth: 2 }
+  year: { label: 'Year', daysVisible: 365, dayWidth: 2 },
+  eighteenMonths: { label: '18 Months', daysVisible: 548, dayWidth: 1.5 },
+  twoYears: { label: '2 Years', daysVisible: 730, dayWidth: 1 }
 };
 
 const ROW_HEIGHT = 44;
@@ -495,13 +497,13 @@ function GanttTimeline({
             </span>
             <button
               onClick={handleZoomOut}
-              disabled={zoomLevel === 'year'}
+              disabled={zoomLevel === 'twoYears'}
               style={{
                 padding: '6px',
                 background: 'none',
                 border: 'none',
-                cursor: zoomLevel === 'year' ? 'not-allowed' : 'pointer',
-                opacity: zoomLevel === 'year' ? 0.3 : 1,
+                cursor: zoomLevel === 'twoYears' ? 'not-allowed' : 'pointer',
+                opacity: zoomLevel === 'twoYears' ? 0.3 : 1,
                 color: 'var(--text-secondary)'
               }}
             >
@@ -605,7 +607,33 @@ function GanttTimeline({
           style={{
             flex: 1,
             overflowX: 'auto',
-            overflowY: 'hidden'
+            overflowY: 'hidden',
+            scrollBehavior: 'smooth',
+            cursor: 'grab'
+          }}
+          onMouseDown={(e) => {
+            if (e.button !== 0) return;
+            const el = timelineRef.current;
+            if (!el) return;
+            el.style.cursor = 'grabbing';
+            el.style.scrollBehavior = 'auto';
+            const startX = e.pageX;
+            const startScroll = el.scrollLeft;
+
+            const onMouseMove = (moveEvent) => {
+              const dx = moveEvent.pageX - startX;
+              el.scrollLeft = startScroll - dx;
+            };
+
+            const onMouseUp = () => {
+              el.style.cursor = 'grab';
+              el.style.scrollBehavior = 'smooth';
+              window.removeEventListener('mousemove', onMouseMove);
+              window.removeEventListener('mouseup', onMouseUp);
+            };
+
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
           }}
         >
           <div style={{

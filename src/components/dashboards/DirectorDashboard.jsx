@@ -1,7 +1,12 @@
 // ============================================================================
-// DirectorDashboard Component - Responsive Version
+// DirectorDashboard Component - Responsive Version (Praxis Enhanced)
 // ============================================================================
 // Max-width container with responsive grids for all screen sizes
+//
+// PRAXIS ENHANCEMENTS:
+// - Praxis fields in project table (building type, sqft, modules, dealer)
+// - Weighted PM workload toggle (simple vs difficulty-weighted)
+// - Incoming Projects section (quotes at 95%+ outlook)
 // ============================================================================
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -25,7 +30,14 @@ import {
   Layers,
   RefreshCw,
   ChevronDown,
-  ExternalLink
+  ExternalLink,
+  FileUp,
+  Plus,
+  Package,
+  Star,
+  Truck,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -34,6 +46,8 @@ import GanttTimeline from './GanttTimeline';
 import RiskSettingsModal from './RiskSettingsModal';
 import TeamWorkloadView from './TeamWorkloadView';
 import RecentActivityFeed from './RecentActivityFeed';
+import CreateProjectModal from '../projects/CreateProjectModal';
+import PraxisImportModal from '../projects/PraxisImportModal';
 
 // ============================================================================
 // DEFAULT RISK SETTINGS
@@ -80,6 +94,26 @@ const getDaysOverdue = (dateString) => {
   return days !== null && days < 0 ? Math.abs(days) : 0;
 };
 
+const formatCurrency = (amount) => {
+  if (!amount) return '$0';
+  if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
+  if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
+  return `$${amount.toLocaleString()}`;
+};
+
+const formatSqft = (sqft) => {
+  if (!sqft) return '-';
+  return `${sqft.toLocaleString()} sqft`;
+};
+
+// Building type badge colors
+const BUILDING_TYPE_COLORS = {
+  'CUSTOM': '#f59e0b',
+  'FLEET/STOCK': '#3b82f6',
+  'GOVERNMENT': '#22c55e',
+  'Business': '#8b5cf6'
+};
+
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -97,13 +131,18 @@ function DirectorDashboard() {
   const [milestones, setMilestones] = useState([]);
   const [users, setUsers] = useState([]);
 
+  const [quotes, setQuotes] = useState([]); // Sales quotes for incoming projects
   const [selectedProject, setSelectedProject] = useState(null);
   const [showRiskSettings, setShowRiskSettings] = useState(false);
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [showPraxisImport, setShowPraxisImport] = useState(false);
+  const [showNewDropdown, setShowNewDropdown] = useState(false);
   const [filterPM, setFilterPM] = useState('all');
   const [filterFactory, setFilterFactory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('active');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedSection, setExpandedSection] = useState('timeline');
+  const [useWeightedWorkload, setUseWeightedWorkload] = useState(false); // Toggle for workload calculation
   const [toast, setToast] = useState(null);
 
   const [riskSettings, setRiskSettings] = useState(() => {
@@ -121,13 +160,18 @@ function DirectorDashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [projectsRes, tasksRes, rfisRes, submittalsRes, milestonesRes, usersRes] = await Promise.all([
+      const [projectsRes, tasksRes, rfisRes, submittalsRes, milestonesRes, usersRes, quotesRes] = await Promise.all([
         supabase.from('projects').select('*').order('updated_at', { ascending: false }),
         supabase.from('tasks').select('*, project:project_id(id, project_number), assignee:assignee_id(name)'),
         supabase.from('rfis').select('*, project:project_id(id, project_number)'),
         supabase.from('submittals').select('*, project:project_id(id, project_number)'),
         supabase.from('milestones').select('*, project:project_id(id, project_number)'),
-        supabase.from('users').select('*').eq('is_active', true)
+        supabase.from('users').select('*').eq('is_active', true),
+        // Fetch high-probability quotes for "Incoming Projects" section
+        supabase.from('sales_quotes').select(`
+          *,
+          dealer:dealer_id(id, code, name, branch_name)
+        `).eq('is_latest_version', true).gte('outlook_percentage', 95).order('expected_close_timeframe', { ascending: true })
       ]);
 
       setProjects(projectsRes.data || []);
@@ -136,6 +180,7 @@ function DirectorDashboard() {
       setSubmittals(submittalsRes.data || []);
       setMilestones(milestonesRes.data || []);
       setUsers(usersRes.data || []);
+      setQuotes(quotesRes.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -259,6 +304,62 @@ function DirectorDashboard() {
 
     return filtered;
   }, [portfolioMetrics.projectsWithHealth, filterStatus, filterPM, filterFactory, searchTerm]);
+
+  // ==========================================================================
+  // INCOMING PROJECTS (High-Probability Quotes)
+  // ==========================================================================
+  const incomingProjects = useMemo(() => {
+    // Only show unconverted quotes at 95%+ outlook
+    return quotes.filter(q =>
+      !q.converted_to_project_id &&
+      q.outlook_percentage >= 95 &&
+      !['won', 'lost', 'expired', 'converted'].includes(q.status)
+    ).sort((a, b) => (b.outlook_percentage || 0) - (a.outlook_percentage || 0));
+  }, [quotes]);
+
+  // ==========================================================================
+  // WEIGHTED PM WORKLOAD CALCULATION
+  // ==========================================================================
+  const pmWorkloadStats = useMemo(() => {
+    const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
+    // Roles: 'PM', 'Director' (not 'Project Manager')
+    const pms = users.filter(u => ['PM', 'Director'].includes(u.role));
+
+    return pms.map(pm => {
+      const pmProjects = projects.filter(p =>
+        p.owner_id === pm.id && activeStatuses.includes(p.status)
+      );
+
+      // Simple count
+      const projectCount = pmProjects.length;
+
+      // Total contract value
+      const totalValue = pmProjects.reduce((sum, p) => sum + (p.contract_value || 0), 0);
+
+      // Weighted by difficulty (1-5, default to 3)
+      const weightedCount = pmProjects.reduce((sum, p) => {
+        const difficulty = p.difficulty_rating || 3;
+        return sum + difficulty;
+      }, 0);
+
+      // Average difficulty
+      const avgDifficulty = pmProjects.length > 0
+        ? (weightedCount / pmProjects.length).toFixed(1)
+        : 0;
+
+      return {
+        ...pm,
+        projectCount,
+        totalValue,
+        weightedCount,
+        avgDifficulty,
+        projects: pmProjects
+      };
+    }).sort((a, b) => useWeightedWorkload
+      ? b.weightedCount - a.weightedCount
+      : b.projectCount - a.projectCount
+    );
+  }, [users, projects, useWeightedWorkload]);
 
   // ==========================================================================
   // HELPERS
@@ -386,6 +487,82 @@ function DirectorDashboard() {
             <Settings size={14} />
             Settings
           </button>
+
+          {/* New Dropdown */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowNewDropdown(!showNewDropdown)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 16px',
+                background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '0.8125rem'
+              }}
+            >
+              <Plus size={14} />
+              New
+              <ChevronDown size={12} />
+            </button>
+
+            {showNewDropdown && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '4px',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-lg)',
+                minWidth: '180px',
+                zIndex: 100
+              }}>
+                <button
+                  onClick={() => { setShowCreateProject(true); setShowNewDropdown(false); }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-sm)',
+                    padding: 'var(--space-sm) var(--space-md)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.875rem'
+                  }}
+                >
+                  <Building2 size={16} />
+                  New Project
+                </button>
+                <button
+                  onClick={() => { setShowPraxisImport(true); setShowNewDropdown(false); }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-sm)',
+                    padding: 'var(--space-sm) var(--space-md)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.875rem'
+                  }}
+                >
+                  <FileUp size={16} />
+                  Import from Praxis
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -597,9 +774,9 @@ function DirectorDashboard() {
             <thead>
               <tr style={{ background: 'var(--bg-tertiary)' }}>
                 <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: '600', color: 'var(--text-secondary)' }}>Project</th>
-                <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: '600', color: 'var(--text-secondary)' }}>Status</th>
+                <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: '600', color: 'var(--text-secondary)' }}>Type</th>
+                <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: '600', color: 'var(--text-secondary)' }}>Specs</th>
                 <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: '600', color: 'var(--text-secondary)' }}>Health</th>
-                <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: '600', color: 'var(--text-secondary)' }}>Open</th>
                 <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: '600', color: 'var(--text-secondary)' }}>Overdue</th>
                 <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: '600', color: 'var(--text-secondary)' }}>Delivery</th>
                 <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: '600', color: 'var(--text-secondary)' }}></th>
@@ -607,7 +784,7 @@ function DirectorDashboard() {
             </thead>
             <tbody>
               {filteredProjects.slice(0, 15).map(project => {
-                const openTasks = tasks.filter(t => t.project_id === project.id && !['Completed', 'Cancelled'].includes(t.status)).length;
+                const buildingTypeColor = BUILDING_TYPE_COLORS[project.building_type] || 'var(--text-tertiary)';
                 return (
                   <tr
                     key={project.id}
@@ -619,11 +796,41 @@ function DirectorDashboard() {
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{project.project_number}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{project.name}</div>
+                      {project.dealer_name && (
+                        <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                          {project.dealer_name}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '0.6875rem', fontWeight: '600', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-                        {project.status}
-                      </span>
+                      {project.building_type ? (
+                        <span style={{
+                          padding: '3px 8px',
+                          borderRadius: '4px',
+                          fontSize: '0.6875rem',
+                          fontWeight: '600',
+                          background: `${buildingTypeColor}20`,
+                          color: buildingTypeColor
+                        }}>
+                          {project.building_type}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>-</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px 16px', fontSize: '0.75rem' }}>
+                      {project.square_footage || project.module_count ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          {project.square_footage && (
+                            <span style={{ color: 'var(--text-secondary)' }}>{formatSqft(project.square_footage)}</span>
+                          )}
+                          {project.module_count && (
+                            <span style={{ color: 'var(--text-tertiary)' }}>{project.module_count} module{project.module_count > 1 ? 's' : ''}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text-tertiary)' }}>-</span>
+                      )}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                       <span style={{
@@ -634,11 +841,17 @@ function DirectorDashboard() {
                         background: getHealthColor(project.healthStatus)
                       }} />
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center', color: 'var(--text-primary)' }}>{openTasks}</td>
                     <td style={{ padding: '12px 16px', textAlign: 'center', color: project.totalOverdue > 0 ? '#ef4444' : 'var(--text-tertiary)', fontWeight: project.totalOverdue > 0 ? '600' : '400' }}>
                       {project.totalOverdue}
                     </td>
-                    <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>{formatShortDate(project.delivery_date)}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ color: 'var(--text-secondary)' }}>{formatShortDate(project.delivery_date)}</div>
+                      {project.promised_delivery_date && project.promised_delivery_date !== project.delivery_date && (
+                        <div style={{ fontSize: '0.6875rem', color: '#f59e0b' }}>
+                          Promised: {formatShortDate(project.promised_delivery_date)}
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: '12px 16px' }}>
                       <ChevronRight size={16} style={{ color: 'var(--text-tertiary)' }} />
                     </td>
@@ -656,16 +869,204 @@ function DirectorDashboard() {
         )}
       </div>
 
-      {/* TEAM WORKLOAD */}
-      <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', padding: '16px', marginBottom: 'var(--space-lg)' }}>
-        <TeamWorkloadView
-          users={users}
-          projects={projects}
-          tasks={tasks}
-          rfis={rfis}
-          submittals={submittals}
-          onProjectClick={(project) => setSelectedProject(project)}
-        />
+      {/* INCOMING PROJECTS & TEAM WORKLOAD ROW */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '16px',
+        marginBottom: 'var(--space-lg)'
+      }}>
+        {/* Incoming Projects (95%+ Outlook) */}
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(34, 197, 94, 0.1))',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid rgba(16, 185, 129, 0.2)',
+          padding: '16px'
+        }}>
+          <h3 style={{
+            fontSize: '1rem',
+            fontWeight: '700',
+            color: 'var(--text-primary)',
+            margin: '0 0 16px 0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <Truck size={18} style={{ color: '#10b981' }} />
+            Incoming Projects ({incomingProjects.length})
+            <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--text-tertiary)', marginLeft: '4px' }}>95%+ outlook</span>
+          </h3>
+
+          {incomingProjects.length === 0 ? (
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>No high-probability quotes in pipeline</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {incomingProjects.slice(0, 5).map(quote => {
+                const buildingTypeColor = BUILDING_TYPE_COLORS[quote.building_type] || 'var(--text-tertiary)';
+                return (
+                  <div
+                    key={quote.id}
+                    style={{
+                      padding: '12px',
+                      background: 'var(--bg-secondary)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-color)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                      <div>
+                        <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                          {quote.project_name || quote.quote_number}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                          {quote.dealer?.name || 'Unknown Dealer'}
+                        </div>
+                      </div>
+                      <div style={{
+                        padding: '3px 8px',
+                        borderRadius: '12px',
+                        fontSize: '0.6875rem',
+                        fontWeight: '700',
+                        background: quote.outlook_percentage === 100 ? 'rgba(34, 197, 94, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                        color: quote.outlook_percentage === 100 ? '#22c55e' : '#f59e0b'
+                      }}>
+                        {quote.outlook_percentage}%
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      {quote.building_type && (
+                        <span style={{
+                          padding: '2px 6px',
+                          borderRadius: '3px',
+                          fontSize: '0.625rem',
+                          fontWeight: '600',
+                          background: `${buildingTypeColor}20`,
+                          color: buildingTypeColor
+                        }}>
+                          {quote.building_type}
+                        </span>
+                      )}
+                      {quote.square_footage && (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>
+                          {formatSqft(quote.square_footage)}
+                        </span>
+                      )}
+                      <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--sunbelt-orange)', marginLeft: 'auto' }}>
+                        {formatCurrency(quote.total_price)}
+                      </span>
+                    </div>
+                    {quote.expected_close_timeframe && (
+                      <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: '6px' }}>
+                        Expected: {quote.expected_close_timeframe}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* PM Workload with Toggle */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--border-color)',
+          padding: '16px'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '16px'
+          }}>
+            <h3 style={{
+              fontSize: '1rem',
+              fontWeight: '700',
+              color: 'var(--text-primary)',
+              margin: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <Users size={18} style={{ color: 'var(--sunbelt-orange)' }} />
+              PM Workload
+            </h3>
+            <button
+              onClick={() => setUseWeightedWorkload(!useWeightedWorkload)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 10px',
+                background: useWeightedWorkload ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-tertiary)',
+                border: useWeightedWorkload ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid var(--border-color)',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+                color: useWeightedWorkload ? '#8b5cf6' : 'var(--text-secondary)'
+              }}
+            >
+              {useWeightedWorkload ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+              {useWeightedWorkload ? 'Weighted' : 'Simple'}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {pmWorkloadStats.slice(0, 6).map(pm => {
+              const maxWorkload = Math.max(...pmWorkloadStats.map(p => useWeightedWorkload ? p.weightedCount : p.projectCount), 1);
+              const currentWorkload = useWeightedWorkload ? pm.weightedCount : pm.projectCount;
+              const widthPercent = (currentWorkload / maxWorkload) * 100;
+
+              return (
+                <div
+                  key={pm.id}
+                  style={{
+                    padding: '10px 12px',
+                    background: 'var(--bg-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.8125rem' }}>
+                      {pm.name}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        {pm.projectCount} project{pm.projectCount !== 1 ? 's' : ''}
+                      </span>
+                      {useWeightedWorkload && (
+                        <span style={{
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontSize: '0.6875rem',
+                          fontWeight: '600',
+                          background: 'rgba(139, 92, 246, 0.15)',
+                          color: '#8b5cf6'
+                        }}>
+                          {pm.avgDifficulty}★ avg
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ background: 'var(--bg-tertiary)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${widthPercent}%`,
+                      height: '100%',
+                      background: widthPercent > 80 ? '#ef4444' : widthPercent > 60 ? '#f59e0b' : '#22c55e',
+                      borderRadius: '4px',
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
+                  <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                    {formatCurrency(pm.totalValue)} total value
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* RISK SETTINGS MODAL */}
@@ -675,6 +1076,35 @@ function DirectorDashboard() {
           onClose={() => setShowRiskSettings(false)}
           settings={riskSettings}
           onSave={handleRiskSettingsSave}
+        />
+      )}
+
+      {/* CREATE PROJECT MODAL */}
+      {showCreateProject && (
+        <CreateProjectModal
+          isOpen={showCreateProject}
+          onClose={() => setShowCreateProject(false)}
+          onSuccess={() => {
+            setShowCreateProject(false);
+            fetchDashboardData();
+            setToast({ message: 'Project created successfully', type: 'success' });
+            setTimeout(() => setToast(null), 3000);
+          }}
+        />
+      )}
+
+      {/* PRAXIS IMPORT MODAL */}
+      {showPraxisImport && (
+        <PraxisImportModal
+          isOpen={showPraxisImport}
+          onClose={() => setShowPraxisImport(false)}
+          onSuccess={(importedProjects) => {
+            setShowPraxisImport(false);
+            fetchDashboardData();
+            const count = Array.isArray(importedProjects) ? importedProjects.length : 1;
+            setToast({ message: `${count} project(s) imported from Praxis`, type: 'success' });
+            setTimeout(() => setToast(null), 3000);
+          }}
         />
       )}
 

@@ -49,8 +49,9 @@ function TeamWorkloadView({
   const workloadData = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
 
+    // Roles: 'PM', 'Director' (not 'Project Manager')
     return users
-      .filter(u => u.role === 'Project Manager' || u.role === 'Director' || u.role === 'Admin')
+      .filter(u => u.role === 'PM' || u.role === 'Director')
       .map(user => {
         // ===== PROJECTS =====
         const userProjects = projects.filter(p => p.pm_id === user.id);
