@@ -650,6 +650,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
           rfi={editRFI}
           projectName={project.name}
           projectNumber={project.project_number}
+          factoryCode={project.factory}
           onSuccess={() => {
             setEditRFI(null);
             fetchProjectData();

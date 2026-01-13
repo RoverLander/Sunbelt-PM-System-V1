@@ -22,7 +22,8 @@ import PMDashboard from './components/dashboards/PMDashboard';
 import DirectorDashboard from './components/dashboards/DirectorDashboard';
 import VPDashboard from './components/dashboards/VPDashboard';
 import PCDashboard from './components/dashboards/PCDashboard';
-import { ITDashboard } from './components/it';
+import { ITDashboard, UserManagement, ErrorTracking, AnnouncementManager, FeatureFlagManager, SessionManager } from './components/it';
+import AnnouncementBanner from './components/common/AnnouncementBanner';
 
 // Pages
 import CalendarPage from './components/calendar/CalendarPage';
@@ -41,6 +42,9 @@ import ProjectDetails from './components/projects/ProjectDetails';
 
 // Reports
 import { ExecutiveReports } from './components/reports';
+
+// Sales
+import { SalesDashboard } from './components/sales';
 
 import { supabase } from './utils/supabaseClient';
 import './App.css';
@@ -110,8 +114,8 @@ function AppContent() {
             localStorage.setItem('dashboardType', 'director');
           }
         }
-        // Force IT to IT dashboard
-        else if (role === 'it') {
+        // Force IT and IT_Manager to IT dashboard
+        else if (role === 'it' || role === 'it_manager') {
           setDashboardType('it');
           localStorage.setItem('dashboardType', 'it');
         }
@@ -128,6 +132,11 @@ function AppContent() {
         else if (role === 'pc' || role === 'project coordinator') {
           setDashboardType('pc');
           localStorage.setItem('dashboardType', 'pc');
+        }
+        // Sales users
+        else if (role === 'sales_rep' || role === 'sales_manager') {
+          setDashboardType('sales');
+          localStorage.setItem('dashboardType', 'sales');
         }
       }
     } catch (error) {
@@ -358,16 +367,17 @@ function AppContent() {
         case 'dashboard':
           return <ITDashboard />;
         case 'users':
-          // Render IT Dashboard with User Management tab active
-          return <ITDashboard initialTab="users" />;
-        case 'projects':
-          return <ProjectsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
-        case 'tasks':
-          return <TasksPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
-        case 'rfis':
-          return <RFIsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
-        case 'submittals':
-          return <SubmittalsPage isDirectorView={true} onNavigateToProject={handleNavigateToProject} />;
+          return <UserManagement />;
+        case 'error-tracking':
+          return <ErrorTracking />;
+        case 'announcements':
+          return <AnnouncementManager />;
+        case 'feature-flags':
+          return <FeatureFlagManager />;
+        case 'sessions':
+          return <SessionManager />;
+        // Note: IT users don't have access to Projects, Tasks, RFIs, Submittals
+        // They manage the system, not construction projects
         default:
           return <ITDashboard />;
       }
@@ -386,6 +396,22 @@ function AppContent() {
           return <TasksPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
         default:
           return <PCDashboard onNavigateToProject={handleNavigateToProject} />;
+      }
+    }
+
+    // ========================================================================
+    // Sales-specific views
+    // ========================================================================
+    if (dashboardType === 'sales') {
+      switch (currentView) {
+        case 'dashboard':
+          return <SalesDashboard onNavigateToProject={handleNavigateToProject} />;
+        case 'projects':
+          return <ProjectsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
+        case 'calendar':
+          return <CalendarPage onNavigateToProject={handleNavigateToProject} />;
+        default:
+          return <SalesDashboard onNavigateToProject={handleNavigateToProject} />;
       }
     }
 
@@ -469,6 +495,10 @@ function AppContent() {
         background: 'var(--bg-primary)',
         overflow: 'auto'
       }}>
+        {/* System-wide announcements */}
+        <div style={{ padding: 'var(--space-md) var(--space-xl) 0' }}>
+          <AnnouncementBanner />
+        </div>
         <div style={{ padding: 'var(--space-xl)' }}>
           {renderContent()}
         </div>

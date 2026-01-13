@@ -122,36 +122,6 @@ const INTEGRITY_CHECKS = [
     }
   },
   {
-    id: 'overdue_tasks',
-    name: 'Overdue Tasks',
-    description: 'Open tasks past their due date',
-    severity: 'info',
-    query: async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const { count } = await supabase
-        .from('tasks')
-        .select('id', { count: 'exact', head: true })
-        .lt('due_date', today)
-        .not('status', 'in', '("Completed","Cancelled")');
-      return count || 0;
-    }
-  },
-  {
-    id: 'overdue_rfis',
-    name: 'Overdue RFIs',
-    description: 'Open RFIs past their due date',
-    severity: 'info',
-    query: async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const { count } = await supabase
-        .from('rfis')
-        .select('id', { count: 'exact', head: true })
-        .lt('due_date', today)
-        .not('status', 'in', '("Answered","Closed")');
-      return count || 0;
-    }
-  },
-  {
     id: 'orphan_rfis',
     name: 'Orphan RFIs',
     description: 'RFIs without valid project reference',

@@ -429,9 +429,9 @@ export function calculateActivityTrends(projects, tasks, rfis, submittals, days 
 export function calculateSecurityMetrics(users, sessionInfo = {}) {
   // Role analysis for security
   const adminUsers = users.filter(u => u.role === 'Admin' && u.is_active !== false);
-  const itUsers = users.filter(u => u.role === 'IT' && u.is_active !== false);
+  const itUsers = users.filter(u => (u.role === 'IT' || u.role === 'IT_Manager') && u.is_active !== false);
   const highPrivilegeUsers = users.filter(u =>
-    ['Admin', 'VP', 'Director', 'IT'].includes(u.role) && u.is_active !== false
+    ['Admin', 'VP', 'Director', 'IT', 'IT_Manager'].includes(u.role) && u.is_active !== false
   );
 
   // Users without recent activity (potential security risk)

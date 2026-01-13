@@ -58,6 +58,7 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 - [x] Internal/External recipient support
 - [x] Email draft generation
 - [x] **Excel export with professional formatting**
+- [x] **PDF export with factory logo branding**
 
 ### Submittal Management
 - [x] Submittal creation and tracking
@@ -138,7 +139,118 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ## Recent Updates (January 2026)
 
+### January 13, 2026
+
+- **PC/Plant Manager Factory Filtering - Complete Fix**
+  - Fixed factory-based data filtering for Project Coordinator and Plant Manager roles
+  - Issue: PC/Plant Manager users were seeing all projects instead of only their assigned factory's projects
+  - Root cause: Code was filtering by `factory_id` (UUID) but projects table uses `factory` (code string like 'PMI', 'ATL', etc.)
+
+  - **Files Fixed:**
+    - `src/components/dashboards/PCDashboard.jsx` - Fixed project query to filter by factory code
+    - `src/components/layout/Sidebar.jsx` - Fixed PC stats to filter by factory code
+    - `src/components/calendar/CalendarPage.jsx` - Already had correct filtering (uses embedded project joins)
+
+  - **Database Fix Applied:**
+    - Updated PC user (Juanita Earnest) to have correct `factory_id` assignment to PMI factory
+    - Added factory assignment dropdown to EditUserModal for IT admins
+
+  - **How It Works Now:**
+    1. User's `factory_id` links to `factories` table
+    2. System fetches factory `code` via join (e.g., 'PMI')
+    3. Projects filtered by `project.factory === factoryCode`
+    4. All views (Dashboard, Sidebar, Calendar) now show consistent factory-filtered data
+
+- **Calendar "Unknown Project" Bug - Fixed (Previous Session)**
+  - Fixed RLS policy allowing PC users to read projects via embedded joins
+  - Calendar items now show correct project names instead of "Unknown Project"
+
 ### January 12, 2026
+
+- **IT Dashboard Enhancement (Phase 1 & 2)**
+  - **Phase 1: IT-Specific Navigation**
+    - Restricted IT users to IT-specific sidebar (Dashboard, User Management, Error Tracking, Factory Map)
+    - Removed Projects, Tasks, RFIs, Submittals from IT view (not relevant to IT workflow)
+    - IT users now only access IT Dashboard (not VP/Director/PC dashboards)
+
+  - **Phase 2: Error Tracking System**
+    - Created global `ErrorBoundary` component wrapping the entire app
+    - Auto-captures JavaScript errors and reports to database
+    - Shows friendly fallback UI with "Try Again", "Go Home", and "Report Issue" options
+    - Users can add context when reporting errors
+    - Built Error Tracking page with List and Kanban views
+    - Stats dashboard showing Total, New, In Progress, Resolved, Critical counts
+    - Ticket detail modal with assignment, status workflow, and comments
+    - Status workflow: New → Investigating → In Progress → Resolved → Closed
+    - Priority levels: Critical, High, Medium, Low
+    - Auto-generated ticket numbers (ERR-0001, ERR-0002, etc.)
+    - Database migration: `20260112_error_tracking_system.sql`
+    - New tables: `system_errors`, `error_tickets`, `error_ticket_comments`
+    - RLS policies restrict access to IT/Admin users only
+
+  - Files created/modified:
+    - `src/components/common/ErrorBoundary.jsx` (new)
+    - `src/components/it/ErrorTracking.jsx` (new)
+    - `src/components/layout/Sidebar.jsx` (modified)
+    - `src/App.jsx` (modified)
+    - `src/main.jsx` (modified)
+    - `supabase/migrations/20260112_error_tracking_system.sql` (new)
+
+  - **Phase 3: IT_Manager Role Distinction**
+    - Added `IT_Manager` role separate from regular `IT` staff
+    - IT_Manager can assign tickets to IT staff members
+    - Regular IT staff can only change status on tickets assigned to them
+    - Added "My Tickets / All Tickets" toggle filter
+    - Regular IT defaults to "My Tickets" view
+    - Updated role arrays in CreateUserModal, EditUserModal, UserManagement
+    - Added IT_Manager role color (cyan/teal)
+    - Updated App.jsx and Sidebar.jsx for IT_Manager routing
+    - Updated itAnalytics.js security metrics to include IT_Manager
+
+  - **Phase 4: IT Admin Tools**
+    - **Announcement System**
+      - System-wide announcements displayed at top of app
+      - Types: info, warning, critical, maintenance
+      - Target by role and/or factory
+      - Schedule start/expiration dates
+      - Users can dismiss non-critical announcements
+      - Database: `announcements`, `announcement_dismissals`
+      - Migration: `20260112_announcement_system.sql`
+      - Components: `AnnouncementBanner.jsx`, `AnnouncementManager.jsx`
+
+    - **Feature Flags System**
+      - Runtime feature toggles without deploying code
+      - Categories: feature, ui, experimental, maintenance
+      - Target by role, factory, or specific users
+      - Audit log of all flag changes
+      - Real-time updates via Supabase subscriptions
+      - Context/hook: `FeatureFlagContext.jsx`
+      - Database: `feature_flags`, `feature_flag_audit`
+      - Migration: `20260112_feature_flags_system.sql`
+      - Component: `FeatureFlagManager.jsx`
+
+    - **Session Management**
+      - View all active user sessions
+      - See user, device, location, IP info
+      - Activity status (Active, Idle, Away, Inactive)
+      - Force logout individual sessions
+      - Auto-refresh every 30 seconds
+      - Database: `user_sessions`
+      - Migration: `20260112_session_management.sql`
+      - Component: `SessionManager.jsx`
+
+  - IT Sidebar now includes:
+    - Dashboard, User Management, Error Tracking, Announcements, Feature Flags, Sessions, Factory Map
+
+- **RFI PDF Export: Factory Logo Integration**
+  - Added factory logos to RFI PDF exports
+  - Logo appears in PDF header (left side, next to Sunbelt Modular branding)
+  - Created factory-to-logo mapping supporting all factories (NWBS, BRIT, SSI, AMTEX, etc.)
+  - Logo is automatically loaded based on project's assigned factory
+  - Uses base64 encoding for reliable browser print embedding
+  - Updated EditRFIModal, ProjectDetails, and CalendarPage to pass factory info
+  - Files changed: `pdfUtils.js`, `EditRFIModal.jsx`, `ProjectDetails.jsx`, `CalendarPage.jsx`
+
 - **Factory Map: Architecture Pivot**
   - Identified React + PIXI.js integration issues (event handling, StrictMode conflicts)
   - Decided to pivot to standalone vanilla JavaScript + PIXI.js implementation
@@ -189,6 +301,22 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 | `workflow_stations` | Workflow station definitions |
 | `project_station_status` | Project progress through stations |
 | `project_logs` | Audit log of project changes |
+
+### IT/Error Tracking Tables
+| Table | Purpose |
+|-------|---------|
+| `system_errors` | Captures JavaScript errors from the application |
+| `error_tickets` | IT ticket system for tracking and resolving errors |
+| `error_ticket_comments` | Comments on error tickets for collaboration |
+
+### IT Admin Tables
+| Table | Purpose |
+|-------|---------|
+| `announcements` | System-wide announcements from IT |
+| `announcement_dismissals` | Tracks dismissed announcements per user |
+| `feature_flags` | Runtime feature toggles managed by IT |
+| `feature_flag_audit` | Audit log of feature flag changes |
+| `user_sessions` | Tracks user login sessions for security monitoring |
 
 ---
 

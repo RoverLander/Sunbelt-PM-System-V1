@@ -133,13 +133,14 @@ const downloadICS = (icsContent, filename) => {
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-function CalendarWeekView({ 
-  items = [], 
+function CalendarWeekView({
+  items = [],
   projects = [],
   onItemClick,
   onDateClick,
   onViewChange,
-  compact = false 
+  compact = false,
+  canEdit = true
 }) {
   // ==========================================================================
   // STATE
@@ -781,30 +782,32 @@ function CalendarWeekView({
               display: 'flex',
               gap: 'var(--space-sm)'
             }}>
-              <button
-                onClick={() => {
-                  onItemClick && onItemClick(selectedItem);
-                  closePopover();
-                }}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 'var(--space-xs)',
-                  padding: 'var(--space-sm)',
-                  background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius-md)',
-                  fontSize: '0.8125rem',
-                  fontWeight: '600',
-                  cursor: 'pointer'
-                }}
-              >
-                <Edit size={14} />
-                Edit
-              </button>
+              {canEdit && (
+                <button
+                  onClick={() => {
+                    onItemClick && onItemClick(selectedItem);
+                    closePopover();
+                  }}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 'var(--space-xs)',
+                    padding: 'var(--space-sm)',
+                    background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '0.8125rem',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Edit size={14} />
+                  Edit
+                </button>
+              )}
               <button
                 onClick={closePopover}
                 style={{

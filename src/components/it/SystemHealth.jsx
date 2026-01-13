@@ -213,37 +213,6 @@ function SystemHealth({ showToast }) {
         });
       }
 
-      // Check for overdue items
-      const today = new Date().toISOString().split('T')[0];
-
-      const { count: overdueTaskCount } = await supabase
-        .from('tasks')
-        .select('*', { count: 'exact', head: true })
-        .lt('due_date', today)
-        .not('status', 'in', '(Completed,Cancelled)');
-
-      if (overdueTaskCount > 0) {
-        issues.push({
-          type: 'info',
-          message: `${overdueTaskCount} overdue task(s)`,
-          table: 'tasks'
-        });
-      }
-
-      const { count: overdueRFICount } = await supabase
-        .from('rfis')
-        .select('*', { count: 'exact', head: true })
-        .lt('due_date', today)
-        .not('status', 'in', '(Closed,Answered)');
-
-      if (overdueRFICount > 0) {
-        issues.push({
-          type: 'info',
-          message: `${overdueRFICount} overdue RFI(s)`,
-          table: 'rfis'
-        });
-      }
-
     } catch (error) {
       console.error('Error running integrity checks:', error);
       issues.push({

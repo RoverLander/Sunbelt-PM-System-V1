@@ -811,17 +811,41 @@ export const buildCalendarItems = (projects, tasks, rfis, submittals, milestones
   const items = [];
   const projectColorMap = buildProjectColorMap(projects);
 
+  // Build project lookup map for fallback when join data is missing
+  const projectMap = {};
+  projects?.forEach(p => {
+    projectMap[p.id] = p;
+  });
+
+  // Helper to get project info with fallback to projects array
+  const getProjectInfo = (item) => {
+    // First try the joined project data
+    if (item.project?.name) {
+      return {
+        name: item.project.name,
+        number: item.project.project_number
+      };
+    }
+    // Fallback to projects lookup
+    const proj = projectMap[item.project_id];
+    return {
+      name: proj?.name || 'Unknown Project',
+      number: proj?.project_number
+    };
+  };
+
   // Add tasks
   tasks?.forEach(task => {
     if (task.due_date) {
+      const projectInfo = getProjectInfo(task);
       items.push({
         id: `task-${task.id}`,
         type: CALENDAR_ITEM_TYPES.TASK,
         title: task.title,
         date: task.due_date,
         projectId: task.project_id,
-        projectName: task.project?.name || 'Unknown Project',
-        projectNumber: task.project?.project_number,
+        projectName: projectInfo.name,
+        projectNumber: projectInfo.number,
         color: projectColorMap[task.project_id] || PROJECT_COLORS[0],
         status: task.status,
         priority: task.priority,
@@ -833,14 +857,15 @@ export const buildCalendarItems = (projects, tasks, rfis, submittals, milestones
   // Add RFIs
   rfis?.forEach(rfi => {
     if (rfi.due_date) {
+      const projectInfo = getProjectInfo(rfi);
       items.push({
         id: `rfi-${rfi.id}`,
         type: CALENDAR_ITEM_TYPES.RFI,
         title: `${rfi.rfi_number}: ${rfi.subject}`,
         date: rfi.due_date,
         projectId: rfi.project_id,
-        projectName: rfi.project?.name || 'Unknown Project',
-        projectNumber: rfi.project?.project_number,
+        projectName: projectInfo.name,
+        projectNumber: projectInfo.number,
         color: projectColorMap[rfi.project_id] || PROJECT_COLORS[0],
         status: rfi.status,
         priority: rfi.priority,
@@ -852,14 +877,15 @@ export const buildCalendarItems = (projects, tasks, rfis, submittals, milestones
   // Add submittals
   submittals?.forEach(submittal => {
     if (submittal.due_date) {
+      const projectInfo = getProjectInfo(submittal);
       items.push({
         id: `submittal-${submittal.id}`,
         type: CALENDAR_ITEM_TYPES.SUBMITTAL,
         title: `${submittal.submittal_number}: ${submittal.title}`,
         date: submittal.due_date,
         projectId: submittal.project_id,
-        projectName: submittal.project?.name || 'Unknown Project',
-        projectNumber: submittal.project?.project_number,
+        projectName: projectInfo.name,
+        projectNumber: projectInfo.number,
         color: projectColorMap[submittal.project_id] || PROJECT_COLORS[0],
         status: submittal.status,
         priority: submittal.priority,
@@ -871,14 +897,15 @@ export const buildCalendarItems = (projects, tasks, rfis, submittals, milestones
   // Add milestones
   milestones?.forEach(milestone => {
     if (milestone.due_date) {
+      const projectInfo = getProjectInfo(milestone);
       items.push({
         id: `milestone-${milestone.id}`,
         type: CALENDAR_ITEM_TYPES.MILESTONE,
         title: milestone.name,
         date: milestone.due_date,
         projectId: milestone.project_id,
-        projectName: milestone.project?.name || 'Unknown Project',
-        projectNumber: milestone.project?.project_number,
+        projectName: projectInfo.name,
+        projectNumber: projectInfo.number,
         color: projectColorMap[milestone.project_id] || PROJECT_COLORS[0],
         status: milestone.status,
         data: milestone,

@@ -42,15 +42,23 @@ A comprehensive Project Management System built for Sunbelt Modular and its subs
 - **VP Dashboard** - Executive overview across all factories
 - **Director Dashboard** - Factory-level metrics and oversight
 - **PM Dashboard** - Project manager workload and tasks
-- **PC Dashboard** - Plant controller factory-specific view
+- **PC Dashboard** - Project Coordinator factory-specific view (filtered to assigned factory)
+- **Plant Manager** - Factory-specific view (filtered to assigned factory)
+
+### Factory Map (In Development)
+- **Interactive USA Map** - Visual overview of all factory locations
+- **Factory Sprites** - Studio Ghibli-style factory buildings
+- **Real-time Stats** - Project counts and status by factory
+- **Zoom/Pan Controls** - Navigate the map with mouse wheel and drag
 
 ## Tech Stack
 
 - **Frontend**: React 18 with Vite
 - **Styling**: CSS Variables with custom design system
-- **Database**: Supabase (PostgreSQL)
+- **Database**: Supabase (PostgreSQL) with Row Level Security
 - **Storage**: Supabase Storage for file uploads
 - **Authentication**: Supabase Auth
+- **Graphics**: PixiJS 8 for Factory Map rendering
 - **Excel Export**: SheetJS (xlsx)
 - **PDF Processing**: PDF.js
 - **Icons**: Lucide React
@@ -87,8 +95,8 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
 4. Run database migrations (in Supabase SQL Editor):
-- Run `supabase/migrations/20260109_workflow_system_clean.sql`
-- Run additional migrations as needed
+- Run migrations in order from `supabase/migrations/`
+- The `20260113_critical_fixes.sql` contains comprehensive RLS policies and creates all required tables
 
 5. Start the development server:
 ```bash
@@ -110,7 +118,12 @@ src/
 │   ├── calendar/      # Calendar views
 │   ├── common/        # Shared UI components
 │   ├── dashboards/    # Role-specific dashboards
+│   ├── factoryMap/    # Interactive factory map (PixiJS)
+│   │   ├── sprites/   # Factory sprite components
+│   │   ├── systems/   # Viewport, rendering systems
+│   │   └── layers/    # Map layers (USA, factories)
 │   ├── floorplans/    # Floor plan viewer and markers
+│   ├── it/            # IT admin tools (user management, feature flags)
 │   ├── pages/         # Top-level pages
 │   ├── projects/      # Project details, modals, forms
 │   └── workflow/      # Workflow tracker components
@@ -127,13 +140,13 @@ src/
 
 ## Factories
 
-The system supports multiple Sunbelt subsidiaries:
-- Northwest Building Systems (NWBS)
-- Whitley Manufacturing East/West (WM-EAST, WM-WEST)
-- Mobile Modular (MM)
-- Sunbelt Structures (SSI)
-- ModSpace (MS)
-- And more...
+The system supports 14 Sunbelt factory locations:
+- Atlanta (ATL), Dallas (DAL), Phoenix (PHX), Denver (DEN)
+- Orlando (ORL), Charlotte (CLT), Houston (HOU), Nashville (BNA)
+- Kansas City (MCI), Salt Lake City (SLC), San Antonio (SAT)
+- Tampa (TPA), Raleigh (RDU), Indianapolis (IND)
+
+Each factory can have assigned Project Coordinators (PC) and Plant Managers who see only their factory's projects.
 
 ## Key Workflows
 

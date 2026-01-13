@@ -15,11 +15,11 @@
 // - ✅ FIXED: VP now has Reports page
 //
 // NAV ORDER:
-// - PM: Dashboard → Projects, Tasks, RFIs, Submittals, Calendar
-// - Director: Dashboard → Team, Reports → Projects, Tasks, RFIs, Submittals, Calendar
-// - VP: Dashboard → Analytics, Clients, Team, Reports → Projects, Tasks, RFIs, Submittals, Calendar
-// - IT: Dashboard → User Management → Projects, Tasks, RFIs, Submittals, Calendar
-// - PC: Dashboard → Deadlines, Drawings, Approvals → Projects, Tasks, Calendar
+// - PM: Dashboard → Projects, Tasks, RFIs, Submittals, Calendar, Factory Map
+// - Director: Dashboard → Team, Reports → Projects, Tasks, RFIs, Submittals, Calendar, Factory Map
+// - VP: Dashboard → Analytics, Clients, Team, Reports → Projects, Tasks, RFIs, Submittals, Calendar, Factory Map
+// - IT: Dashboard → User Management → Error Tracking → Factory Map (IT-specific, no project management)
+// - PC: Dashboard → Projects, Tasks, Calendar
 //
 // UPDATES (Jan 9, 2026):
 // - ✅ ADDED: PC (Project Coordinator) dashboard type
@@ -55,7 +55,12 @@ import {
   Factory,
   Clock,
   Mail,
-  Map as MapIcon
+  Map as MapIcon,
+  Megaphone,
+  Flag,
+  Receipt,
+  Target,
+  UserCheck
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -124,6 +129,279 @@ function Sidebar({
     warningsSent: 0
   });
 
+  // Sales View Stats
+  const [salesStats, setSalesStats] = useState({
+    activeQuotes: 0,
+    pipelineValue: 0,
+    wonThisMonth: 0,
+    conversionRate: 0
+  });
+
+  // ==========================================================================
+  // DATA FETCHING FUNCTIONS (defined before useEffects to avoid hoisting issues)
+  // ==========================================================================
+  const fetchUserData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (!error && data) {
+        setCurrentUser(data);
+      }
+    } catch (err) {
+      console.error('Error fetching user:', err);
+    }
+  };
+
+  const fetchPMStats = async () => {
+    if (!currentUser?.id) return;
+
+    try {
+      const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
+      const activeTaskStatuses = ['Not Started', 'In Progress', 'Awaiting Response'];
+      const today = new Date().toISOString().split('T')[0];
+
+      const { data: primaryProjectsRaw } = await supabase
+        .from('projects')
+        .select('id, status')
+        .eq('owner_id', currentUser.id);
+
+      const primaryProjects = (primaryProjectsRaw || []).filter(p => activeStatuses.includes(p.status));
+
+      let backupProjects = [];
+      if (includeSecondary) {
+        const { data: backupRaw } = await supabase
+          .from('projects')
+          .select('id, status')
+          .eq('backup_pm_id', currentUser.id);
+        backupProjects = (backupRaw || []).filter(p => activeStatuses.includes(p.status));
+      }
+
+      const allProjectIds = [...new Set([
+        ...primaryProjects.map(p => p.id),
+        ...backupProjects.map(p => p.id)
+      ])];
+
+      setActiveProjects(allProjectIds.length);
+
+      const [assignedTasksRes, ownedTasksRes] = await Promise.all([
+        supabase.from('tasks').select('id, status, due_date').eq('assignee_id', currentUser.id),
+        supabase.from('tasks').select('id, status, due_date').eq('internal_owner_id', currentUser.id)
+      ]);
+
+      const taskMap = new Map();
+      [...(assignedTasksRes.data || []), ...(ownedTasksRes.data || [])].forEach(t => taskMap.set(t.id, t));
+      const openTasks = Array.from(taskMap.values()).filter(t => activeTaskStatuses.includes(t.status));
+
+      setMyTasks(openTasks.length);
+
+      const overdue = openTasks.filter(t => t.due_date && t.due_date < today).length;
+      setOverdueTasks(overdue);
+
+    } catch (err) {
+      console.error('Error fetching PM stats:', err);
+    }
+  };
+
+  const fetchDirectorStats = async () => {
+    try {
+      const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
+      const activeTaskStatuses = ['Not Started', 'In Progress', 'Awaiting Response'];
+      const today = new Date().toISOString().split('T')[0];
+
+      const { data: allProjects } = await supabase
+        .from('projects')
+        .select('id, status, health_status');
+
+      const projectList = (allProjects || []).filter(p => activeStatuses.includes(p.status));
+      const total = projectList.length;
+
+      const onTrack = projectList.filter(p => p.health_status === 'On Track' || !p.health_status).length;
+      const atRisk = projectList.filter(p => p.health_status === 'At Risk').length;
+      const critical = projectList.filter(p => p.health_status === 'Critical').length;
+
+      const { data: allTasks } = await supabase
+        .from('tasks')
+        .select('id, status, due_date')
+        .lt('due_date', today);
+
+      const overdueCount = (allTasks || []).filter(t => activeTaskStatuses.includes(t.status)).length;
+
+      const { count: teamCount } = await supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_active', true);
+
+      setDirectorStats({
+        totalProjects: total,
+        onTrack,
+        atRisk,
+        critical,
+        totalOverdue: overdueCount,
+        teamMembers: teamCount || 0
+      });
+
+    } catch (err) {
+      console.error('Error fetching director stats:', err);
+    }
+  };
+
+  const fetchVPStats = async () => {
+    try {
+      const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
+
+      const { data: allProjects } = await supabase
+        .from('projects')
+        .select('id, contract_value, status');
+
+      const projects = (allProjects || []).filter(p => activeStatuses.includes(p.status));
+
+      const projectList = projects || [];
+      const totalValue = projectList.reduce((sum, p) => sum + (p.contract_value || 0), 0);
+
+      const { data: clients } = await supabase
+        .from('projects')
+        .select('client_name')
+        .not('client_name', 'is', null);
+
+      const uniqueClients = new Set((clients || []).map(c => c.client_name).filter(Boolean));
+
+      setVPStats({
+        portfolioValue: totalValue,
+        activeProjects: projectList.length,
+        onTimeRate: 100,
+        totalClients: uniqueClients.size
+      });
+
+    } catch (err) {
+      console.error('Error fetching VP stats:', err);
+    }
+  };
+
+  const fetchITStats = async () => {
+    try {
+      const { data: users } = await supabase.from('users').select('id, is_active');
+      const userList = users || [];
+      const activeUsers = userList.filter(u => u.is_active !== false).length;
+
+      const { count: projectCount } = await supabase
+        .from('projects')
+        .select('id', { count: 'exact', head: true });
+
+      setITStats({
+        totalUsers: userList.length,
+        activeUsers,
+        totalProjects: projectCount || 0,
+        recentErrors: 0
+      });
+
+    } catch (err) {
+      console.error('Error fetching IT stats:', err);
+    }
+  };
+
+  const fetchPCStats = async () => {
+    if (!user?.id) return;
+
+    try {
+      const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
+      const activeTaskStatuses = ['Not Started', 'In Progress', 'Awaiting Response'];
+      const today = new Date().toISOString().split('T')[0];
+      const weekFromNow = new Date();
+      weekFromNow.setDate(weekFromNow.getDate() + 7);
+      const weekEndDate = weekFromNow.toISOString().split('T')[0];
+
+      // Get user's factory CODE (not just factory_id)
+      const { data: userData } = await supabase
+        .from('users')
+        .select('factory_id, factory:factories(code)')
+        .eq('id', user.id)
+        .single();
+
+      const factoryCode = userData?.factory?.code;
+
+      const { data: allProjects } = await supabase
+        .from('projects')
+        .select('id, status, factory');
+
+      let projects = (allProjects || []).filter(p => activeStatuses.includes(p.status));
+      // Filter by factory CODE (projects use 'factory' column with code string like 'PMI')
+      if (factoryCode) {
+        projects = projects.filter(p => p.factory === factoryCode);
+      }
+
+      const projectIds = projects.map(p => p.id);
+
+      const { data: allTasks } = await supabase
+        .from('tasks')
+        .select('id, project_id, status, due_date');
+
+      const factoryTasks = (allTasks || []).filter(t =>
+        projectIds.includes(t.project_id) && activeTaskStatuses.includes(t.status)
+      );
+
+      const overdueCount = factoryTasks.filter(t => t.due_date && t.due_date < today).length;
+
+      const weekCount = factoryTasks.filter(t =>
+        t.due_date && t.due_date >= today && t.due_date <= weekEndDate
+      ).length;
+
+      setPCStats({
+        factoryProjects: projectIds.length,
+        overdueItems: overdueCount,
+        dueThisWeek: weekCount,
+        warningsSent: 0
+      });
+
+    } catch (err) {
+      console.error('Error fetching PC stats:', err);
+    }
+  };
+
+  const fetchSalesStats = async () => {
+    try {
+      const activeStatuses = ['draft', 'sent', 'negotiating'];
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { data: allQuotes } = await supabase
+        .from('sales_quotes')
+        .select('id, status, total_price, won_date, created_at');
+
+      const quotes = allQuotes || [];
+
+      const activeQuotes = quotes.filter(q => activeStatuses.includes(q.status));
+
+      const pipelineValue = activeQuotes.reduce((sum, q) => sum + (q.total_price || 0), 0);
+
+      const wonThisMonth = quotes.filter(q =>
+        q.status === 'won' &&
+        q.won_date &&
+        new Date(q.won_date) >= startOfMonth
+      ).length;
+
+      const wonTotal = quotes.filter(q => q.status === 'won').length;
+      const lostTotal = quotes.filter(q => q.status === 'lost').length;
+      const conversionRate = (wonTotal + lostTotal) > 0
+        ? Math.round((wonTotal / (wonTotal + lostTotal)) * 100)
+        : 0;
+
+      setSalesStats({
+        activeQuotes: activeQuotes.length,
+        pipelineValue,
+        wonThisMonth,
+        conversionRate
+      });
+
+    } catch (err) {
+      console.error('Error fetching sales stats:', err);
+    }
+  };
+
   // ==========================================================================
   // EFFECTS
   // ==========================================================================
@@ -131,9 +409,10 @@ function Sidebar({
     if (user) {
       fetchUserData();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Fetch VP/Director/IT/PC stats immediately (don't need currentUser for some)
+  // Fetch VP/Director/IT/PC/Sales stats immediately (don't need currentUser for some)
   useEffect(() => {
     if (dashboardType === 'vp') {
       fetchVPStats();
@@ -143,7 +422,10 @@ function Sidebar({
       fetchITStats();
     } else if (dashboardType === 'pc') {
       fetchPCStats();
+    } else if (dashboardType === 'sales') {
+      fetchSalesStats();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dashboardType]);
 
   // Fetch PM stats only after currentUser is loaded
@@ -151,6 +433,7 @@ function Sidebar({
     if (currentUser && dashboardType === 'pm') {
       fetchPMStats();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, dashboardType, includeSecondary]);
 
   // ==========================================================================
@@ -165,7 +448,7 @@ function Sidebar({
         if (userRole === 'vp') {
           setDashboardType('vp');
           localStorage.setItem('dashboardType', 'vp');
-        } else if (userRole === 'it') {
+        } else if (userRole === 'it' || userRole === 'it_manager') {
           setDashboardType('it');
           localStorage.setItem('dashboardType', 'it');
         } else if (userRole === 'director' || userRole === 'admin') {
@@ -174,6 +457,9 @@ function Sidebar({
         } else if (userRole === 'project coordinator' || userRole === 'pc') {
           setDashboardType('pc');
           localStorage.setItem('dashboardType', 'pc');
+        } else if (userRole === 'sales_rep' || userRole === 'sales_manager') {
+          setDashboardType('sales');
+          localStorage.setItem('dashboardType', 'sales');
         } else {
           setDashboardType('pm');
           localStorage.setItem('dashboardType', 'pm');
@@ -193,247 +479,6 @@ function Sidebar({
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
     localStorage.setItem('darkMode', JSON.stringify(darkMode));
   }, [darkMode]);
-
-  // ==========================================================================
-  // DATA FETCHING
-  // ==========================================================================
-  const fetchUserData = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (!error && data) {
-        setCurrentUser(data);
-      }
-    } catch (error) {
-      console.error('Error fetching user:', error);
-    }
-  };
-
-  const fetchPMStats = async () => {
-    if (!currentUser?.id) return;
-
-    try {
-      const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
-      const activeTaskStatuses = ['Not Started', 'In Progress', 'Awaiting Response'];
-      const today = new Date().toISOString().split('T')[0];
-
-      // Fetch projects where user is primary PM - filter client-side
-      const { data: primaryProjectsRaw } = await supabase
-        .from('projects')
-        .select('id, status')
-        .eq('owner_id', currentUser.id);
-
-      const primaryProjects = (primaryProjectsRaw || []).filter(p => activeStatuses.includes(p.status));
-
-      // Fetch projects where user is backup PM (if toggle enabled)
-      let backupProjects = [];
-      if (includeSecondary) {
-        const { data: backupRaw } = await supabase
-          .from('projects')
-          .select('id, status')
-          .eq('backup_pm_id', currentUser.id);
-        backupProjects = (backupRaw || []).filter(p => activeStatuses.includes(p.status));
-      }
-
-      // Combine and deduplicate
-      const allProjectIds = [...new Set([
-        ...primaryProjects.map(p => p.id),
-        ...backupProjects.map(p => p.id)
-      ])];
-
-      setActiveProjects(allProjectIds.length);
-
-      // Fetch tasks - use separate queries to avoid .or() issues
-      const [assignedTasksRes, ownedTasksRes] = await Promise.all([
-        supabase.from('tasks').select('id, status, due_date').eq('assignee_id', currentUser.id),
-        supabase.from('tasks').select('id, status, due_date').eq('internal_owner_id', currentUser.id)
-      ]);
-
-      // Combine and deduplicate, then filter by status
-      const taskMap = new Map();
-      [...(assignedTasksRes.data || []), ...(ownedTasksRes.data || [])].forEach(t => taskMap.set(t.id, t));
-      const openTasks = Array.from(taskMap.values()).filter(t => activeTaskStatuses.includes(t.status));
-
-      setMyTasks(openTasks.length);
-
-      const overdue = openTasks.filter(t => t.due_date && t.due_date < today).length;
-      setOverdueTasks(overdue);
-
-    } catch (error) {
-      console.error('Error fetching PM stats:', error);
-    }
-  };
-
-  const fetchDirectorStats = async () => {
-    try {
-      const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
-      const activeTaskStatuses = ['Not Started', 'In Progress', 'Awaiting Response'];
-      const today = new Date().toISOString().split('T')[0];
-
-      // Fetch all projects and filter client-side
-      const { data: allProjects } = await supabase
-        .from('projects')
-        .select('id, status, health_status');
-
-      const projectList = (allProjects || []).filter(p => activeStatuses.includes(p.status));
-      const total = projectList.length;
-
-      // Calculate health breakdown
-      const onTrack = projectList.filter(p => p.health_status === 'On Track' || !p.health_status).length;
-      const atRisk = projectList.filter(p => p.health_status === 'At Risk').length;
-      const critical = projectList.filter(p => p.health_status === 'Critical').length;
-
-      // Fetch tasks and filter client-side
-      const { data: allTasks } = await supabase
-        .from('tasks')
-        .select('id, status, due_date')
-        .lt('due_date', today);
-
-      const overdueCount = (allTasks || []).filter(t => activeTaskStatuses.includes(t.status)).length;
-
-      // Fetch team members
-      const { count: teamCount } = await supabase
-        .from('users')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_active', true);
-
-      setDirectorStats({
-        totalProjects: total,
-        onTrack,
-        atRisk,
-        critical,
-        totalOverdue: overdueCount,
-        teamMembers: teamCount || 0
-      });
-
-    } catch (error) {
-      console.error('Error fetching director stats:', error);
-    }
-  };
-
-  const fetchVPStats = async () => {
-    try {
-      const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
-
-      // Fetch projects with contract values - filter client-side
-      const { data: allProjects } = await supabase
-        .from('projects')
-        .select('id, contract_value, status');
-
-      const projects = (allProjects || []).filter(p => activeStatuses.includes(p.status));
-
-      const projectList = projects || [];
-      const totalValue = projectList.reduce((sum, p) => sum + (p.contract_value || 0), 0);
-
-      // Fetch unique clients
-      const { data: clients } = await supabase
-        .from('projects')
-        .select('client_name')
-        .not('client_name', 'is', null);
-
-      const uniqueClients = new Set((clients || []).map(c => c.client_name).filter(Boolean));
-
-      setVPStats({
-        portfolioValue: totalValue,
-        activeProjects: projectList.length,
-        onTimeRate: 100, // Default - needs actual_completion_date to calculate
-        totalClients: uniqueClients.size
-      });
-
-    } catch (error) {
-      console.error('Error fetching VP stats:', error);
-    }
-  };
-
-  const fetchITStats = async () => {
-    try {
-      // Fetch users
-      const { data: users } = await supabase.from('users').select('id, is_active');
-      const userList = users || [];
-      const activeUsers = userList.filter(u => u.is_active !== false).length;
-
-      // Fetch project count
-      const { count: projectCount } = await supabase
-        .from('projects')
-        .select('id', { count: 'exact', head: true });
-
-      setITStats({
-        totalUsers: userList.length,
-        activeUsers,
-        totalProjects: projectCount || 0,
-        recentErrors: 0
-      });
-
-    } catch (error) {
-      console.error('Error fetching IT stats:', error);
-    }
-  };
-
-  const fetchPCStats = async () => {
-    if (!user?.id) return;
-
-    try {
-      const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
-      const activeTaskStatuses = ['Not Started', 'In Progress', 'Awaiting Response'];
-      const today = new Date().toISOString().split('T')[0];
-      const weekFromNow = new Date();
-      weekFromNow.setDate(weekFromNow.getDate() + 7);
-      const weekEndDate = weekFromNow.toISOString().split('T')[0];
-
-      // Get user's factory_code
-      const { data: userData } = await supabase
-        .from('users')
-        .select('factory_code, factory_id')
-        .eq('id', user.id)
-        .single();
-
-      // Fetch all projects and filter client-side
-      const { data: allProjects } = await supabase
-        .from('projects')
-        .select('id, status, factory_id, factory_code');
-
-      // Filter by status and factory
-      let projects = (allProjects || []).filter(p => activeStatuses.includes(p.status));
-      if (userData?.factory_id) {
-        projects = projects.filter(p => p.factory_id === userData.factory_id);
-      } else if (userData?.factory_code) {
-        projects = projects.filter(p => p.factory_code === userData.factory_code);
-      }
-
-      const projectIds = projects.map(p => p.id);
-
-      // Fetch all tasks and filter client-side
-      const { data: allTasks } = await supabase
-        .from('tasks')
-        .select('id, project_id, status, due_date');
-
-      const factoryTasks = (allTasks || []).filter(t =>
-        projectIds.includes(t.project_id) && activeTaskStatuses.includes(t.status)
-      );
-
-      // Count overdue tasks
-      const overdueCount = factoryTasks.filter(t => t.due_date && t.due_date < today).length;
-
-      // Count due this week
-      const weekCount = factoryTasks.filter(t =>
-        t.due_date && t.due_date >= today && t.due_date <= weekEndDate
-      ).length;
-
-      setPCStats({
-        factoryProjects: projectIds.length,
-        overdueItems: overdueCount,
-        dueThisWeek: weekCount,
-        warningsSent: 0 // Would need warning_emails_log table
-      });
-
-    } catch (error) {
-      console.error('Error fetching PC stats:', error);
-    }
-  };
 
   // ==========================================================================
   // HANDLERS
@@ -462,11 +507,12 @@ function Sidebar({
     const role = (currentUser.role || '').toLowerCase();
 
     const access = {
-      pm: ['pm', 'director', 'vp', 'it', 'admin', 'project coordinator', 'plant manager'],
+      pm: ['pm', 'director', 'vp', 'it', 'it_manager', 'admin', 'project coordinator', 'plant manager'],
       director: ['director', 'vp', 'admin'],
       vp: ['vp', 'admin'],
-      it: ['it', 'admin'],
-      pc: ['project coordinator', 'pc', 'plant manager', 'director', 'vp', 'admin']
+      it: ['it', 'it_manager', 'admin'],
+      pc: ['project coordinator', 'pc', 'plant manager', 'director', 'vp', 'admin'],
+      sales: ['sales_rep', 'sales_manager', 'vp', 'admin']
     };
 
     return access[type]?.includes(role) || false;
@@ -491,7 +537,8 @@ function Sidebar({
       director: { icon: BarChart3, label: 'Director Dashboard', color: 'var(--info)' },
       vp: { icon: TrendingUp, label: 'VP Dashboard', color: '#8b5cf6' },
       it: { icon: Shield, label: 'IT Dashboard', color: '#06b6d4' },
-      pc: { icon: Factory, label: 'PC Dashboard', color: '#ec4899' }
+      pc: { icon: Factory, label: 'PC Dashboard', color: '#ec4899' },
+      sales: { icon: Receipt, label: 'Sales Dashboard', color: '#10b981' }
     };
     return configs[type] || configs.pm;
   };
@@ -855,6 +902,61 @@ function Sidebar({
           </div>
         );
 
+      case 'sales':
+        return (
+          <div style={{ padding: '0 var(--space-md)', marginBottom: 'var(--space-sm)' }}>
+            {/* Pipeline value */}
+            <div style={{
+              padding: '8px 10px',
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05))',
+              borderRadius: 'var(--radius-sm)',
+              marginBottom: '8px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                <Target size={12} style={{ color: '#10b981' }} />
+                <span style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>Pipeline Value</span>
+              </div>
+              <div style={{ fontSize: '1.125rem', fontWeight: '700', color: '#10b981' }}>
+                {formatCurrency(salesStats.pipelineValue)}
+              </div>
+            </div>
+
+            {/* Stats row */}
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+              <div style={{
+                flex: 1,
+                padding: '6px 8px',
+                background: 'var(--bg-tertiary)',
+                borderRadius: 'var(--radius-sm)',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--text-primary)' }}>{salesStats.activeQuotes}</div>
+                <div style={{ fontSize: '0.5625rem', color: 'var(--text-tertiary)' }}>Active</div>
+              </div>
+              <div style={{
+                flex: 1,
+                padding: '6px 8px',
+                background: 'var(--bg-tertiary)',
+                borderRadius: 'var(--radius-sm)',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--success)' }}>{salesStats.wonThisMonth}</div>
+                <div style={{ fontSize: '0.5625rem', color: 'var(--text-tertiary)' }}>Won</div>
+              </div>
+              <div style={{
+                flex: 1,
+                padding: '6px 8px',
+                background: 'var(--bg-tertiary)',
+                borderRadius: 'var(--radius-sm)',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '0.875rem', fontWeight: '700', color: 'var(--info)' }}>{salesStats.conversionRate}%</div>
+                <div style={{ fontSize: '0.5625rem', color: 'var(--text-tertiary)' }}>Win Rate</div>
+              </div>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -904,11 +1006,16 @@ function Sidebar({
         ];
 
       case 'it':
-        // IT: Dashboard → User Management → [common pages]
+        // IT: Dashboard → User Management → Error Tracking → Announcements → Feature Flags → Sessions → Factory Map
+        // Note: IT users don't need Projects, Tasks, RFIs, Submittals - they manage the system, not projects
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'users', label: 'User Management', icon: Users },
-          ...commonItems,
+          { id: 'error-tracking', label: 'Error Tracking', icon: AlertTriangle },
+          { id: 'announcements', label: 'Announcements', icon: Megaphone },
+          { id: 'feature-flags', label: 'Feature Flags', icon: Flag },
+          { id: 'sessions', label: 'Sessions', icon: Activity },
+          { id: 'factory-map', label: 'Factory Map', icon: MapIcon },
         ];
 
       case 'pc':
@@ -917,6 +1024,15 @@ function Sidebar({
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'projects', label: 'Projects', icon: FolderKanban },
           { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+          { id: 'calendar', label: 'Calendar', icon: Calendar },
+        ];
+
+      case 'sales':
+        // Sales: Dashboard → Projects (read-only), Calendar
+        // Note: Sales dashboard has quotes management built-in
+        return [
+          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'projects', label: 'PM Projects', icon: FolderKanban },
           { id: 'calendar', label: 'Calendar', icon: Calendar },
         ];
 
@@ -1002,7 +1118,7 @@ function Sidebar({
               zIndex: 200,
               overflow: 'hidden'
             }}>
-              {['pm', 'director', 'vp', 'it'].map(type => {
+              {['pm', 'director', 'vp', 'it', 'sales'].map(type => {
                 if (!canAccessDashboard(type)) return null;
                 const config = getDashboardConfig(type);
                 const Icon = config.icon;

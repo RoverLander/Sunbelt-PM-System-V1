@@ -46,7 +46,7 @@ const RFI_STATUSES = ['Open', 'Pending', 'Answered', 'Closed'];
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-function EditRFIModal({ isOpen, onClose, rfi, projectName = '', projectNumber = '', onSuccess, onDelete }) {
+function EditRFIModal({ isOpen, onClose, rfi, projectName = '', projectNumber = '', factoryCode = '', onSuccess, onDelete }) {
   
   // ==========================================================================
   // HOOKS
@@ -243,8 +243,8 @@ function EditRFIModal({ isOpen, onClose, rfi, projectName = '', projectNumber = 
   // EXPORT FUNCTIONS
   // ==========================================================================
   
-  const handleExportPDF = () => {
-    exportRFIToPDF(rfi, projectName, projectNumber, attachments);
+  const handleExportPDF = async () => {
+    await exportRFIToPDF(rfi, projectName, projectNumber, attachments, factoryCode);
   };
 
   const handleExportICS = () => {

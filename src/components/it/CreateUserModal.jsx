@@ -32,10 +32,13 @@ const ROLES = [
   { value: 'PM', label: 'Project Manager', description: 'Manages assigned projects' },
   { value: 'Director', label: 'Director', description: 'Portfolio oversight' },
   { value: 'VP', label: 'VP', description: 'Executive access' },
-  { value: 'IT', label: 'IT', description: 'System administration' },
+  { value: 'IT', label: 'IT', description: 'IT support staff' },
+  { value: 'IT_Manager', label: 'IT Manager', description: 'IT team lead, can assign tickets' },
   { value: 'Admin', label: 'Admin', description: 'Full system access' },
   { value: 'Project Coordinator', label: 'Project Coordinator', description: 'Task support' },
-  { value: 'Plant Manager', label: 'Plant Manager', description: 'Factory oversight' }
+  { value: 'Plant Manager', label: 'Plant Manager', description: 'Factory oversight' },
+  { value: 'Sales_Rep', label: 'Sales Rep', description: 'Creates and manages sales quotes' },
+  { value: 'Sales_Manager', label: 'Sales Manager', description: 'Oversees sales pipeline and team' }
 ];
 
 // ============================================================================
@@ -250,11 +253,13 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
     setError('');
 
     try {
-      // Check if email already exists
+      const email = formData.email.trim().toLowerCase();
+
+      // Check if email already exists in users table
       const { data: existingUser } = await supabase
         .from('users')
         .select('id')
-        .eq('email', formData.email.toLowerCase())
+        .eq('email', email)
         .single();
 
       if (existingUser) {
@@ -263,10 +268,43 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
         return;
       }
 
-      // Create user record
+      // Step 1: Create auth user via Supabase Auth signUp
+      // Standard initial password - user should change after first login
+      const tempPassword = 'Sunbelt2026!';
+
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: email,
+        password: tempPassword,
+        options: {
+          // Don't send confirmation email - IT admin is creating the account
+          emailRedirectTo: undefined,
+          data: {
+            name: formData.name.trim(),
+            role: formData.role
+          }
+        }
+      });
+
+      if (authError) {
+        // Handle specific auth errors
+        if (authError.message.includes('already registered')) {
+          setError('This email is already registered in the authentication system. Contact support.');
+        } else {
+          throw authError;
+        }
+        setLoading(false);
+        return;
+      }
+
+      if (!authData?.user?.id) {
+        throw new Error('Failed to create authentication account');
+      }
+
+      // Step 2: Create user record in users table with auth user ID
       const userData = {
+        id: authData.user.id, // Use the auth user ID (FK constraint requirement)
         name: formData.name.trim(),
-        email: formData.email.trim().toLowerCase(),
+        email: email,
         role: formData.role,
         title: formData.title.trim() || null,
         department: formData.department.trim() || null,
@@ -279,7 +317,21 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
         .from('users')
         .insert([userData]);
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        // If users table insert fails, log the auth user ID for cleanup
+        console.error('Failed to create user record. Auth user ID:', authData.user.id);
+        throw insertError;
+      }
+
+      // Step 3: Send password reset email so user can set their own password
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+
+      if (resetError) {
+        console.warn('Password reset email failed:', resetError);
+        // Don't fail the whole operation - user was created successfully
+      }
 
       // Reset form
       setFormData({
@@ -400,7 +452,7 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
               <div style={styles.errorText}>{fieldErrors.email}</div>
             )}
             <div style={styles.hint}>
-              User will receive an invitation email to set their password
+              Initial password: Sunbelt2026! (user should change after first login)
             </div>
           </div>
 

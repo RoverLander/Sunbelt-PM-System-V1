@@ -38,12 +38,13 @@ const ICON_MAP = {
   Truck
 };
 
-function CalendarDayView({ 
-  items = [], 
+function CalendarDayView({
+  items = [],
   projects = [],
   onItemClick,
   onViewChange,
-  initialDate = new Date()
+  initialDate = new Date(),
+  canEdit = true
 }) {
   const [currentDate, setCurrentDate] = useState(initialDate);
   const [dayItems, setDayItems] = useState([]);
@@ -854,28 +855,30 @@ function CalendarDayView({
               >
                 Close
               </button>
-              <button
-                onClick={() => {
-                  onItemClick && onItemClick(selectedItem);
-                  setSelectedItem(null);
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-xs)',
-                  padding: 'var(--space-sm) var(--space-lg)',
-                  background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius-md)',
-                  fontSize: '0.875rem',
-                  fontWeight: '600',
-                  cursor: 'pointer'
-                }}
-              >
-                <Edit size={16} />
-                Edit Item
-              </button>
+              {canEdit && (
+                <button
+                  onClick={() => {
+                    onItemClick && onItemClick(selectedItem);
+                    setSelectedItem(null);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-xs)',
+                    padding: 'var(--space-sm) var(--space-lg)',
+                    background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '0.875rem',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Edit size={16} />
+                  Edit Item
+                </button>
+              )}
             </div>
           </div>
         </div>

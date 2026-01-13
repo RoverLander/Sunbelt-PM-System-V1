@@ -47,7 +47,7 @@ import SystemConfiguration from './SystemConfiguration';
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-const TOAST_DURATION = 3000;
+const TOAST_DURATION = 5000;
 
 // ============================================================================
 // MAIN COMPONENT
@@ -569,15 +569,24 @@ function ITDashboard({ initialTab }) {
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
-          padding: '14px 20px',
+          padding: '16px 24px',
           color: 'white',
-          borderRadius: 'var(--radius-md)',
-          background: toast.type === 'error' ? 'var(--danger)' : toast.type === 'info' ? '#3b82f6' : 'var(--success)',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-          zIndex: 10000
+          borderRadius: 'var(--radius-lg)',
+          background: toast.type === 'error' ? 'var(--danger)' : toast.type === 'info' ? '#3b82f6' : '#22c55e',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+          zIndex: 10000,
+          animation: 'slideInRight 0.3s ease-out',
+          fontWeight: '500',
+          fontSize: '0.9375rem'
         }}>
-          {toast.type === 'error' ? <AlertCircle size={18} /> : <CheckCircle size={18} />}
+          {toast.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle size={20} />}
           {toast.message}
+          <style>{`
+            @keyframes slideInRight {
+              from { transform: translateX(100%); opacity: 0; }
+              to { transform: translateX(0); opacity: 1; }
+            }
+          `}</style>
         </div>
       )}
     </div>

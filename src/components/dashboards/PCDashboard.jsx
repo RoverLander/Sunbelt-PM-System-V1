@@ -320,37 +320,32 @@ function PCDashboard({ onNavigateToProject }) {
       setLoading(true);
       setError(null);
 
-      // Get user's factory
+      // Get user's factory info (including factory code)
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('factory_id, factory_code')
+        .select('factory_id, factory:factories(id, code, name)')
         .eq('id', user.id)
         .single();
 
       if (userError) throw userError;
 
       const factoryId = userData?.factory_id;
-      const factoryCode = userData?.factory_code;
+      const factoryCode = userData?.factory?.code;
 
       // If no factory assigned, show message
-      if (!factoryId && !factoryCode) {
+      if (!factoryId || !factoryCode) {
         setError('No factory assigned. Please contact an administrator.');
         setLoading(false);
         return;
       }
 
-      // Get factory info
-      if (factoryId) {
-        const { data: factory } = await supabase
-          .from('factories')
-          .select('*')
-          .eq('id', factoryId)
-          .single();
-        setFactoryInfo(factory);
+      // Set factory info from the joined data
+      if (userData?.factory) {
+        setFactoryInfo(userData.factory);
       }
 
       // Fetch projects for this factory
-      // FIX: Removed .in() filter - use client-side filtering to avoid 400 errors in web containers
+      // Projects table uses 'factory' column with code string (e.g., 'PMI'), not factory_id
       let projectsQuery = supabase
         .from('projects')
         .select(`
@@ -361,11 +356,9 @@ function PCDashboard({ onNavigateToProject }) {
           tasks(id, title, status, due_date, priority)
         `);
 
-      // Filter by factory
-      if (factoryId) {
-        projectsQuery = projectsQuery.eq('factory_id', factoryId);
-      } else if (factoryCode) {
-        projectsQuery = projectsQuery.eq('factory_code', factoryCode);
+      // Filter by factory CODE (not factory_id - projects use code string)
+      if (factoryCode) {
+        projectsQuery = projectsQuery.eq('factory', factoryCode);
       }
 
       const { data: allProjectsData, error: projectsError } = await projectsQuery;

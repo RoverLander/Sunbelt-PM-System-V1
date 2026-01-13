@@ -40,16 +40,19 @@ import EditUserModal from './EditUserModal';
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-const ROLES = ['PM', 'Director', 'VP', 'IT', 'Admin', 'Project Coordinator', 'Plant Manager'];
+const ROLES = ['PM', 'Director', 'VP', 'IT', 'IT_Manager', 'Admin', 'Project Coordinator', 'Plant Manager', 'Sales_Rep', 'Sales_Manager'];
 
 const ROLE_COLORS = {
   'PM': '#3b82f6',
   'Director': 'var(--sunbelt-orange)',
   'VP': '#8b5cf6',
   'IT': '#06b6d4',
+  'IT_Manager': '#0891b2',
   'Admin': '#ef4444',
   'Project Coordinator': '#22c55e',
-  'Plant Manager': '#f59e0b'
+  'Plant Manager': '#f59e0b',
+  'Sales_Rep': '#10b981',
+  'Sales_Manager': '#059669'
 };
 
 // ============================================================================
@@ -197,7 +200,7 @@ function UserManagement({ showToast }) {
 
   const handleUserCreated = () => {
     setShowCreateModal(false);
-    showToast('User created successfully');
+    showToast('User created! Initial password: Sunbelt2026!', 'success');
     fetchUsers();
   };
 

@@ -15,7 +15,8 @@ import {
   Phone,
   Briefcase,
   Building,
-  Save
+  Save,
+  Factory
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 
@@ -27,9 +28,12 @@ const ROLES = [
   { value: 'Director', label: 'Director' },
   { value: 'VP', label: 'VP' },
   { value: 'IT', label: 'IT' },
+  { value: 'IT_Manager', label: 'IT Manager' },
   { value: 'Admin', label: 'Admin' },
   { value: 'Project Coordinator', label: 'Project Coordinator' },
-  { value: 'Plant Manager', label: 'Plant Manager' }
+  { value: 'Plant Manager', label: 'Plant Manager' },
+  { value: 'Sales_Rep', label: 'Sales Rep' },
+  { value: 'Sales_Manager', label: 'Sales Manager' }
 ];
 
 // ============================================================================
@@ -189,6 +193,7 @@ function EditUserModal({ isOpen, onClose, user, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
+  const [factories, setFactories] = useState([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -197,12 +202,28 @@ function EditUserModal({ isOpen, onClose, user, onSuccess }) {
     title: '',
     department: '',
     phone: '',
+    factory_id: '',
     is_active: true
   });
 
   // ==========================================================================
   // EFFECTS
   // ==========================================================================
+  // Fetch factories list
+  useEffect(() => {
+    const fetchFactories = async () => {
+      const { data } = await supabase
+        .from('factories')
+        .select('id, name, code')
+        .eq('is_active', true)
+        .order('name');
+      setFactories(data || []);
+    };
+    if (isOpen) {
+      fetchFactories();
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     if (isOpen && user) {
       setFormData({
@@ -212,6 +233,7 @@ function EditUserModal({ isOpen, onClose, user, onSuccess }) {
         title: user.title || '',
         department: user.department || '',
         phone: user.phone || '',
+        factory_id: user.factory_id || '',
         is_active: user.is_active !== false
       });
       setError('');
@@ -291,6 +313,7 @@ function EditUserModal({ isOpen, onClose, user, onSuccess }) {
         title: formData.title.trim() || null,
         department: formData.department.trim() || null,
         phone: formData.phone.trim() || null,
+        factory_id: formData.factory_id || null,
         is_active: formData.is_active,
         updated_at: new Date().toISOString()
       };
@@ -461,6 +484,30 @@ function EditUserModal({ isOpen, onClose, user, onSuccess }) {
               placeholder="(555) 123-4567"
               style={styles.input}
             />
+          </div>
+
+          {/* Factory Assignment */}
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              <Factory size={14} />
+              Assigned Factory
+            </label>
+            <select
+              name="factory_id"
+              value={formData.factory_id}
+              onChange={handleChange}
+              style={styles.select}
+            >
+              <option value="">No factory assigned</option>
+              {factories.map(factory => (
+                <option key={factory.id} value={factory.id}>
+                  {factory.name} ({factory.code})
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+              Required for Project Coordinator and Plant Manager roles
+            </div>
           </div>
 
           {/* Active Status */}

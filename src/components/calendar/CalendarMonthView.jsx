@@ -39,13 +39,14 @@ const ICON_MAP = {
   Truck
 };
 
-function CalendarMonthView({ 
-  items = [], 
+function CalendarMonthView({
+  items = [],
   projects = [],
   onItemClick,
   onDateClick,
   onViewChange,
-  initialDate = new Date()
+  initialDate = new Date(),
+  canEdit = true
 }) {
   const [currentDate, setCurrentDate] = useState(initialDate);
   const [monthDates, setMonthDates] = useState([]);
@@ -761,34 +762,34 @@ function CalendarMonthView({
               display: 'flex',
               gap: 'var(--space-sm)'
             }}>
+              {canEdit && (
+                <button
+                  onClick={() => {
+                    onItemClick && onItemClick(selectedItem);
+                    closePopover();
+                  }}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 'var(--space-xs)',
+                    padding: 'var(--space-sm)',
+                    background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '0.8125rem',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Edit size={14} />
+                  Edit
+                </button>
+              )}
               <button
-                onClick={() => {
-                  onItemClick && onItemClick(selectedItem);
-                  closePopover();
-                }}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 'var(--space-xs)',
-                  padding: 'var(--space-sm)',
-                  background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius-md)',
-                  fontSize: '0.8125rem',
-                  fontWeight: '600',
-                  cursor: 'pointer'
-                }}
-              >
-                <Edit size={14} />
-                Edit
-              </button>
-              <button
-                onClick={() => {
-                  closePopover();
-                }}
+                onClick={closePopover}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -801,7 +802,7 @@ function CalendarMonthView({
                   cursor: 'pointer'
                 }}
               >
-                <ExternalLink size={14} />
+                <X size={14} />
               </button>
             </div>
           </div>

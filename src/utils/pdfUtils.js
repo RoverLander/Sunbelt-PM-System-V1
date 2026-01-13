@@ -29,6 +29,77 @@ const COMPANY_CONFIG = {
   accentColor: '#0EA5E9',     // Info blue
 };
 
+/**
+ * Factory logo mapping - maps factory codes/names to logo paths
+ * Logos are stored in src/assets/logos/
+ */
+const FACTORY_LOGOS = {
+  // Factory codes from FACTORY_LOCATIONS
+  'NWBS': '/src/assets/logos/Northwest-Logo-Final.png',
+  'BRIT': '/src/assets/logos/Britco-Logo-Final-FR.png',
+  'PMI': '/src/assets/logos/PMI-Revision-400x309.png',
+  'SSI': '/src/assets/logos/SSI-Logo-Tall.png',
+  'AMTEX': '/src/assets/logos/New-AmTex-Logo.png',
+  'MRS': '/src/assets/logos/Mr-Steel-Logo-Final.png',
+  'CB': '/src/assets/logos/C-B-Logo-Final-1-400x400.png',
+  'IND': '/src/assets/logos/Indicom-Logo-Final-400x400.png',
+  'SEMO': '/src/assets/logos/Southeast-Logo-Final.png',
+
+  // Also support full factory names
+  'Northwest Building Systems': '/src/assets/logos/Northwest-Logo-Final.png',
+  'Britco': '/src/assets/logos/Britco-Logo-Final-FR.png',
+  'Palomar Modular': '/src/assets/logos/PMI-Revision-400x309.png',
+  'Sunbelt Structures': '/src/assets/logos/SSI-Logo-Tall.png',
+  'AmTex Modular': '/src/assets/logos/New-AmTex-Logo.png',
+  'Mr. Steel': '/src/assets/logos/Mr-Steel-Logo-Final.png',
+  'C&B Modular': '/src/assets/logos/C-B-Logo-Final-1-400x400.png',
+  'Indicom': '/src/assets/logos/Indicom-Logo-Final-400x400.png',
+  'Southeast Modular': '/src/assets/logos/Southeast-Logo-Final.png',
+
+  // Default Sunbelt logo
+  'default': '/src/assets/logos/Sunbelt-Logo.jpg'
+};
+
+/**
+ * Convert an image URL to base64 for embedding in PDF HTML
+ * @param {string} url - Image URL path
+ * @returns {Promise<string>} Base64 encoded image data URL
+ */
+const imageToBase64 = async (url) => {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.warn('Failed to load logo:', url, error);
+    return null;
+  }
+};
+
+/**
+ * Get factory logo as base64 for PDF embedding
+ * @param {string} factoryCode - Factory code or name
+ * @returns {Promise<string|null>} Base64 logo or null
+ */
+const getFactoryLogoBase64 = async (factoryCode) => {
+  if (!factoryCode) return null;
+
+  // Try to find logo by code or name
+  const logoPath = FACTORY_LOGOS[factoryCode] ||
+                   FACTORY_LOGOS[factoryCode?.toUpperCase()] ||
+                   FACTORY_LOGOS['default'];
+
+  if (logoPath) {
+    return await imageToBase64(logoPath);
+  }
+  return null;
+};
+
 // ===== UTILITY FUNCTIONS =====
 
 /**
@@ -179,6 +250,20 @@ const getHeaderStyles = () => `
     padding-bottom: 16px;
     margin-bottom: 20px;
     border-bottom: 3px solid var(--primary);
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+  }
+
+  .factory-logo {
+    height: 50px;
+    width: auto;
+    max-width: 120px;
+    object-fit: contain;
   }
 
   .company-info {
@@ -761,13 +846,17 @@ const getPDFStyles = () => `
  * @param {string} docType - Document type label
  * @param {string} docNumber - Document number
  * @param {string} [revision] - Revision number
+ * @param {string} [factoryLogoBase64] - Base64 encoded factory logo
  * @returns {string} Header HTML
  */
-const generateHeader = (docType, docNumber, revision = null) => `
+const generateHeader = (docType, docNumber, revision = null, factoryLogoBase64 = null) => `
   <header class="document-header">
-    <div class="company-info">
-      <div class="company-name">${COMPANY_CONFIG.name}</div>
-      <div class="company-tagline">${COMPANY_CONFIG.tagline}</div>
+    <div class="header-left">
+      ${factoryLogoBase64 ? `<img src="${factoryLogoBase64}" alt="Factory Logo" class="factory-logo" />` : ''}
+      <div class="company-info">
+        <div class="company-name">${COMPANY_CONFIG.name}</div>
+        <div class="company-tagline">${COMPANY_CONFIG.tagline}</div>
+      </div>
     </div>
     <div class="document-title-block">
       <div class="document-type">${escapeHTML(docType)}</div>
@@ -901,11 +990,15 @@ const formatFileSize = (bytes) => {
  * @param {string} [projectName] - Project name
  * @param {string} [projectNumber] - Project number
  * @param {Array} [attachments] - Array of attachments
+ * @param {string} [factoryCode] - Factory code or name for logo
  */
-export const exportRFIToPDF = (rfi, projectName = '', projectNumber = '', attachments = []) => {
-  const projectDisplay = projectNumber 
+export const exportRFIToPDF = async (rfi, projectName = '', projectNumber = '', attachments = [], factoryCode = '') => {
+  const projectDisplay = projectNumber
     ? `${projectNumber}${projectName ? ` — ${projectName}` : ''}`
     : projectName || '—';
+
+  // Load factory logo as base64 for embedding
+  const factoryLogoBase64 = await getFactoryLogoBase64(factoryCode);
 
   const html = `
     <!DOCTYPE html>
@@ -917,8 +1010,8 @@ export const exportRFIToPDF = (rfi, projectName = '', projectNumber = '', attach
       <style>${getPDFStyles()}</style>
     </head>
     <body>
-      ${generateHeader('Request for Information', rfi.rfi_number)}
-      
+      ${generateHeader('Request for Information', rfi.rfi_number, null, factoryLogoBase64)}
+
       <!-- Project & Status Info -->
       <div class="info-grid">
         ${generateInfoCell('Project', escapeHTML(projectDisplay), { large: true })}

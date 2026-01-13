@@ -16,18 +16,26 @@ function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState('month'); // week, month, day
   const [selectedDate, setSelectedDate] = useState(new Date());
-  
+  const [currentUserRole, setCurrentUserRole] = useState('');
+  const [userFactoryCode, setUserFactoryCode] = useState(null); // Factory code for PC/Plant Manager filtering
+
   // Data
   const [projects, setProjects] = useState([]);
   const [calendarItems, setCalendarItems] = useState([]);
-  
+
   // Edit modals
   const [editTask, setEditTask] = useState(null);
   const [editRFI, setEditRFI] = useState(null);
   const [editSubmittal, setEditSubmittal] = useState(null);
-  
+
   // Toast
   const [toast, setToast] = useState(null);
+
+  // Roles that cannot edit tasks/items AND should only see their factory's data
+  const factoryRestrictedRoles = ['project coordinator', 'pc', 'plant manager'];
+  const readOnlyRoles = ['project coordinator', 'pc', 'plant manager'];
+  const canEdit = !readOnlyRoles.includes(currentUserRole.toLowerCase());
+  const isFactoryRestricted = factoryRestrictedRoles.includes(currentUserRole.toLowerCase());
 
   useEffect(() => {
     fetchCalendarData();
@@ -36,45 +44,79 @@ function CalendarPage() {
   const fetchCalendarData = async () => {
     setLoading(true);
     try {
-      // Fetch all projects
-      const { data: projectsData } = await supabase
+      // Fetch current user role and factory assignment
+      let userRole = '';
+      let factoryCode = null;
+
+      if (user?.id) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('role, factory_id, factory:factories(code)')
+          .eq('id', user.id)
+          .single();
+
+        if (userData?.role) {
+          userRole = userData.role;
+          setCurrentUserRole(userData.role);
+        }
+
+        // Get factory code for PC/Plant Manager users
+        if (userData?.factory?.code) {
+          factoryCode = userData.factory.code;
+          setUserFactoryCode(factoryCode);
+        }
+      }
+
+      // Check if this user should only see their factory's data
+      const shouldFilterByFactory = factoryRestrictedRoles.includes(userRole.toLowerCase()) && factoryCode;
+
+      // Fetch all tasks, RFIs, submittals, milestones WITH embedded project info
+      // This bypasses RLS issues where PC users can't read projects directly
+      const [tasksResult, rfisResult, submittalsResult, milestonesResult] = await Promise.all([
+        supabase.from('tasks').select('*, project:projects(id, name, project_number, factory, color)'),
+        supabase.from('rfis').select('*, project:projects(id, name, project_number, factory, color)'),
+        supabase.from('submittals').select('*, project:projects(id, name, project_number, factory, color)'),
+        supabase.from('milestones').select('*, project:projects(id, name, project_number, factory, color)')
+      ]);
+
+      let tasksData = tasksResult.data || [];
+      let rfisData = rfisResult.data || [];
+      let submittalsData = submittalsResult.data || [];
+      let milestonesData = milestonesResult.data || [];
+
+      // Filter by factory for PC/Plant Manager users
+      if (shouldFilterByFactory) {
+        tasksData = tasksData.filter(t => t.project?.factory === factoryCode);
+        rfisData = rfisData.filter(r => r.project?.factory === factoryCode);
+        submittalsData = submittalsData.filter(s => s.project?.factory === factoryCode);
+        milestonesData = milestonesData.filter(m => m.project?.factory === factoryCode);
+      }
+
+      // Build projects from embedded data (fallback for RLS-blocked users)
+      const embeddedProjectsMap = {};
+      [...tasksData, ...rfisData, ...submittalsData, ...milestonesData].forEach(item => {
+        if (item.project && item.project.id) {
+          embeddedProjectsMap[item.project.id] = item.project;
+        }
+      });
+
+      // Try to fetch all projects directly first
+      let projectsData = [];
+      const { data: allProjects, error: projectsError } = await supabase
         .from('projects')
         .select('*')
         .order('name');
 
-      // Fetch all tasks with project info
-      const { data: tasksData } = await supabase
-        .from('tasks')
-        .select(`
-          *,
-          project:project_id(id, name, project_number, color),
-          assignee:assignee_id(name),
-          internal_owner:internal_owner_id(name)
-        `);
-
-      // Fetch all RFIs with project info
-      const { data: rfisData } = await supabase
-        .from('rfis')
-        .select(`
-          *,
-          project:project_id(id, name, project_number, color)
-        `);
-
-      // Fetch all submittals with project info
-      const { data: submittalsData } = await supabase
-        .from('submittals')
-        .select(`
-          *,
-          project:project_id(id, name, project_number, color)
-        `);
-
-      // Fetch all milestones with project info
-      const { data: milestonesData } = await supabase
-        .from('milestones')
-        .select(`
-          *,
-          project:project_id(id, name, project_number, color)
-        `);
+      if (allProjects && allProjects.length > 0) {
+        projectsData = allProjects;
+        // Also filter projects by factory for restricted users
+        if (shouldFilterByFactory) {
+          projectsData = projectsData.filter(p => p.factory === factoryCode);
+        }
+      } else {
+        // Fallback: use projects extracted from embedded joins (already filtered)
+        projectsData = Object.values(embeddedProjectsMap);
+      }
 
       // Assign colors to projects
       const projectsWithColors = (projectsData || []).map((project, index) => ({
@@ -116,6 +158,12 @@ function CalendarPage() {
   };
 
   const handleItemClick = (item) => {
+    // PC and Plant Manager roles cannot edit items
+    if (!canEdit) {
+      showToast('View only - editing is restricted for your role', 'info');
+      return;
+    }
+
     // Open the appropriate edit modal
     switch (item.type) {
       case 'task':
@@ -170,9 +218,10 @@ function CalendarPage() {
           onItemClick={handleItemClick}
           onDateClick={handleDateClick}
           onViewChange={handleViewChange}
+          canEdit={canEdit}
         />
       )}
-      
+
       {currentView === 'month' && (
         <CalendarMonthView
           items={calendarItems}
@@ -181,9 +230,10 @@ function CalendarPage() {
           onDateClick={handleDateClick}
           onViewChange={handleViewChange}
           initialDate={selectedDate}
+          canEdit={canEdit}
         />
       )}
-      
+
       {currentView === 'day' && (
         <CalendarDayView
           items={calendarItems}
@@ -191,6 +241,7 @@ function CalendarPage() {
           onItemClick={handleItemClick}
           onViewChange={handleViewChange}
           initialDate={selectedDate}
+          canEdit={canEdit}
         />
       )}
 
@@ -201,6 +252,8 @@ function CalendarPage() {
           onClose={() => setEditTask(null)}
           task={editTask}
           projectId={editTask.project_id}
+          projectName={editTask.project?.name || ''}
+          projectNumber={editTask.project?.project_number || ''}
           onSuccess={() => {
             setEditTask(null);
             handleEditSuccess();
@@ -218,6 +271,9 @@ function CalendarPage() {
           isOpen={true}
           onClose={() => setEditRFI(null)}
           rfi={editRFI}
+          projectName={editRFI.project?.name || ''}
+          projectNumber={editRFI.project?.project_number || ''}
+          factoryCode={editRFI.project?.factory || ''}
           onSuccess={() => {
             setEditRFI(null);
             handleEditSuccess();
