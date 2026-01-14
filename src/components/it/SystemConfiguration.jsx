@@ -36,7 +36,15 @@ import {
   Eye,
   EyeOff,
   Copy,
-  Check
+  Check,
+  Lock,
+  FolderKanban,
+  Calendar,
+  FileQuestion,
+  Factory,
+  Key,
+  Timer,
+  UserCheck
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 
@@ -59,7 +67,9 @@ const DEFAULT_CONFIG = {
     taskReminders: true,
     rfiAlerts: true,
     submittalAlerts: true,
-    workflowUpdates: true
+    workflowUpdates: true,
+    projectMilestones: true,
+    deliveryReminders: true
   },
   features: {
     darkMode: true,
@@ -75,6 +85,46 @@ const DEFAULT_CONFIG = {
     lazyLoadImages: true,
     paginationSize: 50,
     maxFileSize: 50
+  },
+  security: {
+    sessionTimeout: 480, // minutes (8 hours)
+    requireStrongPasswords: true,
+    minPasswordLength: 8,
+    enforce2FAAdmins: false,
+    maxLoginAttempts: 5,
+    lockoutDuration: 30, // minutes
+    autoLogoutOnIdle: true,
+    idleTimeout: 60 // minutes
+  },
+  projects: {
+    defaultPhaseCount: 4,
+    autoArchiveDays: 90,
+    requireProjectNumber: true,
+    projectNumberPrefix: 'SBT',
+    defaultHealthStatus: 'On Track',
+    warnDeliveryDaysBefore: 14,
+    criticalDeliveryDaysBefore: 7
+  },
+  calendar: {
+    workdayStart: '07:00',
+    workdayEnd: '17:00',
+    workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+    includesSaturday: false,
+    defaultMeetingDuration: 60, // minutes
+    showWeekends: true
+  },
+  rfiSubmittal: {
+    defaultRFIDueDays: 7,
+    defaultSubmittalDueDays: 14,
+    requireApprovalForClose: true,
+    autoNotifyOnOverdue: true,
+    escalateDaysOverdue: 3
+  },
+  factory: {
+    defaultFactory: 'ATX', // AmTex default
+    requireFactoryAssignment: true,
+    showAllFactoriesInReports: true,
+    factoryColorCoding: true
   }
 };
 
@@ -571,6 +621,137 @@ function SystemConfiguration() {
               </button>
             </div>
           </ConfigSection>
+
+          {/* Security Settings */}
+          <ConfigSection title="Security Settings" icon={Lock} color="#ef4444">
+            <ConfigInput
+              label="Session Timeout"
+              description="Auto logout after inactivity"
+              type="number"
+              value={config.security.sessionTimeout}
+              onChange={(v) => updateConfig('security', 'sessionTimeout', v)}
+              suffix="minutes"
+              min={15}
+              max={1440}
+            />
+            <ConfigToggle
+              label="Strong Passwords Required"
+              description="Enforce complex password rules"
+              value={config.security.requireStrongPasswords}
+              onChange={(v) => updateConfig('security', 'requireStrongPasswords', v)}
+            />
+            <ConfigInput
+              label="Minimum Password Length"
+              description="Minimum characters required"
+              type="number"
+              value={config.security.minPasswordLength}
+              onChange={(v) => updateConfig('security', 'minPasswordLength', v)}
+              suffix="chars"
+              min={6}
+              max={32}
+              disabled={!config.security.requireStrongPasswords}
+            />
+            <ConfigToggle
+              label="Require 2FA for Admins"
+              description="Two-factor authentication for admin accounts"
+              value={config.security.enforce2FAAdmins}
+              onChange={(v) => updateConfig('security', 'enforce2FAAdmins', v)}
+            />
+            <ConfigInput
+              label="Max Login Attempts"
+              description="Failed attempts before lockout"
+              type="number"
+              value={config.security.maxLoginAttempts}
+              onChange={(v) => updateConfig('security', 'maxLoginAttempts', v)}
+              suffix="attempts"
+              min={3}
+              max={10}
+            />
+            <ConfigInput
+              label="Lockout Duration"
+              description="Account lockout time after max attempts"
+              type="number"
+              value={config.security.lockoutDuration}
+              onChange={(v) => updateConfig('security', 'lockoutDuration', v)}
+              suffix="minutes"
+              min={5}
+              max={120}
+            />
+            <ConfigToggle
+              label="Auto Logout on Idle"
+              description="Logout users after idle timeout"
+              value={config.security.autoLogoutOnIdle}
+              onChange={(v) => updateConfig('security', 'autoLogoutOnIdle', v)}
+            />
+            <ConfigInput
+              label="Idle Timeout"
+              description="Minutes of inactivity before logout"
+              type="number"
+              value={config.security.idleTimeout}
+              onChange={(v) => updateConfig('security', 'idleTimeout', v)}
+              suffix="minutes"
+              min={5}
+              max={240}
+              disabled={!config.security.autoLogoutOnIdle}
+            />
+          </ConfigSection>
+
+          {/* Project Defaults */}
+          <ConfigSection title="Project Defaults" icon={FolderKanban} color="#8b5cf6">
+            <ConfigInput
+              label="Default Phase Count"
+              description="Number of phases for new projects"
+              type="number"
+              value={config.projects.defaultPhaseCount}
+              onChange={(v) => updateConfig('projects', 'defaultPhaseCount', v)}
+              suffix="phases"
+              min={1}
+              max={10}
+            />
+            <ConfigInput
+              label="Auto-Archive After"
+              description="Days after completion to archive"
+              type="number"
+              value={config.projects.autoArchiveDays}
+              onChange={(v) => updateConfig('projects', 'autoArchiveDays', v)}
+              suffix="days"
+              min={30}
+              max={365}
+            />
+            <ConfigToggle
+              label="Require Project Number"
+              description="Project number mandatory on creation"
+              value={config.projects.requireProjectNumber}
+              onChange={(v) => updateConfig('projects', 'requireProjectNumber', v)}
+            />
+            <ConfigInput
+              label="Project Number Prefix"
+              description="Default prefix for project numbers"
+              type="text"
+              value={config.projects.projectNumberPrefix}
+              onChange={(v) => updateConfig('projects', 'projectNumberPrefix', v)}
+            />
+            <ConfigInput
+              label="Warning Days Before Delivery"
+              description="Days to show warning indicator"
+              type="number"
+              value={config.projects.warnDeliveryDaysBefore}
+              onChange={(v) => updateConfig('projects', 'warnDeliveryDaysBefore', v)}
+              suffix="days"
+              min={3}
+              max={30}
+            />
+            <ConfigInput
+              label="Critical Days Before Delivery"
+              description="Days to show critical indicator"
+              type="number"
+              value={config.projects.criticalDeliveryDaysBefore}
+              onChange={(v) => updateConfig('projects', 'criticalDeliveryDaysBefore', v)}
+              suffix="days"
+              min={1}
+              max={14}
+            />
+          </ConfigSection>
         </div>
 
         {/* Right Column */}
@@ -768,6 +949,122 @@ function SystemConfiguration() {
                 <div style={{ fontSize: '0.75rem', color: '#22c55e' }}>Active</div>
               </div>
             </div>
+          </ConfigSection>
+
+          {/* Calendar & Scheduling */}
+          <ConfigSection title="Calendar & Scheduling" icon={Calendar} color="#0ea5e9">
+            <ConfigInput
+              label="Workday Start"
+              description="Default work start time"
+              type="time"
+              value={config.calendar.workdayStart}
+              onChange={(v) => updateConfig('calendar', 'workdayStart', v)}
+            />
+            <ConfigInput
+              label="Workday End"
+              description="Default work end time"
+              type="time"
+              value={config.calendar.workdayEnd}
+              onChange={(v) => updateConfig('calendar', 'workdayEnd', v)}
+            />
+            <ConfigToggle
+              label="Include Saturdays"
+              description="Count Saturdays as working days"
+              value={config.calendar.includesSaturday}
+              onChange={(v) => updateConfig('calendar', 'includesSaturday', v)}
+            />
+            <ConfigInput
+              label="Default Meeting Duration"
+              description="Default length for new meetings"
+              type="number"
+              value={config.calendar.defaultMeetingDuration}
+              onChange={(v) => updateConfig('calendar', 'defaultMeetingDuration', v)}
+              suffix="minutes"
+              min={15}
+              max={480}
+            />
+            <ConfigToggle
+              label="Show Weekends"
+              description="Display weekends in calendar views"
+              value={config.calendar.showWeekends}
+              onChange={(v) => updateConfig('calendar', 'showWeekends', v)}
+            />
+          </ConfigSection>
+
+          {/* RFI & Submittal Settings */}
+          <ConfigSection title="RFI & Submittal Settings" icon={FileQuestion} color="#f97316">
+            <ConfigInput
+              label="Default RFI Due Days"
+              description="Days until RFI response is due"
+              type="number"
+              value={config.rfiSubmittal.defaultRFIDueDays}
+              onChange={(v) => updateConfig('rfiSubmittal', 'defaultRFIDueDays', v)}
+              suffix="days"
+              min={1}
+              max={30}
+            />
+            <ConfigInput
+              label="Default Submittal Due Days"
+              description="Days until submittal is due"
+              type="number"
+              value={config.rfiSubmittal.defaultSubmittalDueDays}
+              onChange={(v) => updateConfig('rfiSubmittal', 'defaultSubmittalDueDays', v)}
+              suffix="days"
+              min={1}
+              max={60}
+            />
+            <ConfigToggle
+              label="Require Approval to Close"
+              description="Manager approval needed to close items"
+              value={config.rfiSubmittal.requireApprovalForClose}
+              onChange={(v) => updateConfig('rfiSubmittal', 'requireApprovalForClose', v)}
+            />
+            <ConfigToggle
+              label="Auto-Notify on Overdue"
+              description="Send alerts when items become overdue"
+              value={config.rfiSubmittal.autoNotifyOnOverdue}
+              onChange={(v) => updateConfig('rfiSubmittal', 'autoNotifyOnOverdue', v)}
+            />
+            <ConfigInput
+              label="Escalation Days"
+              description="Days overdue before escalation"
+              type="number"
+              value={config.rfiSubmittal.escalateDaysOverdue}
+              onChange={(v) => updateConfig('rfiSubmittal', 'escalateDaysOverdue', v)}
+              suffix="days"
+              min={1}
+              max={14}
+              disabled={!config.rfiSubmittal.autoNotifyOnOverdue}
+            />
+          </ConfigSection>
+
+          {/* Factory Settings */}
+          <ConfigSection title="Factory Settings" icon={Factory} color="#10b981">
+            <ConfigInput
+              label="Default Factory"
+              description="Default factory for new projects"
+              type="text"
+              value={config.factory.defaultFactory}
+              onChange={(v) => updateConfig('factory', 'defaultFactory', v)}
+            />
+            <ConfigToggle
+              label="Require Factory Assignment"
+              description="Factory required for all projects"
+              value={config.factory.requireFactoryAssignment}
+              onChange={(v) => updateConfig('factory', 'requireFactoryAssignment', v)}
+            />
+            <ConfigToggle
+              label="Show All Factories in Reports"
+              description="Include all factories in aggregate reports"
+              value={config.factory.showAllFactoriesInReports}
+              onChange={(v) => updateConfig('factory', 'showAllFactoriesInReports', v)}
+            />
+            <ConfigToggle
+              label="Factory Color Coding"
+              description="Use color coding for factory identification"
+              value={config.factory.factoryColorCoding}
+              onChange={(v) => updateConfig('factory', 'factoryColorCoding', v)}
+            />
           </ConfigSection>
         </div>
       </div>

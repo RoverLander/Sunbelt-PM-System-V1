@@ -1,7 +1,7 @@
 # Project Status
 
 **Last Updated:** January 14, 2026
-**Version:** 1.1.0
+**Version:** 1.2.1
 **Status:** Production Ready (Beta) + Praxis Integration In Progress
 
 ---
@@ -154,6 +154,52 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 ---
 
 ## Recent Updates (January 2026)
+
+### January 14, 2026 (Late Night - System Configuration Expansion)
+
+- **SystemConfiguration Settings - Expanded**
+  - Added 5 new configuration sections to IT Settings page
+  - All settings persisted to localStorage with Save/Reset functionality
+
+  - **Security Settings Section (NEW):**
+    - Session timeout duration (15-1440 minutes)
+    - Strong password requirements toggle
+    - Minimum password length (6-32 chars)
+    - 2FA requirement for admin accounts
+    - Max login attempts before lockout (3-10)
+    - Account lockout duration (5-120 minutes)
+    - Auto logout on idle toggle
+    - Idle timeout configuration (5-240 minutes)
+
+  - **Project Defaults Section (NEW):**
+    - Default phase count for new projects (1-10)
+    - Auto-archive days after completion (30-365)
+    - Require project number toggle
+    - Project number prefix (e.g., "SBT")
+    - Warning days before delivery (3-30)
+    - Critical days before delivery (1-14)
+
+  - **Calendar & Scheduling Section (NEW):**
+    - Workday start/end times (time inputs)
+    - Include Saturdays toggle
+    - Default meeting duration (15-480 minutes)
+    - Show weekends in calendar toggle
+
+  - **RFI & Submittal Settings Section (NEW):**
+    - Default RFI due days (1-30)
+    - Default submittal due days (1-60)
+    - Require approval to close toggle
+    - Auto-notify on overdue toggle
+    - Escalation days after overdue (1-14)
+
+  - **Factory Settings Section (NEW):**
+    - Default factory code (e.g., "ATX")
+    - Require factory assignment toggle
+    - Show all factories in reports toggle
+    - Factory color coding toggle
+
+- **Files Modified:**
+  - `src/components/it/SystemConfiguration.jsx` - Added 5 new config sections with UI
 
 ### January 14, 2026 (Late Night - IT Dashboard Enhancements)
 
@@ -969,50 +1015,30 @@ notify_contacts JSONB               -- Array of {id, name, email} snapshots
 
 **Status:** Complete (January 14, 2026)
 
-**Overview:** Dedicated settings page for IT Manager role, accessible from sidebar navigation. Uses existing `SystemConfiguration` component now directly routable via sidebar.
+**Overview:** Comprehensive system configuration page for IT administrators, accessible from sidebar navigation. Uses `SystemConfiguration` component with 9 configuration sections.
 
-**Settings Categories to Consider:**
-- **Authentication & Security**
-  - Session timeout duration
-  - Password requirements
-  - Two-factor authentication toggle
-  - Account lockout thresholds
-
-- **System Defaults**
-  - Default dashboard per role
-  - Default factory assignments
-  - Auto-assign rules for new projects
-
-- **Notifications**
-  - Email server configuration
-  - Notification templates
-  - Email frequency limits
-  - Quiet hours settings
-
-- **Data Management**
-  - Data retention policies
-  - Archive settings
-  - Backup schedules
-
-- **UI/UX Settings**
-  - Default theme (light/dark)
-  - Date/time format
-  - Currency format
-  - Items per page defaults
-
-- **Integration Settings**
-  - Praxis import configuration
-  - API rate limits
-  - Webhook endpoints
-
-- **Feature Toggles** (link to Feature Flags page)
+**Implemented Settings Categories:**
+- **Email Settings** - Warning emails, daily digest, SMTP configuration
+- **Notifications** - Browser notifications, task/RFI/submittal/workflow alerts
+- **Feature Toggles** - Dark mode, auto-save, compact view, animations, debug mode, maintenance mode
+- **Performance** - Caching, pagination, lazy loading, file size limits
+- **Cache Management** - Clear application cache
+- **Environment** - System info, Supabase URL, build version, timezone
+- **System Status** - Database, Auth, Storage, Realtime connectivity status
+- **Security Settings** - Session timeout, password rules, 2FA, lockout policies
+- **Project Defaults** - Phase count, archive settings, delivery warning thresholds
+- **Calendar & Scheduling** - Work hours, meeting duration, weekend settings
+- **RFI & Submittal Settings** - Due day defaults, approval requirements, escalation
+- **Factory Settings** - Default factory, assignment requirements, color coding
 
 **Implementation:**
-- [ ] Create `system_settings` table
-- [ ] Create SettingsPage component (`src/components/it/SettingsPage.jsx`)
-- [ ] Add "Settings" nav item for IT_Manager role
-- [ ] Settings form with validation
-- [ ] Settings change audit logging
+- [x] SystemConfiguration component with all settings sections
+- [x] Settings persisted to localStorage
+- [x] Save/Reset functionality
+- [x] "Settings" nav item in IT sidebar
+- [x] Settings form with validation (min/max values)
+- [ ] Create `system_settings` database table (future - for server-side persistence)
+- [ ] Settings change audit logging (future)
 
 ---
 

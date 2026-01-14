@@ -2,7 +2,7 @@
 
 **Last Updated:** January 14, 2026 (Late Night)
 **Framework:** React 18 + Vite
-**Version:** 1.2.0
+**Version:** 1.2.1
 
 ---
 
@@ -177,7 +177,9 @@ components/
 │   ├── SecurityCenter.jsx       # Security metrics and alerts
 │   ├── DatabaseTools.jsx        # Database diagnostics and stats
 │   ├── SystemHealth.jsx         # System health monitoring
-│   ├── SystemConfiguration.jsx  # Global settings management
+│   ├── SystemConfiguration.jsx  # Global settings (9 sections: email, notifications,
+│   │                             #   features, performance, cache, environment, status,
+│   │                             #   security, projects, calendar, RFI/submittal, factory)
 │   ├── AuditLogViewer.jsx       # Activity audit trail
 │   └── index.js             # Barrel exports
 │
