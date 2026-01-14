@@ -34,6 +34,7 @@ import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { useContacts } from '../../hooks/useContacts';
 import FileAttachments from '../common/FileAttachments';
+import ContactPicker from '../common/ContactPicker';
 import { exportRFIToICS } from '../../utils/icsUtils';
 import { exportRFIToPDF } from '../../utils/pdfUtils';
 import { draftRFIEmail } from '../../utils/emailUtils';
@@ -69,6 +70,7 @@ function EditRFIModal({ isOpen, onClose, rfi, projectName = '', projectNumber = 
     answer: '',
     sent_to: '',
     sent_to_email: '',
+    selected_contact: null, // Full contact object from ContactPicker
     is_external: false,
     internal_owner_id: '',
     priority: 'Medium',
@@ -90,6 +92,7 @@ function EditRFIModal({ isOpen, onClose, rfi, projectName = '', projectNumber = 
         answer: rfi.answer || '',
         sent_to: rfi.sent_to || '',
         sent_to_email: rfi.sent_to_email || '',
+        selected_contact: null, // Will be populated by ContactPicker if assigned_to_contact_id exists
         is_external: rfi.is_external || false,
         internal_owner_id: rfi.internal_owner_id || '',
         priority: rfi.priority || 'Medium',
@@ -154,20 +157,28 @@ function EditRFIModal({ isOpen, onClose, rfi, projectName = '', projectNumber = 
     setError('');
 
     try {
+      const selectedContact = formData.selected_contact;
+      const isExternal = formData.is_external;
+
       const rfiData = {
         subject: formData.subject.trim(),
         question: formData.question.trim(),
         answer: formData.answer.trim() || null,
-        sent_to: formData.sent_to,
-        sent_to_email: formData.sent_to_email || null,
-        is_external: formData.is_external,
+        // Legacy sent_to field (name as string)
+        sent_to: isExternal ? formData.sent_to : (selectedContact?.full_name || formData.sent_to),
+        sent_to_email: isExternal ? (formData.sent_to_email || null) : (selectedContact?.email || null),
+        // New directory_contacts reference
+        assigned_to_contact_id: isExternal ? null : (selectedContact?.id || null),
+        assigned_to_name: isExternal ? null : (selectedContact?.full_name || null),
+        assigned_to_email: isExternal ? null : (selectedContact?.email || null),
+        is_external: isExternal,
         internal_owner_id: formData.internal_owner_id || null,
         priority: formData.priority,
         due_date: formData.due_date || null,
         status: formData.status,
         // Auto-set date_answered when status changes to Answered
-        date_answered: formData.status === 'Answered' && rfi.status !== 'Answered' 
-          ? new Date().toISOString().split('T')[0] 
+        date_answered: formData.status === 'Answered' && rfi.status !== 'Answered'
+          ? new Date().toISOString().split('T')[0]
           : rfi.date_answered,
         updated_at: new Date().toISOString()
       };
@@ -500,11 +511,11 @@ function EditRFIModal({ isOpen, onClose, rfi, projectName = '', projectNumber = 
               </label>
             </div>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
-              {/* Sent To */}
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Sent To (Name/Company)</label>
-                {formData.is_external ? (
+            {/* Recipient - ContactPicker for internal, text input for external */}
+            {formData.is_external ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Sent To (Name/Company)</label>
                   <input
                     type="text"
                     name="sent_to"
@@ -513,44 +524,41 @@ function EditRFIModal({ isOpen, onClose, rfi, projectName = '', projectNumber = 
                     className="form-input"
                     placeholder="e.g., ABC Architecture"
                   />
-                ) : (
-                  <select
-                    name="sent_to"
-                    value={formData.sent_to}
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Email</label>
+                  <input
+                    type="email"
+                    name="sent_to_email"
+                    value={formData.sent_to_email}
                     onChange={handleChange}
                     className="form-input"
-                  >
-                    <option value="">Select recipient</option>
-                    {/* Internal Team */}
-                    <optgroup label="── Internal Team ──">
-                      {contacts.filter(c => c.contact_type === 'user').map(u => (
-                        <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
-                      ))}
-                    </optgroup>
-                    {/* Factory Contacts */}
-                    <optgroup label="── Factory Contacts ──">
-                      {contacts.filter(c => c.contact_type === 'factory').map(c => (
-                        <option key={c.id} value={c.name}>{c.name}</option>
-                      ))}
-                    </optgroup>
-                  </select>
-                )}
+                    placeholder="contact@example.com"
+                  />
+                </div>
               </div>
-              
-              {/* Email (for external) */}
+            ) : (
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Email</label>
-                <input
-                  type="email"
-                  name="sent_to_email"
-                  value={formData.sent_to_email}
-                  onChange={handleChange}
-                  className="form-input"
-                  placeholder="contact@example.com"
-                  disabled={!formData.is_external}
+                <ContactPicker
+                  value={rfi?.assigned_to_contact_id || formData.selected_contact?.id}
+                  onChange={(contact) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      selected_contact: contact,
+                      sent_to: contact?.full_name || '',
+                      sent_to_email: contact?.email || ''
+                    }));
+                  }}
+                  projectFactory={factoryCode}
+                  placeholder="Select recipient from directory..."
+                  label="Sent To"
+                  showExternal={true}
+                  onExternalSelect={() => {
+                    setFormData(prev => ({ ...prev, is_external: true }));
+                  }}
                 />
               </div>
-            </div>
+            )}
 
             {/* Internal Owner (for external RFIs) */}
             {formData.is_external && (

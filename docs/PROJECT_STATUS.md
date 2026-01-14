@@ -10,6 +10,8 @@
 
 - **[ARCHITECTURE_ANALYSIS.md](./ARCHITECTURE_ANALYSIS.md)** - Full system topology, security analysis, dependency graph, and improvement recommendations (Jan 14, 2026)
 - **[PRAXIS_INTEGRATION_ANALYSIS.md](./PRAXIS_INTEGRATION_ANALYSIS.md)** - Praxis field mappings and integration details
+- **[DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)** - Complete database schema reference (Jan 14, 2026)
+- **[FRONTEND_ARCHITECTURE.md](./FRONTEND_ARCHITECTURE.md)** - React component organization and data flow (Jan 14, 2026)
 
 ---
 
@@ -152,6 +154,87 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 ---
 
 ## Recent Updates (January 2026)
+
+### January 14, 2026 (Late Night - ContactPicker & Documentation)
+
+- **ContactPicker Component - Complete**
+  - Created `src/components/common/ContactPicker.jsx` - Reusable contact selection component
+  - **Features:**
+    - Type-ahead search across 311 directory contacts
+    - Factory grouping with project factory prioritized first
+    - Department color-coded badges (14 departments with unique colors)
+    - Keyboard navigation (arrow keys, enter to select, escape to close)
+    - External contact option toggle (for non-directory recipients)
+    - Suggested department filtering
+  - **Integration:**
+    - `EditTaskModal.jsx` - Replaced grouped select dropdown with ContactPicker
+    - `EditRFIModal.jsx` - Replaced select dropdown with ContactPicker (conditional on is_external)
+    - `EditSubmittalModal.jsx` - Same pattern as EditRFIModal
+  - **Database fields updated:**
+    - New fields: `assigned_to_contact_id`, `assigned_to_name`, `assigned_to_email`
+    - Snapshot approach for data integrity (stores name/email at time of assignment)
+    - Backward compatible: Legacy `assignee_id` and `sent_to` fields retained
+
+- **System Documentation - Complete**
+  - Created `docs/DATABASE_SCHEMA.md` - Comprehensive database schema reference
+    - All tables with columns, types, constraints, indexes
+    - Key tables: users, projects, tasks, rfis, submittals, directory_contacts, sales_quotes, factories, departments
+    - RLS policies and triggers documented
+    - Entity relationships and dependencies
+  - Created `docs/FRONTEND_ARCHITECTURE.md` - React component organization reference
+    - Component hierarchy and feature domains
+    - Role-based routing documentation
+    - State management patterns (local state + Supabase)
+    - CSS variables and styling approach
+    - Data flow patterns
+
+- **Files Created:**
+  - `src/components/common/ContactPicker.jsx` - NEW: Reusable contact picker
+  - `docs/DATABASE_SCHEMA.md` - NEW: Database schema documentation
+  - `docs/FRONTEND_ARCHITECTURE.md` - NEW: Frontend architecture documentation
+
+- **Files Modified:**
+  - `src/components/projects/EditTaskModal.jsx` - Integrated ContactPicker
+  - `src/components/projects/EditRFIModal.jsx` - Integrated ContactPicker
+  - `src/components/projects/EditSubmittalModal.jsx` - Integrated ContactPicker
+  - `docs/PROJECT_STATUS.md` - Added documentation links
+
+### January 14, 2026 (Late Night - Code Refactoring)
+
+- **Sales Status Configuration Refactoring - Complete**
+  - Created `src/constants/salesStatuses.js` as single source of truth for all sales status definitions
+  - Eliminated ~250 lines of duplicate STATUS_CONFIG code across 7 files
+  - **Exports from shared constants file:**
+    - `STATUS_CONFIG` - Full status configuration with labels, colors, icons, bgColors, order
+    - `ACTIVE_STATUSES` - Pipeline statuses: draft, pending, sent, negotiating, awaiting_po, po_received
+    - `TERMINAL_STATUSES` - End states: won, lost, expired, converted
+    - `ALL_STATUSES` - Sorted by display order
+    - `BUILDING_TYPES` - CUSTOM, FLEET/STOCK, GOVERNMENT, Business
+    - `BUILDING_TYPE_COLORS` - Color mapping for building types
+    - `FACTORIES` - All 14 factory codes
+    - `AGING_THRESHOLDS` - Days for fresh (15), aging (25), stale (30)
+    - `LOST_REASONS` - Dropdown options for lost quotes
+    - Helper functions: `formatCurrency`, `formatCompactCurrency`, `getDaysAgo`, `getAgingColor`, `getAgingLabel`, `getStatusConfig`, `isActiveStatus`, `isTerminalStatus`
+  - **Files updated to use shared constants:**
+    - `src/components/sales/SalesManagerDashboard.jsx`
+    - `src/components/sales/SalesRepDashboard.jsx`
+    - `src/components/sales/SalesDashboard.jsx`
+    - `src/components/sales/SalesTeamPage.jsx`
+    - `src/components/sales/QuoteDetail.jsx`
+    - `src/components/layout/Sidebar.jsx`
+    - `src/components/calendar/CalendarPage.jsx`
+  - **Bug fix:** Sidebar was using incomplete activeStatuses array (missing awaiting_po, po_received) - now uses shared ACTIVE_STATUSES
+  - **Bug fix:** Fixed missing icon imports (Award, FileText, CheckCircle, ArrowRight) in dashboard components after refactoring
+
+- **Debug Logging Cleanup - Complete**
+  - Removed debug console.log statements from CalendarPage.jsx
+
+- **Files Created:**
+  - `src/constants/salesStatuses.js` - NEW: Shared sales status configuration
+
+- **Commits:**
+  - `5c7cefa` - Refactor: Extract shared STATUS_CONFIG to single source of truth
+  - `51d8ace` - Fix: Add missing icon imports after refactoring
 
 ### January 14, 2026 (Night - Sales Data & Status Fixes)
 

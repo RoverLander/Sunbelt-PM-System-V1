@@ -35,6 +35,7 @@ import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { useContacts } from '../../hooks/useContacts';
 import FileAttachments from '../common/FileAttachments';
+import ContactPicker from '../common/ContactPicker';
 import { exportSubmittalToICS } from '../../utils/icsUtils';
 import { exportSubmittalToPDF } from '../../utils/pdfUtils';
 import { draftSubmittalEmail } from '../../utils/emailUtils';
@@ -88,6 +89,7 @@ function EditSubmittalModal({ isOpen, onClose, submittal, projectName = '', proj
     model_number: '',
     sent_to: '',
     sent_to_email: '',
+    selected_contact: null, // Full contact object from ContactPicker
     is_external: false,
     internal_owner_id: '',
     priority: 'Medium',
@@ -112,6 +114,7 @@ function EditSubmittalModal({ isOpen, onClose, submittal, projectName = '', proj
         model_number: submittal.model_number || '',
         sent_to: submittal.sent_to || '',
         sent_to_email: submittal.sent_to_email || '',
+        selected_contact: null, // Will be populated by ContactPicker if assigned_to_contact_id exists
         is_external: submittal.is_external || false,
         internal_owner_id: submittal.internal_owner_id || '',
         priority: submittal.priority || 'Medium',
@@ -198,6 +201,9 @@ function EditSubmittalModal({ isOpen, onClose, submittal, projectName = '', proj
     setError('');
 
     try {
+      const selectedContact = formData.selected_contact;
+      const isExternal = formData.is_external;
+
       const submittalData = {
         title: formData.title.trim(),
         description: formData.description.trim() || null,
@@ -205,9 +211,14 @@ function EditSubmittalModal({ isOpen, onClose, submittal, projectName = '', proj
         spec_section: formData.spec_section.trim() || null,
         manufacturer: formData.manufacturer.trim() || null,
         model_number: formData.model_number.trim() || null,
-        sent_to: formData.sent_to,
-        sent_to_email: formData.sent_to_email || null,
-        is_external: formData.is_external,
+        // Legacy sent_to field (name as string)
+        sent_to: isExternal ? formData.sent_to : (selectedContact?.full_name || formData.sent_to),
+        sent_to_email: isExternal ? (formData.sent_to_email || null) : (selectedContact?.email || null),
+        // New directory_contacts reference
+        assigned_to_contact_id: isExternal ? null : (selectedContact?.id || null),
+        assigned_to_name: isExternal ? null : (selectedContact?.full_name || null),
+        assigned_to_email: isExternal ? null : (selectedContact?.email || null),
+        is_external: isExternal,
         internal_owner_id: formData.internal_owner_id || null,
         priority: formData.priority,
         due_date: formData.due_date || null,
@@ -215,7 +226,7 @@ function EditSubmittalModal({ isOpen, onClose, submittal, projectName = '', proj
         reviewer_comments: formData.reviewer_comments.trim() || null,
         revision_number: formData.revision_number,
         // Auto-set date_approved when status changes to Approved
-        date_approved: (formData.status === 'Approved' || formData.status === 'Approved as Noted') && 
+        date_approved: (formData.status === 'Approved' || formData.status === 'Approved as Noted') &&
                        submittal.status !== 'Approved' && submittal.status !== 'Approved as Noted'
           ? new Date().toISOString().split('T')[0]
           : submittal.date_approved,
@@ -528,33 +539,39 @@ function EditSubmittalModal({ isOpen, onClose, submittal, projectName = '', proj
               </label>
             </div>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Sent To</label>
-                {formData.is_external ? (
+            {/* Recipient - ContactPicker for internal, text inputs for external */}
+            {formData.is_external ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Sent To</label>
                   <input type="text" name="sent_to" value={formData.sent_to} onChange={handleChange} className="form-input" placeholder="e.g., ABC Architecture" />
-                ) : (
-                  <select name="sent_to" value={formData.sent_to} onChange={handleChange} className="form-input">
-                    <option value="">Select recipient</option>
-                    <optgroup label="── Internal Team ──">
-                      {contacts.filter(c => c.contact_type === 'user').map(u => (
-                        <option key={u.id} value={u.name}>{u.name} ({u.role})</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="── Factory Contacts ──">
-                      {contacts.filter(c => c.contact_type === 'factory').map(c => (
-                        <option key={c.id} value={c.name}>{c.name}</option>
-                      ))}
-                    </optgroup>
-                  </select>
-                )}
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Email</label>
+                  <input type="email" name="sent_to_email" value={formData.sent_to_email} onChange={handleChange} className="form-input" placeholder="contact@example.com" />
+                </div>
               </div>
-              
+            ) : (
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Email</label>
-                <input type="email" name="sent_to_email" value={formData.sent_to_email} onChange={handleChange} className="form-input" placeholder="contact@example.com" disabled={!formData.is_external} />
+                <ContactPicker
+                  value={submittal?.assigned_to_contact_id || formData.selected_contact?.id}
+                  onChange={(contact) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      selected_contact: contact,
+                      sent_to: contact?.full_name || '',
+                      sent_to_email: contact?.email || ''
+                    }));
+                  }}
+                  placeholder="Select recipient from directory..."
+                  label="Sent To"
+                  showExternal={true}
+                  onExternalSelect={() => {
+                    setFormData(prev => ({ ...prev, is_external: true }));
+                  }}
+                />
               </div>
-            </div>
+            )}
 
             {formData.is_external && (
               <div className="form-group" style={{ marginTop: 'var(--space-md)', marginBottom: 0 }}>

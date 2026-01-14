@@ -36,6 +36,7 @@ import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { useContacts } from '../../hooks/useContacts';
 import FileAttachments from '../common/FileAttachments';
+import ContactPicker from '../common/ContactPicker';
 import { exportTaskToICS } from '../../utils/icsUtils';
 import { exportTaskToPDF } from '../../utils/pdfUtils';
 import { draftTaskEmail } from '../../utils/emailUtils';
@@ -57,7 +58,8 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
   // HOOKS
   // ==========================================================================
   const { user } = useAuth();
-  const { contacts, users, factoryContacts } = useContacts(isOpen);
+  // We only need contacts for the internal_owner_id dropdown (external assignment tracking)
+  const { contacts } = useContacts(isOpen);
 
   // ==========================================================================
   // DERIVED - EXTRACT FACTORY CODE
@@ -81,6 +83,7 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
     description: '',
     assignment_type: 'internal',
     assignee_id: '',
+    assigned_contact: null, // Full contact object from ContactPicker
     external_assignee_name: '',
     external_assignee_email: '',
     internal_owner_id: '',
@@ -106,7 +109,8 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
         title: task.title || '',
         description: task.description || '',
         assignment_type: isExternal ? 'external' : 'internal',
-        assignee_id: task.assignee_id || '',
+        assignee_id: task.assignee_id || task.assigned_to_contact_id || '',
+        assigned_contact: null, // Will be populated by ContactPicker if assignee_id exists
         external_assignee_name: task.external_assignee_name || '',
         external_assignee_email: task.external_assignee_email || '',
         internal_owner_id: task.internal_owner_id || '',
@@ -125,42 +129,9 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
   }, [isOpen, task]);
 
   // ==========================================================================
-  // GROUPED CONTACTS FOR DROPDOWN
+  // NOTE: groupedContacts removed - now using ContactPicker component
+  // which fetches from directory_contacts table directly
   // ==========================================================================
-  // Organizes contacts into: Project Factory → Sunbelt Corporate → Other Factories
-  const groupedContacts = React.useMemo(() => {
-    // Get factory contacts for the project's factory
-    const projectFactoryContacts = factoryContacts.filter(
-      c => c.factory_code === projectFactoryCode
-    ).sort((a, b) => a.name.localeCompare(b.name));
-
-    // Get factory contacts from other factories, grouped by factory
-    const otherFactoryContacts = factoryContacts.filter(
-      c => c.factory_code !== projectFactoryCode
-    );
-
-    // Group other factory contacts by factory_code
-    const otherFactoriesGrouped = otherFactoryContacts.reduce((acc, contact) => {
-      const key = contact.factory_code || 'Unknown';
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(contact);
-      return acc;
-    }, {});
-
-    // Sort each group by name
-    Object.keys(otherFactoriesGrouped).forEach(key => {
-      otherFactoriesGrouped[key].sort((a, b) => a.name.localeCompare(b.name));
-    });
-
-    // Sunbelt Corporate users (internal team)
-    const sunbeltUsers = users.sort((a, b) => a.name.localeCompare(b.name));
-
-    return {
-      projectFactory: projectFactoryContacts,
-      sunbeltCorporate: sunbeltUsers,
-      otherFactories: otherFactoriesGrouped
-    };
-  }, [factoryContacts, users, projectFactoryCode]);
 
   // ==========================================================================
   // DATA FETCHING
@@ -231,11 +202,18 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
 
     try {
       const isExternal = formData.assignment_type === 'external';
-      
+      const selectedContact = formData.assigned_contact;
+
       const taskData = {
         title: formData.title.trim(),
         description: formData.description.trim() || null,
+        // Legacy assignee_id field - kept for backward compatibility
         assignee_id: isExternal ? null : (formData.assignee_id || null),
+        // New directory_contacts reference
+        assigned_to_contact_id: isExternal ? null : (selectedContact?.id || null),
+        assigned_to_name: isExternal ? null : (selectedContact?.full_name || null),
+        assigned_to_email: isExternal ? null : (selectedContact?.email || null),
+        // External assignment fields
         external_assignee_name: isExternal ? formData.external_assignee_name.trim() : null,
         external_assignee_email: isExternal ? formData.external_assignee_email.trim() : null,
         is_external: isExternal,
@@ -597,52 +575,27 @@ function EditTaskModal({ isOpen, onClose, task, projectId, projectName = '', pro
           </div>
 
           {/* ============================================================ */}
-          {/* INTERNAL ASSIGNMENT                                          */}
+          {/* INTERNAL ASSIGNMENT - ContactPicker from Directory           */}
           {/* ============================================================ */}
           {formData.assignment_type === 'internal' && (
             <div className="form-group">
-              <label className="form-label">Assign To</label>
-              <select
-                name="assignee_id"
-                value={formData.assignee_id}
-                onChange={handleChange}
-                className="form-input"
-              >
-                <option value="">Select team member</option>
-
-                {/* Section 1: Project Factory Contacts (if factory is set) */}
-                {projectFactoryCode && groupedContacts.projectFactory.length > 0 && (
-                  <optgroup label={`━━ ${projectFactory || projectFactoryCode} ━━`}>
-                    {groupedContacts.projectFactory.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.department || c.role_code})
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-
-                {/* Section 2: Sunbelt Corporate (Internal Team) */}
-                {groupedContacts.sunbeltCorporate.length > 0 && (
-                  <optgroup label="━━ Sunbelt Corporate ━━">
-                    {groupedContacts.sunbeltCorporate.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.role})
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-
-                {/* Section 3: Other Factory Contacts (grouped by factory) */}
-                {Object.entries(groupedContacts.otherFactories).map(([factoryCode, contacts]) => (
-                  <optgroup key={factoryCode} label={`── ${factoryCode} ──`}>
-                    {contacts.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.department || c.role_code})
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+              <ContactPicker
+                value={formData.assignee_id || formData.assigned_contact?.id}
+                onChange={(contact) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    assigned_contact: contact,
+                    assignee_id: contact?.id || ''
+                  }));
+                }}
+                projectFactory={projectFactoryCode}
+                placeholder="Select assignee from directory..."
+                label="Assign To"
+                showExternal={true}
+                onExternalSelect={() => {
+                  setFormData(prev => ({ ...prev, assignment_type: 'external' }));
+                }}
+              />
             </div>
           )}
 
