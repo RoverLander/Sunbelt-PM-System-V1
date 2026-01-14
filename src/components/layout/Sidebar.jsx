@@ -26,7 +26,7 @@
 // - ✅ ADDED: Factory-specific stats for PC role
 // ============================================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Building2,
   LayoutDashboard,
@@ -61,7 +61,9 @@ import {
   Receipt,
   Target,
   UserCheck,
-  Contact
+  Contact,
+  PanelLeftClose,
+  PanelLeft
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -83,6 +85,11 @@ function Sidebar({
   // ==========================================================================
   // STATE
   // ==========================================================================
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return saved !== null ? JSON.parse(saved) : false;
+  });
+
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('darkMode');
     return saved !== null ? JSON.parse(saved) : true;
@@ -526,6 +533,26 @@ function Sidebar({
   // ==========================================================================
   // HANDLERS
   // ==========================================================================
+  const toggleCollapsed = useCallback(() => {
+    setIsCollapsed(prev => {
+      const newValue = !prev;
+      localStorage.setItem('sidebarCollapsed', JSON.stringify(newValue));
+      return newValue;
+    });
+  }, []);
+
+  // Keyboard shortcut: Ctrl/Cmd + B to toggle sidebar
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        toggleCollapsed();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleCollapsed]);
+
   const handleLogout = async () => {
     try {
       await signOut();
@@ -1122,6 +1149,13 @@ function Sidebar({
   };
 
   // ==========================================================================
+  // SIDEBAR WIDTH
+  // ==========================================================================
+  const EXPANDED_WIDTH = 260;
+  const COLLAPSED_WIDTH = 64;
+  const sidebarWidth = isCollapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
+
+  // ==========================================================================
   // MAIN RENDER
   // ==========================================================================
   return (
@@ -1130,54 +1164,102 @@ function Sidebar({
       left: 0,
       top: 0,
       bottom: 0,
-      width: '260px',
+      width: `${sidebarWidth}px`,
       background: 'var(--bg-secondary)',
       borderRight: '1px solid var(--border-color)',
       display: 'flex',
       flexDirection: 'column',
-      zIndex: 100
+      zIndex: 100,
+      transition: 'width 0.2s ease-in-out',
+      overflow: 'hidden'
     }}>
       {/* ================================================================== */}
-      {/* LOGO                                                              */}
+      {/* LOGO + COLLAPSE TOGGLE                                            */}
       {/* ================================================================== */}
       <div style={{
-        padding: 'var(--space-md) var(--space-lg)',
-        borderBottom: '1px solid var(--border-color)'
+        padding: isCollapsed ? 'var(--space-md) var(--space-sm)' : 'var(--space-md) var(--space-lg)',
+        borderBottom: '1px solid var(--border-color)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: isCollapsed ? 'center' : 'space-between',
+        minHeight: '60px',
+        transition: 'padding 0.2s ease-in-out'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-          <Building2 size={24} style={{ color: 'var(--sunbelt-orange)' }} />
-          <div>
-            <div style={{ fontWeight: '700', fontSize: '1rem', color: 'var(--text-primary)' }}>Sunbelt PM</div>
-            <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>Project Management</div>
-          </div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--space-sm)',
+          overflow: 'hidden'
+        }}>
+          <Building2 size={24} style={{ color: 'var(--sunbelt-orange)', flexShrink: 0 }} />
+          {!isCollapsed && (
+            <div style={{ whiteSpace: 'nowrap' }}>
+              <div style={{ fontWeight: '700', fontSize: '1rem', color: 'var(--text-primary)' }}>Sunbelt PM</div>
+              <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>Project Management</div>
+            </div>
+          )}
         </div>
+        {!isCollapsed && (
+          <button
+            onClick={toggleCollapsed}
+            title="Collapse sidebar (Ctrl+B)"
+            style={{
+              padding: '6px',
+              background: 'transparent',
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              cursor: 'pointer',
+              color: 'var(--text-tertiary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--bg-tertiary)';
+              e.currentTarget.style.color = 'var(--text-secondary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = 'var(--text-tertiary)';
+            }}
+          >
+            <PanelLeftClose size={16} />
+          </button>
+        )}
       </div>
 
       {/* ================================================================== */}
       {/* DASHBOARD SELECTOR                                                */}
       {/* ================================================================== */}
-      <div style={{ padding: 'var(--space-sm) var(--space-md)' }}>
+      <div style={{ padding: isCollapsed ? 'var(--space-sm)' : 'var(--space-sm) var(--space-md)' }}>
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => setShowDashboardMenu(!showDashboardMenu)}
+            title={isCollapsed ? currentConfig.label : undefined}
             style={{
               width: '100%',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 12px',
+              justifyContent: isCollapsed ? 'center' : 'space-between',
+              padding: isCollapsed ? '10px' : '8px 12px',
               background: `${currentConfig.color}15`,
               border: `1px solid ${currentConfig.color}30`,
               borderRadius: 'var(--radius-md)',
               cursor: 'pointer',
-              color: currentConfig.color
+              color: currentConfig.color,
+              transition: 'all 0.2s ease-in-out'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <CurrentIcon size={16} />
-              <span style={{ fontWeight: '600', fontSize: '0.8125rem' }}>{currentConfig.label}</span>
+              {!isCollapsed && (
+                <span style={{ fontWeight: '600', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>{currentConfig.label}</span>
+              )}
             </div>
-            <ChevronDown size={14} style={{ transform: showDashboardMenu ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+            {!isCollapsed && (
+              <ChevronDown size={14} style={{ transform: showDashboardMenu ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+            )}
           </button>
 
           {/* Dropdown */}
@@ -1185,9 +1267,11 @@ function Sidebar({
             <div style={{
               position: 'absolute',
               top: '100%',
-              left: 0,
-              right: 0,
-              marginTop: '4px',
+              left: isCollapsed ? '100%' : 0,
+              right: isCollapsed ? 'auto' : 0,
+              marginTop: isCollapsed ? '-40px' : '4px',
+              marginLeft: isCollapsed ? '8px' : 0,
+              minWidth: isCollapsed ? '180px' : 'auto',
               background: 'var(--bg-secondary)',
               border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius-md)',
@@ -1222,7 +1306,8 @@ function Sidebar({
                       color: isActive ? config.color : 'var(--text-secondary)',
                       fontSize: '0.8125rem',
                       fontWeight: isActive ? '600' : '500',
-                      textAlign: 'left'
+                      textAlign: 'left',
+                      whiteSpace: 'nowrap'
                     }}
                   >
                     <Icon size={16} />
@@ -1236,26 +1321,28 @@ function Sidebar({
       </div>
 
       {/* ================================================================== */}
-      {/* STATS                                                             */}
+      {/* STATS (hidden when collapsed)                                     */}
       {/* ================================================================== */}
-      {renderStats()}
+      {!isCollapsed && renderStats()}
 
       {/* ================================================================== */}
       {/* NAVIGATION                                                        */}
       {/* ================================================================== */}
-      <nav style={{ flex: 1, padding: '0 var(--space-sm)', overflowY: 'auto' }}>
-        <div style={{ marginBottom: 'var(--space-xs)' }}>
-          <span style={{ 
-            fontSize: '0.625rem', 
-            fontWeight: '600', 
-            color: 'var(--text-tertiary)', 
-            textTransform: 'uppercase',
-            padding: '0 var(--space-sm)',
-            letterSpacing: '0.05em'
-          }}>
-            Navigation
-          </span>
-        </div>
+      <nav style={{ flex: 1, padding: isCollapsed ? '0 8px' : '0 var(--space-sm)', overflowY: 'auto' }}>
+        {!isCollapsed && (
+          <div style={{ marginBottom: 'var(--space-xs)' }}>
+            <span style={{
+              fontSize: '0.625rem',
+              fontWeight: '600',
+              color: 'var(--text-tertiary)',
+              textTransform: 'uppercase',
+              padding: '0 var(--space-sm)',
+              letterSpacing: '0.05em'
+            }}>
+              Navigation
+            </span>
+          </div>
+        )}
         {renderNavItems().map(item => {
           const Icon = item.icon;
           const isActive = currentView === item.id;
@@ -1264,12 +1351,14 @@ function Sidebar({
             <button
               key={item.id}
               onClick={() => setCurrentView(item.id)}
+              title={isCollapsed ? item.label : undefined}
               style={{
                 width: '100%',
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: isCollapsed ? 'center' : 'flex-start',
                 gap: '10px',
-                padding: '10px 12px',
+                padding: isCollapsed ? '12px' : '10px 12px',
                 marginBottom: '2px',
                 background: isActive ? `${currentConfig.color}15` : 'transparent',
                 border: 'none',
@@ -1282,8 +1371,8 @@ function Sidebar({
                 transition: 'all 0.15s'
               }}
             >
-              <Icon size={16} />
-              {item.label}
+              <Icon size={isCollapsed ? 20 : 16} />
+              {!isCollapsed && item.label}
             </button>
           );
         })}
@@ -1293,16 +1382,20 @@ function Sidebar({
       {/* FOOTER                                                            */}
       {/* ================================================================== */}
       <div style={{
-        padding: 'var(--space-md)',
+        padding: isCollapsed ? 'var(--space-sm)' : 'var(--space-md)',
         borderTop: '1px solid var(--border-color)'
       }}>
         {/* User info */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-sm)',
-          marginBottom: 'var(--space-sm)'
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: isCollapsed ? 'center' : 'flex-start',
+            gap: 'var(--space-sm)',
+            marginBottom: isCollapsed ? '8px' : 'var(--space-sm)'
+          }}
+          title={isCollapsed ? `${currentUser?.name || 'User'} - ${currentUser?.role?.replace(/_/g, ' ') || 'Role'}` : undefined}
+        >
           <div style={{
             width: '32px',
             height: '32px',
@@ -1313,26 +1406,51 @@ function Sidebar({
             justifyContent: 'center',
             color: 'white',
             fontWeight: '600',
-            fontSize: '0.75rem'
+            fontSize: '0.75rem',
+            flexShrink: 0
           }}>
             {currentUser?.name?.split(' ').map(n => n[0]).join('').slice(0, 2) || '?'}
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {currentUser?.name || 'Loading...'}
+          {!isCollapsed && (
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {currentUser?.name || 'Loading...'}
+              </div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
+                {currentUser?.role?.replace(/_/g, ' ') || '—'}
+              </div>
             </div>
-            <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
-              {currentUser?.role?.replace(/_/g, ' ') || '—'}
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Actions */}
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: isCollapsed ? 'column' : 'row', gap: '8px' }}>
+          {/* Expand button (only when collapsed) */}
+          {isCollapsed && (
+            <button
+              onClick={toggleCollapsed}
+              title="Expand sidebar (Ctrl+B)"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '8px',
+                background: 'var(--bg-tertiary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+                color: 'var(--text-secondary)',
+                fontSize: '0.75rem'
+              }}
+            >
+              <PanelLeft size={14} />
+            </button>
+          )}
           <button
             onClick={toggleDarkMode}
+            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             style={{
-              flex: 1,
+              flex: isCollapsed ? 'none' : 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -1350,8 +1468,9 @@ function Sidebar({
           </button>
           <button
             onClick={handleLogout}
+            title="Sign out"
             style={{
-              flex: 1,
+              flex: isCollapsed ? 'none' : 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',

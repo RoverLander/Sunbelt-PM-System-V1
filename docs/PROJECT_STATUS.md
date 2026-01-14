@@ -155,6 +155,30 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ## Recent Updates (January 2026)
 
+### January 14, 2026 (Late Night - Collapsible Sidebar)
+
+- **Collapsible Sidebar - Complete**
+  - Added ability to collapse sidebar to icon-only mode (64px width)
+  - **Features:**
+    - Toggle button in header (PanelLeftClose icon) when expanded
+    - Expand button in footer (PanelLeft icon) when collapsed
+    - Keyboard shortcut: Ctrl+B (Windows) / Cmd+B (Mac)
+    - State persisted in localStorage (`sidebarCollapsed`)
+    - Smooth CSS transition animations (0.2s ease-in-out)
+  - **Collapsed Mode:**
+    - Logo shows only Building2 icon (no text)
+    - Dashboard selector shows only current icon (dropdown appears to the right)
+    - Stats section hidden when collapsed
+    - Navigation shows only icons with tooltips on hover
+    - Footer shows avatar, expand/theme/logout buttons stacked vertically
+  - **Main Content:**
+    - App.jsx syncs with localStorage to adjust main content margin
+    - Smooth transition when sidebar width changes
+
+- **Files Modified:**
+  - `src/components/layout/Sidebar.jsx` - Added collapse functionality
+  - `src/App.jsx` - Added sidebar width state sync
+
 ### January 14, 2026 (Late Night - ContactPicker & Documentation)
 
 - **ContactPicker Component - Complete**
@@ -812,11 +836,11 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 - [ ] Recent contacts section (future)
 
 **Form Integration:**
-- [ ] Contact picker component for RFIs/Tasks/Submittals
-- [ ] "Assigned To" field - single contact with FK + snapshot
+- [x] Contact picker component for RFIs/Tasks/Submittals (`ContactPicker.jsx`)
+- [x] "Assigned To" field - single contact with FK + snapshot
+- [x] Factory context filtering (default to project's factory)
+- [x] Keyboard navigation support
 - [ ] "Notify" field - multiple contacts (combines CC functionality)
-- [ ] Factory context filtering (default to project's factory)
-- [ ] Keyboard navigation support
 
 **Contact Selection Schema Pattern:**
 ```sql
@@ -829,17 +853,17 @@ notify_contacts JSONB               -- Array of {id, name, email} snapshots
 
 ---
 
-### Collapsible Sidebar (Planned)
+### Collapsible Sidebar (Complete)
 
-**Status:** Planned
+**Status:** Complete (January 14, 2026)
 
 **Overview:** Make sidebar collapsible across all dashboards to maximize screen real estate.
 
 **Features:**
-- [ ] Collapse to icons only (like VS Code)
-- [ ] Remember state per user (localStorage)
-- [ ] Keyboard shortcut (Cmd/Ctrl + B)
-- [ ] Smooth animation transition
+- [x] Collapse to icons only (like VS Code)
+- [x] Remember state per user (localStorage)
+- [x] Keyboard shortcut (Cmd/Ctrl + B)
+- [x] Smooth animation transition
 
 ---
 

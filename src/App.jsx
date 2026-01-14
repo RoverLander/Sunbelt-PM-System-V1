@@ -80,6 +80,36 @@ function AppContent() {
   });
   const [initialPageFilter, setInitialPageFilter] = useState(null); // 'overdue', 'open', etc.
 
+  // Sidebar collapsed state (synced with sidebar via localStorage)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return saved !== null ? JSON.parse(saved) : false;
+  });
+
+  // Listen for sidebar collapse changes via storage event
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'sidebarCollapsed') {
+        setSidebarCollapsed(JSON.parse(e.newValue));
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // Also poll localStorage for changes within same tab
+    const interval = setInterval(() => {
+      const saved = localStorage.getItem('sidebarCollapsed');
+      const current = saved !== null ? JSON.parse(saved) : false;
+      if (current !== sidebarCollapsed) {
+        setSidebarCollapsed(current);
+      }
+    }, 100);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, [sidebarCollapsed]);
+
   // ==========================================================================
   // CHECK USER ROLE ON LOAD
   // ==========================================================================
@@ -536,10 +566,11 @@ function AppContent() {
       />
       <main style={{
         flex: 1,
-        marginLeft: '260px', // ✅ FIXED: Match 260px sidebar width
+        marginLeft: sidebarCollapsed ? '64px' : '260px',
         minHeight: '100vh',
         background: 'var(--bg-primary)',
-        overflow: 'auto'
+        overflow: 'auto',
+        transition: 'margin-left 0.2s ease-in-out'
       }}>
         {/* System-wide announcements */}
         <div style={{ padding: 'var(--space-md) var(--space-xl) 0' }}>
