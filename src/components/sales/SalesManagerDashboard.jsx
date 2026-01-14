@@ -32,7 +32,9 @@ import {
   Star,
   Users,
   User,
-  Factory
+  Factory,
+  Award,
+  FileText
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';

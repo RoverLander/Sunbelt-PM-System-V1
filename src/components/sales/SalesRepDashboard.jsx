@@ -33,7 +33,11 @@ import {
   Target,
   Calendar,
   TrendingDown,
-  Factory
+  Factory,
+  Award,
+  FileText,
+  CheckCircle,
+  ArrowRight
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
