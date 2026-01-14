@@ -60,7 +60,8 @@ import {
   Flag,
   Receipt,
   Target,
-  UserCheck
+  UserCheck,
+  Contact
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -1000,6 +1001,7 @@ function Sidebar({
       { id: 'rfis', label: 'RFIs', icon: FileText },
       { id: 'submittals', label: 'Submittals', icon: ClipboardList },
       { id: 'calendar', label: 'Calendar', icon: Calendar },
+      { id: 'directory', label: 'Directory', icon: Contact },
       { id: 'factory-map', label: 'Factory Map', icon: MapIcon },
     ];
 

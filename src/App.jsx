@@ -34,6 +34,7 @@ import SubmittalsPage from './components/pages/SubmittalsPage';
 import TeamPage from './components/pages/TeamPage';
 import AnalyticsPage from './components/pages/AnalyticsPage';
 import ClientsPage from './components/pages/ClientsPage';
+import DirectoryPage from './components/pages/DirectoryPage';
 import FactoryMapPage from './pages/FactoryMapPage';
 import FactoryMapFullscreen from './pages/FactoryMapFullscreen';
 
@@ -297,6 +298,10 @@ function AppContent() {
     // Common pages (same for all views)
     if (currentView === 'calendar') {
       return <CalendarPage onNavigateToProject={handleNavigateToProject} />;
+    }
+
+    if (currentView === 'directory') {
+      return <DirectoryPage />;
     }
 
     if (currentView === 'factory-map') {

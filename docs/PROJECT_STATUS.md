@@ -1,6 +1,6 @@
 # Project Status
 
-**Last Updated:** January 13, 2026
+**Last Updated:** January 14, 2026
 **Version:** 1.1.0
 **Status:** Production Ready (Beta) + Praxis Integration In Progress
 
@@ -528,18 +528,23 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ### Directory System (In Progress - January 14, 2026)
 
-**Status:** Building
+**Status:** Database Complete, UI In Progress
 
 **Overview:** Company-wide contact directory for all Sunbelt employees across 15 factories, with integration into forms (RFIs, Tasks, Submittals) for contact selection.
 
-**Data Source:** `docs/Sunbelt Directory Q3-2025 Updated 07-25-25.xlsx` (15 sheets, ~300+ contacts)
+**Data Source:** `docs/Sunbelt Directory Q3-2025 Updated 07-25-25.xlsx` (15 sheets, 311 contacts)
 
 **Database Changes:**
-- [ ] Update `factories` table - Add address, phone, email_domain columns
-- [ ] Add WM-ROCHESTER factory (missing from current list)
-- [ ] Create `departments` lookup table
-- [ ] Create `directory_contacts` table (internal Sunbelt employees)
-- [ ] Create `external_contacts` table (customers, vendors, external stakeholders)
+- [x] Update `factories` table - Add address, phone, email_domain columns
+- [x] Add WM-ROCHESTER factory (missing from current list)
+- [x] Create `departments` lookup table (14 departments)
+- [x] Create `directory_contacts` table (internal Sunbelt employees)
+- [x] Create `external_contacts` table (customers, vendors, external stakeholders)
+- [x] Create `project_external_contacts` junction table
+- [x] Add contact fields to tasks, rfis, submittals tables
+
+**Migration:** `supabase/migrations/20260114_directory_system.sql`
+**Demo Data:** `supabase/demo/08_DIRECTORY_CONTACTS.sql` (311 contacts imported)
 
 **Departments (14 total):**
 | Department | Example Positions |
@@ -560,12 +565,12 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 | Service | Service Manager, Service Technician, Warranty |
 
 **UI Components:**
-- [ ] Directory sidebar page (full page in nav)
-- [ ] Contact card layout with factory logos
-- [ ] Search with type-ahead
-- [ ] Filter by factory, department
-- [ ] Sort by name, department, factory
-- [ ] Recent contacts section
+- [x] Directory sidebar page (full page in nav) - `src/components/pages/DirectoryPage.jsx`
+- [x] Contact card layout with department colors
+- [x] Search with type-ahead
+- [x] Filter by factory, department
+- [x] Grouped by factory with expand/collapse
+- [ ] Recent contacts section (future)
 
 **Form Integration:**
 - [ ] Contact picker component for RFIs/Tasks/Submittals
@@ -664,5 +669,137 @@ notify_contacts JSONB               -- Array of {id, name, email} snapshots
 | Submittal | Engineering, QA |
 | Task (Production) | Production, Operations |
 | Task (QC) | Quality, Safety |
+
+---
+
+### IT Settings Page (Planned)
+
+**Status:** Planning
+
+**Overview:** Dedicated settings page for IT Manager role, accessible from sidebar navigation. Consolidates all system configuration options.
+
+**Settings Categories to Consider:**
+- **Authentication & Security**
+  - Session timeout duration
+  - Password requirements
+  - Two-factor authentication toggle
+  - Account lockout thresholds
+
+- **System Defaults**
+  - Default dashboard per role
+  - Default factory assignments
+  - Auto-assign rules for new projects
+
+- **Notifications**
+  - Email server configuration
+  - Notification templates
+  - Email frequency limits
+  - Quiet hours settings
+
+- **Data Management**
+  - Data retention policies
+  - Archive settings
+  - Backup schedules
+
+- **UI/UX Settings**
+  - Default theme (light/dark)
+  - Date/time format
+  - Currency format
+  - Items per page defaults
+
+- **Integration Settings**
+  - Praxis import configuration
+  - API rate limits
+  - Webhook endpoints
+
+- **Feature Toggles** (link to Feature Flags page)
+
+**Implementation:**
+- [ ] Create `system_settings` table
+- [ ] Create SettingsPage component (`src/components/it/SettingsPage.jsx`)
+- [ ] Add "Settings" nav item for IT_Manager role
+- [ ] Settings form with validation
+- [ ] Settings change audit logging
+
+---
+
+### Executive Reports Enhancement (Planned)
+
+**Status:** Planning
+
+**Overview:** Upgrade executive reports with new report types, improved visualizations, and professional PDF export with branding.
+
+**Current Reports:**
+- Portfolio Summary
+- Project Status Overview
+- Factory Performance
+- Financial Summary
+
+**New Report Ideas:**
+- **Delivery Pipeline Report** - Projects by promised delivery date (30/60/90 day windows)
+- **PM Workload Report** - Project distribution, task counts, overdue items per PM
+- **Factory Capacity Report** - Projects per factory with timeline, capacity utilization
+- **Client Revenue Report** - Revenue by client/dealer with trends
+- **RFI/Submittal Aging Report** - Open items by age, response time metrics
+- **Risk Assessment Report** - At-risk and critical projects with reasons
+- **Weekly Progress Report** - Tasks completed, RFIs answered, submittals approved
+- **Building Type Analysis** - Revenue and project count by building type
+
+**PDF Export Enhancement:**
+- [ ] Professional PDF generator library (react-pdf or pdfmake)
+- [ ] Sunbelt corporate branding (logo, colors, fonts)
+- [ ] Factory-specific logos where applicable
+- [ ] Cover page with report title, date range, generated by
+- [ ] Table of contents for multi-section reports
+- [ ] Page headers/footers with page numbers
+- [ ] Charts and graphs embedded in PDF
+- [ ] Configurable sections (include/exclude)
+- [ ] Print-optimized styling
+
+**UI Improvements:**
+- [ ] Report builder interface (select metrics, date range, filters)
+- [ ] Preview before export
+- [ ] Scheduled report generation (email)
+- [ ] Report templates (save configurations)
+
+---
+
+### RFI/Submittal/Task Export Polish (Planned)
+
+**Status:** Planning
+
+**Overview:** Enhance Excel and PDF exports for RFI logs, Submittal logs, and Task logs with professional branding and polish.
+
+**Excel Export Improvements:**
+- [ ] Professional header row with Sunbelt branding
+- [ ] Factory logo in header (where applicable)
+- [ ] Column auto-width for readability
+- [ ] Alternating row colors
+- [ ] Frozen header row
+- [ ] Data validation and formatting
+- [ ] Sheet name based on project/date
+- [ ] Summary row at bottom (counts, totals)
+
+**PDF Export Additions:**
+- [ ] Add PDF export button alongside Excel export
+- [ ] Professional cover page with:
+  - Sunbelt Modular logo
+  - Factory logo (if applicable)
+  - Report title (e.g., "RFI Log - Project Name")
+  - Generated date and by whom
+- [ ] Table formatting with:
+  - Column headers with background color
+  - Alternating row shading
+  - Status color coding
+  - Clean borders
+- [ ] Page footer with page numbers
+- [ ] Portrait/landscape toggle based on column count
+
+**Files to Update:**
+- `src/components/rfis/EditRFIModal.jsx` - PDF export button
+- `src/components/submittals/EditSubmittalModal.jsx` - PDF export button
+- `src/components/tasks/EditTaskModal.jsx` - PDF export button
+- `src/utils/pdfUtils.js` - Export utilities
+- `src/utils/excelUtils.js` - Excel styling utilities (new)
 
 ---
