@@ -66,6 +66,9 @@ import {
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 
+// Import shared sales constants
+import { ACTIVE_STATUSES as SALES_ACTIVE_STATUSES } from '../../constants/salesStatuses';
+
 function Sidebar({
   currentView,
   setCurrentView,
@@ -365,8 +368,8 @@ function Sidebar({
 
   const fetchSalesStats = async () => {
     try {
-      // Include 'pending' in active statuses (used in demo data)
-      const activeStatuses = ['draft', 'sent', 'negotiating', 'pending'];
+      // Use shared sales active statuses from constants
+      const activeStatuses = SALES_ACTIVE_STATUSES;
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);

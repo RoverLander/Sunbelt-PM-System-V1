@@ -19,15 +19,9 @@ import {
   Search,
   ChevronDown,
   ChevronRight,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Send,
-  FileText,
   Edit2,
   Trash2,
   RefreshCw,
-  Award,
   Percent,
   Loader2,
   FileUp,
@@ -36,8 +30,6 @@ import {
   Package,
   Ruler,
   Star,
-  Timer,
-  ArrowRight,
   Target,
   Calendar,
   TrendingDown,
@@ -50,80 +42,19 @@ import QuoteDetail from './QuoteDetail';
 import CustomerForm from './CustomerForm';
 import PraxisQuoteImportModal from './PraxisQuoteImportModal';
 
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-const STATUS_CONFIG = {
-  draft: { label: 'Draft', color: '#64748b', icon: FileText, bgColor: 'rgba(100, 116, 139, 0.1)', order: 1 },
-  pending: { label: 'Pending', color: '#a855f7', icon: Clock, bgColor: 'rgba(168, 85, 247, 0.1)', order: 2 },
-  sent: { label: 'Sent', color: '#3b82f6', icon: Send, bgColor: 'rgba(59, 130, 246, 0.1)', order: 3 },
-  negotiating: { label: 'Negotiating', color: '#f59e0b', icon: Clock, bgColor: 'rgba(245, 158, 11, 0.1)', order: 4 },
-  awaiting_po: { label: 'Awaiting PO', color: '#8b5cf6', icon: Timer, bgColor: 'rgba(139, 92, 246, 0.1)', order: 5 },
-  po_received: { label: 'PO Received', color: '#06b6d4', icon: CheckCircle, bgColor: 'rgba(6, 182, 212, 0.1)', order: 6 },
-  won: { label: 'Won', color: '#22c55e', icon: Award, bgColor: 'rgba(34, 197, 94, 0.1)', order: 7 },
-  lost: { label: 'Lost', color: '#ef4444', icon: XCircle, bgColor: 'rgba(239, 68, 68, 0.1)', order: 8 },
-  expired: { label: 'Expired', color: '#6b7280', icon: Clock, bgColor: 'rgba(107, 114, 128, 0.1)', order: 9 },
-  converted: { label: 'Converted', color: '#10b981', icon: ArrowRight, bgColor: 'rgba(16, 185, 129, 0.1)', order: 10 }
-};
-
-const ACTIVE_STATUSES = ['draft', 'sent', 'negotiating', 'pending', 'awaiting_po', 'po_received'];
-const BUILDING_TYPES = ['CUSTOM', 'FLEET/STOCK', 'GOVERNMENT', 'Business'];
-const BUILDING_TYPE_COLORS = {
-  'CUSTOM': '#f59e0b',
-  'FLEET/STOCK': '#3b82f6',
-  'GOVERNMENT': '#22c55e',
-  'Business': '#8b5cf6'
-};
-
-const AGING_THRESHOLDS = {
-  fresh: 15,
-  aging: 25,
-  stale: 30
-};
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-const formatCurrency = (amount) => {
-  if (!amount && amount !== 0) return '-';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(amount);
-};
-
-const formatCompactCurrency = (amount) => {
-  if (!amount && amount !== 0) return '-';
-  if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
-  if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
-  return formatCurrency(amount);
-};
-
-const getDaysAgo = (dateString) => {
-  if (!dateString) return null;
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffTime = now - date;
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-};
-
-const getAgingColor = (daysOld) => {
-  if (daysOld === null) return 'var(--text-tertiary)';
-  if (daysOld <= AGING_THRESHOLDS.fresh) return '#22c55e';
-  if (daysOld <= AGING_THRESHOLDS.aging) return '#f59e0b';
-  return '#ef4444';
-};
-
-const getAgingLabel = (daysOld) => {
-  if (daysOld === null) return '';
-  if (daysOld === 0) return 'Today';
-  if (daysOld <= AGING_THRESHOLDS.fresh) return `${daysOld}d`;
-  if (daysOld <= AGING_THRESHOLDS.aging) return `${daysOld}d (aging)`;
-  return `${daysOld}d (stale)`;
-};
+// Import shared constants
+import {
+  STATUS_CONFIG,
+  ACTIVE_STATUSES,
+  BUILDING_TYPES,
+  BUILDING_TYPE_COLORS,
+  AGING_THRESHOLDS,
+  formatCurrency,
+  formatCompactCurrency,
+  getDaysAgo,
+  getAgingColor,
+  getAgingLabel
+} from '../../constants/salesStatuses';
 
 const renderDifficultyRating = (rating) => {
   if (!rating) return null;

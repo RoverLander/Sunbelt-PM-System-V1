@@ -8,58 +8,28 @@ import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
   Edit2,
-  Send,
-  CheckCircle,
-  XCircle,
-  Clock,
-  FileText,
   Building2,
   MapPin,
   DollarSign,
   Calendar,
   User,
   History,
-  ArrowRight,
   Loader2,
   Copy,
   MoreVertical,
-  AlertCircle
+  AlertCircle,
+  FileText
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-const STATUS_CONFIG = {
-  draft: { label: 'Draft', color: '#64748b', icon: FileText, bgColor: 'rgba(100, 116, 139, 0.1)' },
-  sent: { label: 'Sent', color: '#3b82f6', icon: Send, bgColor: 'rgba(59, 130, 246, 0.1)' },
-  negotiating: { label: 'Negotiating', color: '#f59e0b', icon: Clock, bgColor: 'rgba(245, 158, 11, 0.1)' },
-  won: { label: 'Won', color: '#22c55e', icon: CheckCircle, bgColor: 'rgba(34, 197, 94, 0.1)' },
-  lost: { label: 'Lost', color: '#ef4444', icon: XCircle, bgColor: 'rgba(239, 68, 68, 0.1)' }
-};
-
-const LOST_REASONS = [
-  { value: 'price', label: 'Price too high' },
-  { value: 'timing', label: 'Timeline didn\'t work' },
-  { value: 'competitor', label: 'Lost to competitor' },
-  { value: 'cancelled', label: 'Project cancelled' },
-  { value: 'no_response', label: 'No response' },
-  { value: 'scope_change', label: 'Scope changed' },
-  { value: 'other', label: 'Other' }
-];
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-const formatCurrency = (amount) => {
-  if (!amount && amount !== 0) return '-';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2
-  }).format(amount);
-};
+// Import shared constants
+import {
+  STATUS_CONFIG,
+  LOST_REASONS,
+  formatCurrency,
+  getStatusConfig
+} from '../../constants/salesStatuses';
 
 const formatDate = (dateString) => {
   if (!dateString) return '-';

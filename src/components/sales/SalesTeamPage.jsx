@@ -29,20 +29,11 @@ import {
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-const ACTIVE_STATUSES = ['draft', 'sent', 'negotiating', 'pending', 'awaiting_po', 'po_received'];
+// Import shared constants
+import { ACTIVE_STATUSES, formatCompactCurrency } from '../../constants/salesStatuses';
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-const formatCurrency = (amount) => {
-  if (!amount && amount !== 0) return '$0';
-  if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
-  if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
-  return `$${amount.toLocaleString()}`;
-};
+// Use compact currency format for this page
+const formatCurrency = formatCompactCurrency;
 
 // ============================================================================
 // MAIN COMPONENT

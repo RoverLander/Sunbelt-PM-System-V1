@@ -94,10 +94,6 @@ function CalendarPage() {
       // Check if this user is a Sales Rep (should only see projects they're assigned to via quotes)
       const shouldFilterBySalesRep = salesRepRoles.includes(userRole.toLowerCase()) && user?.id;
 
-      // Debug logging for calendar filtering
-      console.log('[Calendar] User role:', userRole, '| Factory code:', factoryCode);
-      console.log('[Calendar] Filter flags - PM:', shouldFilterByPM, '| SalesManager:', shouldFilterBySalesManager, '| SalesRep:', shouldFilterBySalesRep);
-
       // Fetch all tasks, RFIs, submittals, milestones WITH embedded project info
       // This bypasses RLS issues where PC users can't read projects directly
       // Include PM assignment fields for PM filtering
