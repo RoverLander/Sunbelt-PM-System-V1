@@ -4,7 +4,10 @@
 -- Creates a proper factories table as single source of truth.
 -- Uses Praxis factory codes as the standard.
 --
+-- Locations verified from sunbeltmodular.com/about/sunbelt-companies/
+--
 -- Created: January 13, 2026
+-- Updated: January 14, 2026 - Corrected all factory locations from website
 -- ============================================================================
 
 -- ============================================================================
@@ -31,37 +34,37 @@ CREATE INDEX IF NOT EXISTS idx_factories_code ON factories(code);
 CREATE INDEX IF NOT EXISTS idx_factories_active ON factories(is_active);
 
 -- ============================================================================
--- INSERT PRAXIS FACTORY CODES
+-- INSERT PRAXIS FACTORY CODES (Locations from sunbeltmodular.com)
 -- ============================================================================
 INSERT INTO factories (code, short_name, full_name, display_value, city, state, region, is_active)
 VALUES
-  -- Pacific Northwest
-  ('NWBS', 'Northwest', 'Northwest Building Systems', 'NWBS - Northwest Building Systems', 'Tacoma', 'WA', 'Pacific Northwest', true),
-  ('BUSA', 'Britco USA', 'Britco USA', 'BUSA - Britco USA', 'Ferndale', 'WA', 'Pacific Northwest', true),
+  -- Corporate
+  ('SNB', 'Sunbelt Corporate', 'Sunbelt Modular (Corporate)', 'SNB - Sunbelt Modular (Corporate)', 'Phoenix', 'AZ', 'Corporate', true),
 
-  -- California
-  ('PMI', 'Phoenix Modular', 'Phoenix Modular', 'PMI - Phoenix Modular', 'San Marcos', 'CA', 'California', true),
+  -- Southwest (Arizona)
+  ('PMI', 'Phoenix Modular', 'Phoenix Modular', 'PMI - Phoenix Modular', 'Phoenix', 'AZ', 'Southwest', true),
+  ('MRS', 'MR Steel', 'MR Steel', 'MRS - MR Steel', 'Phoenix', 'AZ', 'Southwest', true),
 
   -- Texas
-  ('SSI', 'Specialized Structures', 'Specialized Structures', 'SSI - Specialized Structures', 'Waco', 'TX', 'Texas', true),
-  ('AMT', 'AMTEX', 'AMTEX', 'AMT - AMTEX', 'Dallas', 'TX', 'Texas', true),
+  ('AMT', 'AMTEX', 'AMTEX', 'AMT - AMTEX', 'Garland', 'TX', 'Texas', true),
+  ('BUSA', 'Britco USA', 'Britco Structures USA', 'BUSA - Britco Structures USA', 'Teague', 'TX', 'Texas', true),
+  ('IBI', 'Indicom', 'Indicom Buildings', 'IBI - Indicom Buildings', 'Burleson', 'TX', 'Texas', true),
 
-  -- Southeast
-  ('SMM', 'Southeast Modular', 'Southeast Modular', 'SMM - Southeast Modular', 'Atlanta', 'GA', 'Southeast', true),
-  ('C&B', 'C&B Modular', 'C&B Modular', 'C&B - C&B Modular', 'Nashville', 'TN', 'Southeast', true),
-  ('WM-EAST', 'Whitley East', 'Whitley Manufacturing East', 'WM-EAST - Whitley Manufacturing East', 'Statesville', 'NC', 'Southeast', true),
-  ('WM-SOUTH', 'Whitley South', 'Whitley Manufacturing South', 'WM-SOUTH - Whitley Manufacturing South', 'Greenville', 'SC', 'Southeast', true),
+  -- Southeast (Florida & Georgia)
+  ('SMM', 'Southeast Modular', 'Southeast Modular Manufacturing', 'SMM - Southeast Modular Manufacturing', 'Leesburg', 'FL', 'Southeast', true),
+  ('SSI', 'Specialized Structures', 'Specialized Structures', 'SSI - Specialized Structures', 'Willacoochee', 'GA', 'Southeast', true),
+  ('PRM', 'Pro-Mod', 'ProMod Manufacturing', 'PRM - ProMod Manufacturing', 'Ellaville', 'GA', 'Southeast', true),
 
-  -- Midwest
-  ('IBI', 'Indicom', 'Indicom Buildings', 'IBI - Indicom Buildings', 'Columbus', 'OH', 'Midwest', true),
-  ('MRS', 'MR Steel', 'MR Steel', 'MRS - MR Steel', 'Springfield', 'MO', 'Midwest', true),
+  -- Pacific Northwest
+  ('NWBS', 'Northwest', 'Northwest Building Systems', 'NWBS - Northwest Building Systems', 'Boise', 'ID', 'Pacific Northwest', true),
+  ('WM-EVERGREEN', 'Whitley Evergreen', 'Whitley Manufacturing Evergreen', 'WM-EVERGREEN - Whitley Manufacturing Evergreen', 'Marysville', 'WA', 'Pacific Northwest', true),
 
-  -- Northeast
-  ('PRM', 'Pro-Mod', 'Pro-Mod Manufacturing', 'PRM - Pro-Mod Manufacturing', 'Brooklyn', 'NY', 'Northeast', true),
-  ('WM-EVERGREEN', 'Whitley Evergreen', 'Whitley Manufacturing Evergreen', 'WM-EVERGREEN - Whitley Manufacturing Evergreen', 'Rochester', 'NY', 'Northeast', true),
+  -- Midwest (Indiana)
+  ('C&B', 'C&B Modular', 'C&B Custom Modular', 'C&B - C&B Custom Modular', 'Bristol', 'IN', 'Midwest', true),
+  ('WM-SOUTH', 'Whitley South', 'Whitley Manufacturing South Whitley', 'WM-SOUTH - Whitley Manufacturing South Whitley', 'South Whitley', 'IN', 'Midwest', true),
 
-  -- Corporate
-  ('SNB', 'Sunbelt Corporate', 'Sunbelt Modular (Corporate)', 'SNB - Sunbelt Modular (Corporate)', 'Dallas', 'TX', 'Corporate', true)
+  -- Northeast (Pennsylvania)
+  ('WM-EAST', 'Whitley East', 'Whitley Manufacturing East', 'WM-EAST - Whitley Manufacturing East', 'Leola', 'PA', 'Northeast', true)
 
 ON CONFLICT (code) DO UPDATE SET
   short_name = EXCLUDED.short_name,
@@ -86,5 +89,5 @@ CREATE POLICY "factories_write_admin" ON factories FOR ALL TO authenticated USIN
 -- ============================================================================
 -- VERIFICATION
 -- ============================================================================
-SELECT 'Factories created:' AS status;
+SELECT 'Factories created (14 locations):' AS status;
 SELECT code, short_name, city, state, region FROM factories ORDER BY region, code;
