@@ -4,11 +4,13 @@
 -- Clears all project-related data while keeping:
 -- - Users (authenticated users)
 -- - System config (feature_flags, announcements)
+-- - Departments (lookup data - repopulated in 03_DEPARTMENTS.sql)
 --
 -- Run this FIRST before any other demo scripts.
 -- Created: January 13, 2026
 -- Updated: January 14, 2026 - Handle non-existent tables gracefully
--- Updated: January 14, 2026 - Added directory_contacts, external_contacts, departments
+-- Updated: January 14, 2026 - Added directory_contacts, external_contacts
+-- Updated: January 14, 2026 - Keep departments (lookup), added 03_DEPARTMENTS.sql
 -- ============================================================================
 
 -- ============================================================================
@@ -26,10 +28,10 @@ $$ LANGUAGE plpgsql;
 -- ============================================================================
 -- CLEAR DIRECTORY CONTACT DATA
 -- ============================================================================
+-- Note: departments is NOT truncated - it's lookup data repopulated in 03_DEPARTMENTS.sql
 SELECT safe_truncate('project_external_contacts');
 SELECT safe_truncate('external_contacts');
 SELECT safe_truncate('directory_contacts');
-SELECT safe_truncate('departments');
 
 -- ============================================================================
 -- CLEAR FLOOR PLAN DATA

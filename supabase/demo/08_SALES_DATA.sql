@@ -44,6 +44,10 @@ CREATE POLICY "dealers_all" ON dealers FOR ALL TO authenticated USING (true) WIT
 CREATE INDEX IF NOT EXISTS idx_dealers_code ON dealers(code);
 CREATE INDEX IF NOT EXISTS idx_dealers_factory ON dealers(factory);
 
+-- Ensure unique constraint on code for ON CONFLICT handling
+ALTER TABLE dealers DROP CONSTRAINT IF EXISTS dealers_code_key;
+ALTER TABLE dealers ADD CONSTRAINT dealers_code_key UNIQUE (code);
+
 -- ============================================================================
 -- INSERT DEALER DATA
 -- ============================================================================
@@ -114,10 +118,34 @@ ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS pm_flagged_at TIMESTAMPTZ;
 ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS pm_flagged_by UUID REFERENCES users(id);
 ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS pm_flagged_reason TEXT;
 ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS converted_to_project_id UUID;
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id);
 ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS converted_at TIMESTAMPTZ;
 ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS converted_by UUID REFERENCES users(id);
 ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS imported_from VARCHAR(50);
 ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS praxis_synced_at TIMESTAMPTZ;
+
+-- Add project details columns used by QuoteForm
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS project_name VARCHAR(200);
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS project_description TEXT;
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS project_location VARCHAR(255);
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS project_city VARCHAR(100);
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS project_state VARCHAR(2);
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS factory VARCHAR(20);
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS product_type VARCHAR(50);
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS product_config JSONB;
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS base_price NUMERIC(12,2);
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS options_price NUMERIC(12,2);
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2);
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS discount_percent NUMERIC(5,2);
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS payment_terms VARCHAR(50);
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS deposit_required NUMERIC(12,2);
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS requested_delivery_date DATE;
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS estimated_production_weeks INTEGER;
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS quote_valid_until DATE;
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS internal_notes TEXT;
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS customer_notes TEXT;
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id);
+ALTER TABLE sales_quotes ADD COLUMN IF NOT EXISTS last_modified_by UUID REFERENCES users(id);
 
 -- Enable RLS
 ALTER TABLE sales_quotes ENABLE ROW LEVEL SECURITY;
@@ -130,6 +158,15 @@ CREATE INDEX IF NOT EXISTS idx_sales_quotes_customer ON sales_quotes(customer_id
 CREATE INDEX IF NOT EXISTS idx_sales_quotes_status ON sales_quotes(status);
 CREATE INDEX IF NOT EXISTS idx_sales_quotes_assigned ON sales_quotes(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_sales_quotes_dealer ON sales_quotes(dealer_id);
+
+-- Ensure is_latest_version is set for all existing rows
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name = 'sales_quotes' AND column_name = 'is_latest_version') THEN
+    UPDATE sales_quotes SET is_latest_version = true WHERE is_latest_version IS NULL;
+  END IF;
+END $$;
 
 -- ============================================================================
 -- CREATE SALES_QUOTE_REVISIONS TABLE (if not exists)
@@ -200,9 +237,13 @@ ALTER TABLE sales_customers ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "sales_customers_all" ON sales_customers;
 CREATE POLICY "sales_customers_all" ON sales_customers FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- Create index
+-- Create indexes
 CREATE INDEX IF NOT EXISTS idx_sales_customers_company ON sales_customers(company_name);
 CREATE INDEX IF NOT EXISTS idx_sales_customers_factory ON sales_customers(factory);
+
+-- Add unique constraint on company_name for ON CONFLICT handling
+ALTER TABLE sales_customers DROP CONSTRAINT IF EXISTS sales_customers_company_name_key;
+ALTER TABLE sales_customers ADD CONSTRAINT sales_customers_company_name_key UNIQUE (company_name);
 
 -- ============================================================================
 -- ADD FOREIGN KEY CONSTRAINTS FOR SUPABASE JOINS
@@ -242,6 +283,7 @@ FOREIGN KEY (dealer_id) REFERENCES dealers(id) ON DELETE SET NULL;
 DO $$
 DECLARE
   v_mitch_id UUID;
+  v_robert_id UUID;
   v_sales_rep1_id UUID;
   v_sales_rep2_id UUID;
   v_customer_id UUID;
@@ -260,6 +302,15 @@ BEGIN
     SELECT id INTO v_mitch_id FROM users LIMIT 1;
   END IF;
 
+  -- Get Rover Thaler (Sales Rep at NWBS)
+  SELECT id INTO v_robert_id FROM users
+  WHERE id = 'aa90ef56-5f69-4531-a24a-5b3d1db608f2'
+     OR name ILIKE '%robert%thaler%'
+     OR email ILIKE '%robert.thaler%';
+
+  -- Fallback to Mitch if Rover not found
+  IF v_robert_id IS NULL THEN v_robert_id := v_mitch_id; END IF;
+
   -- Get or create sales reps
   SELECT id INTO v_sales_rep1_id FROM users WHERE role ILIKE '%sales%rep%' ORDER BY name LIMIT 1;
   SELECT id INTO v_sales_rep2_id FROM users WHERE role ILIKE '%sales%rep%' ORDER BY name OFFSET 1 LIMIT 1;
@@ -271,9 +322,10 @@ BEGIN
   -- CREATE SALES CUSTOMERS
   -- ========================================================================
 
-  -- Actual clients from project list
+  -- Actual clients from project list + additional prospects for pipeline
   INSERT INTO sales_customers (id, company_name, company_type, contact_name, contact_email, contact_phone, address_line1, city, state, zip_code, factory, created_at)
   VALUES
+    -- Project clients
     (uuid_generate_v4(), 'SPECIALIZED TESTING & CONSTRUCTION', 'contractor', 'John Smith', 'jsmith@spectest.com', '(480) 555-1001', '1234 Industrial Blvd', 'Phoenix', 'AZ', '85001', 'PMI', NOW()),
     (uuid_generate_v4(), 'MODULAR MANAGEMENT GROUP', 'dealer', 'Sarah Johnson', 'sjohnson@mmg.com', '(404) 555-2002', '5678 Corporate Dr', 'Atlanta', 'GA', '30301', 'SMM', NOW()),
     (uuid_generate_v4(), 'KITCHENS TO GO', 'direct', 'Mike Williams', 'mwilliams@ktg.com', '(305) 555-3003', '9012 Culinary Way', 'Miami', 'FL', '33101', 'SMM', NOW()),
@@ -285,8 +337,21 @@ BEGIN
     (uuid_generate_v4(), 'MODULAR GENIUS, INC.', 'dealer', 'Barbara Hicks', 'bhicks@modgenius.com', '(404) 555-6001', '321 Genius Way', 'Atlanta', 'GA', '30301', 'SSI', NOW()),
     (uuid_generate_v4(), 'WILLIAMS SCOTSMAN', 'dealer', 'Casey Knipp', 'cknipp@willscot.com', '(602) 555-7001', '654 Scotsman Blvd', 'Phoenix', 'AZ', '85001', 'PMI', NOW()),
     (uuid_generate_v4(), 'CASSONE LEASING, INC.', 'dealer', 'Dean Long', 'dlong@cassone.com', '(718) 555-8001', '987 Brooklyn Ave', 'Brooklyn', 'NY', '11201', 'PRM', NOW()),
-    (uuid_generate_v4(), 'MOBILE MODULAR MANAGEMENT CORP.', 'dealer', 'Casey Knipp', 'cknipp@mmmc.com', '(213) 555-9001', '159 LA St', 'Los Angeles', 'CA', '90001', 'PMI', NOW())
-  ON CONFLICT DO NOTHING;
+    (uuid_generate_v4(), 'MOBILE MODULAR MANAGEMENT CORP.', 'dealer', 'Casey Knipp', 'cknipp@mmmc.com', '(213) 555-9001', '159 LA St', 'Los Angeles', 'CA', '90001', 'PMI', NOW()),
+    -- Additional prospects for sales pipeline
+    (uuid_generate_v4(), 'DOVER INDUSTRIES', 'direct', 'Mike Dover', 'mdover@doverindustries.com', '(404) 555-4001', '100 Dover Way', 'Atlanta', 'GA', '30301', 'SSI', NOW()),
+    (uuid_generate_v4(), 'PACIFIC MOBILE STRUCTURES', 'dealer', 'Lisa Chen', 'lchen@pacificmobile.com', '(206) 555-5001', '200 Pacific Ave', 'Seattle', 'WA', '98101', 'NWBS', NOW()),
+    (uuid_generate_v4(), 'UNITED RENTALS', 'dealer', 'Tom Anderson', 'tanderson@unitedrentals.com', '(203) 555-6001', '300 Rental Blvd', 'Stamford', 'CT', '06901', 'SSI', NOW()),
+    (uuid_generate_v4(), 'GOOGLE FACILITIES', 'direct', 'Karen Mitchell', 'kmitchell@google.com', '(650) 555-7001', '1600 Amphitheatre Pkwy', 'Mountain View', 'CA', '94043', 'PMI', NOW()),
+    (uuid_generate_v4(), 'US SPACE FORCE', 'government', 'Col. James Wright', 'james.wright@spaceforce.mil', '(321) 555-8001', '1 Space Force Way', 'Cape Canaveral', 'FL', '32920', 'SMM', NOW()),
+    -- NWBS region prospects (Pacific Northwest)
+    (uuid_generate_v4(), 'AMAZON WEB SERVICES', 'direct', 'Jennifer Collins', 'jcollins@amazon.com', '(206) 555-9001', '410 Terry Ave N', 'Seattle', 'WA', '98109', 'NWBS', NOW()),
+    (uuid_generate_v4(), 'BOEING COMMERCIAL', 'direct', 'Robert Chen', 'rchen@boeing.com', '(425) 555-9002', '100 N Riverside', 'Renton', 'WA', '98055', 'NWBS', NOW()),
+    (uuid_generate_v4(), 'PORT OF SEATTLE', 'government', 'Maria Santos', 'msantos@portseattle.org', '(206) 555-9003', '2711 Alaskan Way', 'Seattle', 'WA', '98121', 'NWBS', NOW()),
+    (uuid_generate_v4(), 'MICROSOFT CAMPUS SERVICES', 'direct', 'David Park', 'dpark@microsoft.com', '(425) 555-9004', '1 Microsoft Way', 'Redmond', 'WA', '98052', 'NWBS', NOW()),
+    (uuid_generate_v4(), 'OREGON HEALTH AUTHORITY', 'government', 'Dr. Sarah Kim', 'sarah.kim@dhsoha.state.or.us', '(503) 555-9005', '500 Summer St NE', 'Salem', 'OR', '97301', 'NWBS', NOW()),
+    (uuid_generate_v4(), 'IDAHO NATIONAL LABORATORY', 'government', 'James Wilson', 'james.wilson@inl.gov', '(208) 555-9006', '1955 Fremont Ave', 'Idaho Falls', 'ID', '83415', 'NWBS', NOW())
+  ON CONFLICT (company_name) DO NOTHING;
 
   -- ========================================================================
   -- CREATE QUOTES LINKED TO PROJECTS (WON/CONVERTED)
@@ -300,7 +365,7 @@ BEGIN
     id, quote_number, customer_id, dealer_id, status, total_price, created_at, updated_at,
     praxis_quote_number, praxis_source_factory, outlook_percentage,
     building_type, building_width, building_length, square_footage, module_count,
-    assigned_to, converted_to_project_id
+    assigned_to, converted_to_project_id, project_name, factory
   )
   SELECT
     uuid_generate_v4(),
@@ -320,7 +385,9 @@ BEGIN
     9520,
     4,
     v_sales_rep1_id,
-    p.id
+    p.id,
+    'Florence AZ Medical Complex',
+    'PMI'
   FROM projects p WHERE p.project_number = 'PMI-6781';
 
   -- Quote for Kitchens To Go VA modules
@@ -330,7 +397,7 @@ BEGIN
     id, quote_number, customer_id, status, total_price, created_at, updated_at,
     praxis_quote_number, praxis_source_factory, outlook_percentage,
     building_type, building_width, building_length, square_footage, module_count,
-    assigned_to, converted_to_project_id
+    assigned_to, converted_to_project_id, project_name, factory
   )
   SELECT
     uuid_generate_v4(),
@@ -349,7 +416,9 @@ BEGIN
     9408,
     3,
     v_sales_rep1_id,
-    p.id
+    p.id,
+    'VA Kitchen Modules - Marietta',
+    'SMM'
   FROM projects p WHERE p.project_number = 'SMM-21055';
 
   -- Quote for Dover Industries
@@ -359,7 +428,7 @@ BEGIN
     id, quote_number, customer_id, status, total_price, created_at, updated_at,
     praxis_quote_number, praxis_source_factory, outlook_percentage,
     building_type, building_width, building_length, square_footage, module_count,
-    assigned_to, converted_to_project_id
+    assigned_to, converted_to_project_id, project_name, factory
   )
   SELECT
     uuid_generate_v4(),
@@ -378,7 +447,9 @@ BEGIN
     19040,
     8,
     v_sales_rep2_id,
-    p.id
+    p.id,
+    'Dover Industries Office Complex',
+    'SSI'
   FROM projects p WHERE p.project_number = 'SSI-7669';
 
   -- ========================================================================
@@ -393,7 +464,7 @@ BEGIN
     id, quote_number, customer_id, dealer_id, status, total_price, created_at, updated_at,
     praxis_quote_number, praxis_source_factory, outlook_percentage, waiting_on,
     building_type, building_width, building_length, square_footage, module_count,
-    assigned_to, pm_flagged, pm_flagged_at
+    assigned_to, pm_flagged, pm_flagged_at, project_name, factory
   ) VALUES (
     uuid_generate_v4(),
     'SQ-2026-001',
@@ -414,7 +485,9 @@ BEGIN
     6,
     v_mitch_id,
     true,
-    NOW() - INTERVAL '5 days'
+    NOW() - INTERVAL '5 days',
+    'Seattle Distribution Center Expansion',
+    'NWBS'
   );
 
   -- Quote: Negotiating (75%)
@@ -424,14 +497,14 @@ BEGIN
     id, quote_number, customer_id, status, total_price, created_at, updated_at,
     praxis_quote_number, praxis_source_factory, outlook_percentage, waiting_on,
     building_type, building_width, building_length, square_footage, module_count,
-    assigned_to
+    assigned_to, project_name, factory
   ) VALUES (
     uuid_generate_v4(),
     'SQ-2026-002',
     v_customer_id,
     'negotiating',
-    875000.00,
-    NOW() - INTERVAL '45 days',
+    850000.00,
+    NOW() - INTERVAL '10 days',
     NOW() - INTERVAL '3 days',
     'SSI-0156-2026',
     'SSI',
@@ -440,9 +513,11 @@ BEGIN
     'FLEET/STOCK',
     60,
     120,
-    7200,
+    1800,
     4,
-    v_sales_rep1_id
+    v_mitch_id,
+    'United Rentals Fleet Expansion',
+    'SSI'
   );
 
   -- Quote: Sent (40%)
@@ -452,56 +527,63 @@ BEGIN
     id, quote_number, customer_id, status, total_price, created_at, updated_at,
     outlook_percentage, waiting_on,
     building_type, building_width, building_length, square_footage, module_count,
-    assigned_to
+    assigned_to, project_name, factory, pm_flagged
   ) VALUES (
     uuid_generate_v4(),
     'SQ-2026-003',
     v_customer_id,
-    'sent',
-    2100000.00,
-    NOW() - INTERVAL '14 days',
+    'negotiating',
+    4200000.00,
+    NOW() - INTERVAL '15 days',
     NOW() - INTERVAL '14 days',
     40,
     'Initial review by customer',
     'CUSTOM',
     72,
     200,
-    14400,
+    3000,
     8,
-    v_mitch_id
+    v_mitch_id,
+    'Google Campus Temporary Offices',
+    'PMI',
+    true
   );
 
-  -- Quote: Draft (20%)
+  -- Quote: Draft (20%) - US Space Force
+  SELECT id INTO v_customer_id FROM sales_customers WHERE company_name = 'US SPACE FORCE';
+
   INSERT INTO sales_quotes (
     id, quote_number, customer_id, status, total_price, created_at, updated_at,
     outlook_percentage,
     building_type, building_width, building_length, square_footage, module_count,
-    assigned_to
+    assigned_to, project_name, factory
   ) VALUES (
     uuid_generate_v4(),
     'SQ-2026-004',
     v_customer_id,
     'draft',
-    680000.00,
+    5800000.00,
     NOW() - INTERVAL '3 days',
     NOW() - INTERVAL '1 day',
     20,
-    'CUSTOM',
+    'GOVERNMENT',
     56,
     84,
-    4704,
+    2800,
     2,
-    v_sales_rep2_id
+    v_mitch_id,
+    'Space Force Launch Command Center',
+    'SMM'
   );
 
-  -- Quote: PO Received - ready for PM handoff
-  SELECT id INTO v_customer_id FROM sales_customers WHERE company_name = 'US SPACE FORCE';
+  -- Quote: PO Received - ready for PM handoff - different customer
+  SELECT id INTO v_customer_id FROM sales_customers WHERE company_name = 'MODULAR GENIUS, INC.';
 
   INSERT INTO sales_quotes (
     id, quote_number, customer_id, status, total_price, created_at, updated_at,
     praxis_quote_number, praxis_source_factory, outlook_percentage,
     building_type, building_width, building_length, square_footage, module_count,
-    assigned_to, pm_flagged, pm_flagged_at
+    assigned_to, pm_flagged, pm_flagged_at, project_name, factory
   ) VALUES (
     uuid_generate_v4(),
     'SQ-2026-005',
@@ -520,7 +602,9 @@ BEGIN
     10,
     v_mitch_id,
     true,
-    NOW()
+    NOW(),
+    'Atlanta Metro School District Portables',
+    'SSI'
   );
 
   -- Quote: Negotiating - large project
@@ -531,7 +615,7 @@ BEGIN
     id, quote_number, customer_id, dealer_id, status, total_price, created_at, updated_at,
     praxis_quote_number, praxis_source_factory, outlook_percentage, waiting_on,
     building_type, building_width, building_length, square_footage, module_count,
-    assigned_to
+    assigned_to, project_name, factory
   ) VALUES (
     uuid_generate_v4(),
     'SQ-2026-006',
@@ -550,7 +634,9 @@ BEGIN
     320,
     25600,
     12,
-    v_mitch_id
+    v_mitch_id,
+    'MMG Healthcare Campus Buildings',
+    'SMM'
   );
 
   -- Quote: Lost (for reporting)
@@ -558,7 +644,7 @@ BEGIN
     id, quote_number, customer_id, status, total_price, created_at, updated_at,
     outlook_percentage,
     building_type, building_width, building_length, square_footage, module_count,
-    assigned_to
+    assigned_to, project_name, factory
   )
   SELECT
     uuid_generate_v4(),
@@ -574,7 +660,9 @@ BEGIN
     100,
     6000,
     3,
-    v_sales_rep1_id
+    v_mitch_id,
+    'UR Midwest Expansion - Lost to Competitor',
+    'SSI'
   FROM sales_customers WHERE company_name = 'UNITED RENTALS';
 
   -- Quote: Expired
@@ -582,7 +670,7 @@ BEGIN
     id, quote_number, customer_id, status, total_price, created_at, updated_at,
     outlook_percentage,
     building_type, building_width, building_length, square_footage, module_count,
-    assigned_to
+    assigned_to, project_name, factory
   )
   SELECT
     uuid_generate_v4(),
@@ -598,10 +686,221 @@ BEGIN
     72,
     4032,
     2,
-    v_sales_rep2_id
+    v_mitch_id,
+    'PMSI Stock Order - Expired',
+    'NWBS'
   FROM sales_customers WHERE company_name = 'PACIFIC MOBILE STRUCTURES';
 
+  -- ========================================================================
+  -- ROVER THALER'S QUOTES (Sales Rep at NWBS)
+  -- ========================================================================
+
+  -- Quote: AWS Data Center Security Building - Negotiating
+  SELECT id INTO v_customer_id FROM sales_customers WHERE company_name = 'AMAZON WEB SERVICES';
+  SELECT id INTO v_dealer_id FROM dealers WHERE code = 'PMSI' LIMIT 1;
+
+  INSERT INTO sales_quotes (
+    id, quote_number, customer_id, dealer_id, status, total_price, created_at, updated_at,
+    outlook_percentage, waiting_on,
+    building_type, building_width, building_length, square_footage, module_count,
+    assigned_to, project_name, factory
+  ) VALUES (
+    uuid_generate_v4(),
+    'SQ-2026-101',
+    v_customer_id,
+    v_dealer_id,
+    'negotiating',
+    2800000.00,
+    NOW() - INTERVAL '25 days',
+    NOW() - INTERVAL '2 days',
+    70,
+    'Security review and facility clearance',
+    'CUSTOM',
+    72,
+    240,
+    17280,
+    8,
+    v_robert_id,
+    'AWS Quincy Data Center Security Facility',
+    'NWBS'
+  );
+
+  -- Quote: Boeing Renton Assembly Support - Sent
+  SELECT id INTO v_customer_id FROM sales_customers WHERE company_name = 'BOEING COMMERCIAL';
+
+  INSERT INTO sales_quotes (
+    id, quote_number, customer_id, status, total_price, created_at, updated_at,
+    outlook_percentage, waiting_on,
+    building_type, building_width, building_length, square_footage, module_count,
+    assigned_to, project_name, factory
+  ) VALUES (
+    uuid_generate_v4(),
+    'SQ-2026-102',
+    v_customer_id,
+    'sent',
+    1650000.00,
+    NOW() - INTERVAL '12 days',
+    NOW() - INTERVAL '12 days',
+    45,
+    'Customer engineering review',
+    'CUSTOM',
+    60,
+    180,
+    10800,
+    6,
+    v_robert_id,
+    'Boeing 737 MAX Assembly Support Offices',
+    'NWBS'
+  );
+
+  -- Quote: Port of Seattle - Awaiting PO (high probability)
+  SELECT id INTO v_customer_id FROM sales_customers WHERE company_name = 'PORT OF SEATTLE';
+
+  INSERT INTO sales_quotes (
+    id, quote_number, customer_id, status, total_price, created_at, updated_at,
+    outlook_percentage, waiting_on,
+    building_type, building_width, building_length, square_footage, module_count,
+    assigned_to, project_name, factory, pm_flagged, pm_flagged_at
+  ) VALUES (
+    uuid_generate_v4(),
+    'SQ-2026-103',
+    v_customer_id,
+    'awaiting_po',
+    920000.00,
+    NOW() - INTERVAL '45 days',
+    NOW() - INTERVAL '3 days',
+    90,
+    'Final budget approval from Port Commission',
+    'GOVERNMENT',
+    56,
+    120,
+    6720,
+    4,
+    v_robert_id,
+    'SeaTac Airport Terminal Expansion - Temp Offices',
+    'NWBS',
+    true,
+    NOW() - INTERVAL '3 days'
+  );
+
+  -- Quote: Microsoft - Draft (new opportunity)
+  SELECT id INTO v_customer_id FROM sales_customers WHERE company_name = 'MICROSOFT CAMPUS SERVICES';
+
+  INSERT INTO sales_quotes (
+    id, quote_number, customer_id, status, total_price, created_at, updated_at,
+    outlook_percentage,
+    building_type, building_width, building_length, square_footage, module_count,
+    assigned_to, project_name, factory
+  ) VALUES (
+    uuid_generate_v4(),
+    'SQ-2026-104',
+    v_customer_id,
+    'draft',
+    3500000.00,
+    NOW() - INTERVAL '5 days',
+    NOW() - INTERVAL '2 days',
+    25,
+    'CUSTOM',
+    80,
+    280,
+    22400,
+    10,
+    v_robert_id,
+    'Microsoft Redmond Campus Construction HQ',
+    'NWBS'
+  );
+
+  -- Quote: Oregon Health Authority - Negotiating (medical)
+  SELECT id INTO v_customer_id FROM sales_customers WHERE company_name = 'OREGON HEALTH AUTHORITY';
+
+  INSERT INTO sales_quotes (
+    id, quote_number, customer_id, status, total_price, created_at, updated_at,
+    outlook_percentage, waiting_on,
+    building_type, building_width, building_length, square_footage, module_count,
+    assigned_to, project_name, factory
+  ) VALUES (
+    uuid_generate_v4(),
+    'SQ-2026-105',
+    v_customer_id,
+    'negotiating',
+    1250000.00,
+    NOW() - INTERVAL '30 days',
+    NOW() - INTERVAL '5 days',
+    55,
+    'State procurement process',
+    'GOVERNMENT',
+    60,
+    144,
+    8640,
+    5,
+    v_robert_id,
+    'Salem Mobile Health Clinic Complex',
+    'NWBS'
+  );
+
+  -- Quote: Hanford AMPS Project - Won and converted (MITCH's quote)
+  -- This links Mitch to the Hanford project via the quote relationship
+  SELECT id INTO v_customer_id FROM sales_customers WHERE company_name = 'Mobile Modular Management Corporation';
+
+  INSERT INTO sales_quotes (
+    id, quote_number, customer_id, status, total_price, created_at, updated_at,
+    outlook_percentage,
+    building_type, building_width, building_length, square_footage, module_count,
+    assigned_to, project_name, factory, converted_to_project_id
+  )
+  SELECT
+    uuid_generate_v4(),
+    'SQ-2025-200',
+    v_customer_id,
+    'converted',
+    2850000.00,
+    NOW() - INTERVAL '120 days',
+    NOW() - INTERVAL '30 days',
+    100,
+    'GOVERNMENT',
+    168,
+    66,
+    11088,
+    6,
+    v_mitch_id,  -- Mitch's quote!
+    '168x66 Hanford AMPS Project MMG',
+    'NWBS',
+    p.id
+  FROM projects p WHERE p.project_number = 'NWBS-25250';
+
+  -- Quote: Idaho National Lab - Won (Robert's quote)
+  SELECT id INTO v_customer_id FROM sales_customers WHERE company_name = 'IDAHO NATIONAL LABORATORY';
+
+  INSERT INTO sales_quotes (
+    id, quote_number, customer_id, status, total_price, created_at, updated_at,
+    outlook_percentage,
+    building_type, building_width, building_length, square_footage, module_count,
+    assigned_to, project_name, factory
+  )
+  VALUES (
+    uuid_generate_v4(),
+    'SQ-2025-201',
+    v_customer_id,
+    'won',
+    1800000.00,
+    NOW() - INTERVAL '90 days',
+    NOW() - INTERVAL '60 days',
+    100,
+    'GOVERNMENT',
+    68,
+    168,
+    11424,
+    6,
+    v_robert_id,
+    'INL Research Support Facility',
+    'NWBS'
+  );
+
   RAISE NOTICE 'Sales data created successfully';
+
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'ERROR in sales data generation: % - %', SQLERRM, SQLSTATE;
+  RAISE;
 END $$;
 
 -- ============================================================================

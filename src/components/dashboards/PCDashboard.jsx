@@ -323,7 +323,7 @@ function PCDashboard({ onNavigateToProject }) {
       // Get user's factory info (including factory code)
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('factory_id, factory:factories(id, code, name)')
+        .select('factory_id, factory:factories(id, code, short_name)')
         .eq('id', user.id)
         .single();
 
@@ -593,7 +593,7 @@ function PCDashboard({ onNavigateToProject }) {
               gap: '6px'
             }}>
               <MapPin size={14} />
-              {factoryInfo.name || factoryInfo.factory_code}
+              {factoryInfo.short_name || factoryInfo.code}
             </p>
           )}
         </div>

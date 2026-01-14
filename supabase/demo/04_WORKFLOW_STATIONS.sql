@@ -28,6 +28,7 @@ CREATE TABLE workflow_stations (
   display_order INTEGER NOT NULL,
   default_owner VARCHAR(50),
   is_required BOOLEAN DEFAULT true,
+  is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

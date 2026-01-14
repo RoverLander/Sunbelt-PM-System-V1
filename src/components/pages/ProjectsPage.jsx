@@ -32,7 +32,7 @@ import PraxisImportModal from '../projects/PraxisImportModal';
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
+function ProjectsPage({ isDirectorView = false, isSalesView = false, onNavigateToProject }) {
   const { user } = useAuth();
 
   // ==========================================================================
@@ -98,9 +98,9 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
       // ✅ ADDED: Get ALL factories for filter (not just from projects)
       const { data: factoriesData } = await supabase
         .from('factories')
-        .select('id, name, code')
+        .select('id, short_name, code')
         .eq('is_active', true)
-        .order('name');
+        .order('short_name');
       setFactories(factoriesData || []);
 
       // Get projects
@@ -323,72 +323,79 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
         gap: '12px' 
       }}>
         <div>
-          <h1 style={{ 
-            fontSize: '1.75rem', 
-            fontWeight: '700', 
-            color: 'var(--text-primary)', 
-            marginBottom: '4px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '10px' 
+          <h1 style={{
+            fontSize: '1.75rem',
+            fontWeight: '700',
+            color: 'var(--text-primary)',
+            marginBottom: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
           }}>
             <FolderKanban size={28} style={{ color: 'var(--sunbelt-orange)' }} />
-            {isDirectorView ? 'All Projects' : 'My Projects'}
+            {isSalesView ? 'PM Projects' : isDirectorView ? 'All Projects' : 'My Projects'}
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-            {isDirectorView ? 'All projects across the organization' : 'Projects assigned to you'}
+            {isSalesView
+              ? 'Projects converted from your quotes (read-only)'
+              : isDirectorView
+                ? 'All projects across the organization'
+                : 'Projects assigned to you'}
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            onClick={() => setShowPraxisImport(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '10px 16px',
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--text-primary)',
-              fontWeight: '600',
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-              transition: 'all 0.15s'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.borderColor = 'var(--sunbelt-orange)';
-              e.currentTarget.style.color = 'var(--sunbelt-orange)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.borderColor = 'var(--border-color)';
-              e.currentTarget.style.color = 'var(--text-primary)';
-            }}
-          >
-            <FileUp size={18} />
-            Import from Praxis
-          </button>
-          <button
-            onClick={() => setShowCreateProject(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '10px 16px',
-              background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
-              border: 'none',
-              borderRadius: 'var(--radius-md)',
-              color: 'white',
-              fontWeight: '600',
-              fontSize: '0.875rem',
-              cursor: 'pointer'
-            }}
-          >
-            <Plus size={18} />
-            New Project
-          </button>
-        </div>
+        {/* Hide Create/Import buttons for Sales users - they can only view */}
+        {!isSalesView && (
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              onClick={() => setShowPraxisImport(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '10px 16px',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-primary)',
+                fontWeight: '600',
+                fontSize: '0.875rem',
+                cursor: 'pointer',
+                transition: 'all 0.15s'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.borderColor = 'var(--sunbelt-orange)';
+                e.currentTarget.style.color = 'var(--sunbelt-orange)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.borderColor = 'var(--border-color)';
+                e.currentTarget.style.color = 'var(--text-primary)';
+              }}
+            >
+              <FileUp size={18} />
+              Import from Praxis
+            </button>
+            <button
+              onClick={() => setShowCreateProject(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '10px 16px',
+                background: 'linear-gradient(135deg, var(--sunbelt-orange), var(--sunbelt-orange-dark))',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                color: 'white',
+                fontWeight: '600',
+                fontSize: '0.875rem',
+                cursor: 'pointer'
+              }}
+            >
+              <Plus size={18} />
+              New Project
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ================================================================== */}
@@ -509,7 +516,7 @@ function ProjectsPage({ isDirectorView = false, onNavigateToProject }) {
         >
           <option value="all">All Factories</option>
           {factories.map(f => (
-            <option key={f.id} value={f.name}>{f.name}</option>
+            <option key={f.id} value={f.short_name}>{f.short_name}</option>
           ))}
         </select>
 

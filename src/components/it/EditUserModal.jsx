@@ -214,9 +214,9 @@ function EditUserModal({ isOpen, onClose, user, onSuccess }) {
     const fetchFactories = async () => {
       const { data } = await supabase
         .from('factories')
-        .select('id, name, code')
+        .select('id, short_name, code')
         .eq('is_active', true)
-        .order('name');
+        .order('short_name');
       setFactories(data || []);
     };
     if (isOpen) {
@@ -501,7 +501,7 @@ function EditUserModal({ isOpen, onClose, user, onSuccess }) {
               <option value="">No factory assigned</option>
               {factories.map(factory => (
                 <option key={factory.id} value={factory.id}>
-                  {factory.name} ({factory.code})
+                  {factory.short_name} ({factory.code})
                 </option>
               ))}
             </select>

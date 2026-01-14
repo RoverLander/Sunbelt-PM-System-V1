@@ -813,6 +813,41 @@
    }
    
    /* ============================================
+      REACT FLOW CONTROLS (Dark Mode Fix)
+      ============================================ */
+   .react-flow__controls {
+     background: var(--bg-secondary) !important;
+     border: 1px solid var(--border-color) !important;
+     border-radius: var(--radius-md) !important;
+     box-shadow: var(--shadow-md) !important;
+   }
+
+   .react-flow__controls-button {
+     background: var(--bg-secondary) !important;
+     border: none !important;
+     border-bottom: 1px solid var(--border-color) !important;
+     fill: var(--text-secondary) !important;
+     width: 28px !important;
+     height: 28px !important;
+   }
+
+   .react-flow__controls-button:hover {
+     background: var(--bg-tertiary) !important;
+   }
+
+   .react-flow__controls-button:last-child {
+     border-bottom: none !important;
+   }
+
+   .react-flow__controls-button svg {
+     fill: var(--text-secondary) !important;
+   }
+
+   .react-flow__controls-button:hover svg {
+     fill: var(--text-primary) !important;
+   }
+
+   /* ============================================
       PRINT STYLES
       ============================================ */
    @media print {

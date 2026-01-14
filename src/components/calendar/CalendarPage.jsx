@@ -65,7 +65,7 @@ function CalendarPage() {
       if (user?.id) {
         const { data: userData } = await supabase
           .from('users')
-          .select('role, factory_id, factory:factories(code)')
+          .select('role, factory, factory_id, factories:factory_id(code)')
           .eq('id', user.id)
           .single();
 
@@ -74,18 +74,25 @@ function CalendarPage() {
           setCurrentUserRole(userData.role);
         }
 
-        // Get factory code for PC/Plant Manager users
-        if (userData?.factory?.code) {
-          factoryCode = userData.factory.code;
+        // Get factory code for PC/Plant Manager/Sales users
+        // Check both direct factory column and factory_id join
+        if (userData?.factory) {
+          factoryCode = userData.factory;
+          setUserFactoryCode(factoryCode);
+        } else if (userData?.factories?.code) {
+          factoryCode = userData.factories.code;
           setUserFactoryCode(factoryCode);
         }
       }
 
-      // Check if this user should only see their factory's data
-      const shouldFilterByFactory = factoryRestrictedRoles.includes(userRole.toLowerCase()) && factoryCode;
+      // Check if this user should only see their factory's data (PC/Plant Manager)
+      const isFactoryRestrictedPM = ['project coordinator', 'pc', 'plant manager'].includes(userRole.toLowerCase()) && factoryCode;
 
       // Check if this user is a PM (should only see their assigned projects)
       const shouldFilterByPM = pmRoles.includes(userRole.toLowerCase()) && user?.id;
+
+      // Check if this user is a Sales Manager (should see projects linked to factory quotes)
+      const shouldFilterBySalesManager = salesManagerRoles.includes(userRole.toLowerCase()) && factoryCode;
 
       // Check if this user is a Sales Rep (should only see projects they're assigned to via quotes)
       const shouldFilterBySalesRep = salesRepRoles.includes(userRole.toLowerCase()) && user?.id;
@@ -100,15 +107,29 @@ function CalendarPage() {
         supabase.from('milestones').select('*, project:projects(id, name, project_number, factory, color, owner_id, primary_pm_id, backup_pm_id)')
       ];
 
-      // For Sales Reps, also fetch quotes to determine which projects they're assigned to
-      if (shouldFilterBySalesRep) {
+      // Track where quotes result will be in the results array
+      let quotesResultIndex = null;
+
+      // For Sales Manager, fetch all quotes in their factory to determine linked projects
+      if (shouldFilterBySalesManager) {
+        quotesResultIndex = baseQueries.length;
         baseQueries.push(
-          supabase.from('sales_quotes').select('project_id').eq('assigned_to', user.id)
+          supabase.from('sales_quotes').select('project_id, converted_to_project_id').eq('factory', factoryCode)
+        );
+      }
+
+      // For Sales Reps, also fetch quotes to determine which projects they're assigned to
+      // Note: Quotes use both project_id and converted_to_project_id to link to projects
+      if (shouldFilterBySalesRep) {
+        quotesResultIndex = baseQueries.length;
+        baseQueries.push(
+          supabase.from('sales_quotes').select('project_id, converted_to_project_id').eq('assigned_to', user.id)
         );
       }
 
       const results = await Promise.all(baseQueries);
       const [tasksResult, rfisResult, submittalsResult, milestonesResult] = results;
+      const quotesResult = quotesResultIndex !== null ? results[quotesResultIndex] : null;
 
       let tasksData = tasksResult.data || [];
       let rfisData = rfisResult.data || [];
@@ -116,11 +137,25 @@ function CalendarPage() {
       let milestonesData = milestonesResult.data || [];
 
       // Filter by factory for PC/Plant Manager users
-      if (shouldFilterByFactory) {
+      if (isFactoryRestrictedPM) {
         tasksData = tasksData.filter(t => t.project?.factory === factoryCode);
         rfisData = rfisData.filter(r => r.project?.factory === factoryCode);
         submittalsData = submittalsData.filter(s => s.project?.factory === factoryCode);
         milestonesData = milestonesData.filter(m => m.project?.factory === factoryCode);
+      }
+
+      // Filter by Sales Manager's factory quotes
+      if (shouldFilterBySalesManager && quotesResult) {
+        const linkedProjectIds = new Set();
+        (quotesResult?.data || []).forEach(q => {
+          if (q.project_id) linkedProjectIds.add(q.project_id);
+          if (q.converted_to_project_id) linkedProjectIds.add(q.converted_to_project_id);
+        });
+        const isLinkedProject = (project) => project && linkedProjectIds.has(project.id);
+        tasksData = tasksData.filter(t => isLinkedProject(t.project));
+        rfisData = rfisData.filter(r => isLinkedProject(r.project));
+        submittalsData = submittalsData.filter(s => isLinkedProject(s.project));
+        milestonesData = milestonesData.filter(m => isLinkedProject(m.project));
       }
 
       // Filter by PM assignment for PM users
@@ -138,11 +173,13 @@ function CalendarPage() {
       }
 
       // Filter by Sales Rep's assigned projects (via quotes)
-      if (shouldFilterBySalesRep) {
-        const quotesResult = results[4]; // 5th query result
-        const assignedProjectIds = new Set(
-          (quotesResult?.data || []).map(q => q.project_id).filter(Boolean)
-        );
+      // Quotes can link to projects via either project_id or converted_to_project_id
+      if (shouldFilterBySalesRep && quotesResult) {
+        const assignedProjectIds = new Set();
+        (quotesResult?.data || []).forEach(q => {
+          if (q.project_id) assignedProjectIds.add(q.project_id);
+          if (q.converted_to_project_id) assignedProjectIds.add(q.converted_to_project_id);
+        });
         const isAssignedProject = (project) => project && assignedProjectIds.has(project.id);
         tasksData = tasksData.filter(t => isAssignedProject(t.project));
         rfisData = rfisData.filter(r => isAssignedProject(r.project));
@@ -167,8 +204,8 @@ function CalendarPage() {
 
       if (allProjects && allProjects.length > 0) {
         projectsData = allProjects;
-        // Also filter projects by factory for restricted users
-        if (shouldFilterByFactory) {
+        // Also filter projects by factory for PC/Plant Manager users
+        if (isFactoryRestrictedPM) {
           projectsData = projectsData.filter(p => p.factory === factoryCode);
         }
         // Also filter projects by PM assignment for PM users
@@ -179,12 +216,22 @@ function CalendarPage() {
             p.backup_pm_id === user.id
           );
         }
+        // Also filter projects by Sales Manager's factory quotes
+        if (shouldFilterBySalesManager && quotesResult) {
+          const linkedProjectIds = new Set();
+          (quotesResult?.data || []).forEach(q => {
+            if (q.project_id) linkedProjectIds.add(q.project_id);
+            if (q.converted_to_project_id) linkedProjectIds.add(q.converted_to_project_id);
+          });
+          projectsData = projectsData.filter(p => linkedProjectIds.has(p.id));
+        }
         // Also filter projects by Sales Rep's assigned quotes
-        if (shouldFilterBySalesRep) {
-          const quotesResult = results[4];
-          const assignedProjectIds = new Set(
-            (quotesResult?.data || []).map(q => q.project_id).filter(Boolean)
-          );
+        if (shouldFilterBySalesRep && quotesResult) {
+          const assignedProjectIds = new Set();
+          (quotesResult?.data || []).forEach(q => {
+            if (q.project_id) assignedProjectIds.add(q.project_id);
+            if (q.converted_to_project_id) assignedProjectIds.add(q.converted_to_project_id);
+          });
           projectsData = projectsData.filter(p => assignedProjectIds.has(p.id));
         }
       } else {

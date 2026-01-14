@@ -695,12 +695,13 @@ function DirectoryPage() {
         display: 'flex',
         gap: 'var(--space-md)',
         marginBottom: 'var(--space-lg)',
-        flexWrap: 'wrap'
+        alignItems: 'center'
       }}>
         {/* Search */}
         <div style={{
-          flex: '1 1 300px',
-          position: 'relative'
+          flex: '1',
+          position: 'relative',
+          minWidth: '200px'
         }}>
           <Search
             size={16}
@@ -748,7 +749,7 @@ function DirectoryPage() {
         </div>
 
         {/* Factory filter */}
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', flexShrink: 0 }}>
           <Factory
             size={16}
             style={{
@@ -772,7 +773,7 @@ function DirectoryPage() {
               fontSize: '0.875rem',
               cursor: 'pointer',
               appearance: 'none',
-              minWidth: '180px'
+              width: '220px'
             }}
           >
             <option value="all">All Factories</option>
@@ -796,7 +797,7 @@ function DirectoryPage() {
         </div>
 
         {/* Department filter */}
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', flexShrink: 0 }}>
           <Briefcase
             size={16}
             style={{
@@ -820,7 +821,7 @@ function DirectoryPage() {
               fontSize: '0.875rem',
               cursor: 'pointer',
               appearance: 'none',
-              minWidth: '200px'
+              width: '220px'
             }}
           >
             <option value="all">All Departments</option>

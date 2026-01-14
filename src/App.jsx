@@ -45,8 +45,7 @@ import ProjectDetails from './components/projects/ProjectDetails';
 import { ExecutiveReports } from './components/reports';
 
 // Sales
-import { SalesDashboard } from './components/sales';
-import SalesTeamPage from './components/sales/SalesTeamPage';
+import { SalesDashboard, SalesManagerDashboard, SalesRepDashboard, SalesTeamPage } from './components/sales';
 
 import { supabase } from './utils/supabaseClient';
 import './App.css';
@@ -135,10 +134,15 @@ function AppContent() {
           setDashboardType('pc');
           localStorage.setItem('dashboardType', 'pc');
         }
-        // Sales users
-        else if (role === 'sales_rep' || role === 'sales_manager') {
-          setDashboardType('sales');
-          localStorage.setItem('dashboardType', 'sales');
+        // Sales Manager users
+        else if (role === 'sales_manager') {
+          setDashboardType('sales_manager');
+          localStorage.setItem('dashboardType', 'sales_manager');
+        }
+        // Sales Rep users
+        else if (role === 'sales_rep') {
+          setDashboardType('sales_rep');
+          localStorage.setItem('dashboardType', 'sales_rep');
         }
       }
     } catch (error) {
@@ -406,17 +410,50 @@ function AppContent() {
     }
 
     // ========================================================================
-    // Sales-specific views
+    // Sales Manager-specific views
+    // ========================================================================
+    if (dashboardType === 'sales_manager') {
+      switch (currentView) {
+        case 'dashboard':
+          return <SalesManagerDashboard onNavigateToProject={handleNavigateToProject} />;
+        case 'team':
+          return <SalesTeamPage onNavigateToProject={handleNavigateToProject} />;
+        case 'projects':
+          return <ProjectsPage isDirectorView={false} isSalesView={true} onNavigateToProject={handleNavigateToProject} />;
+        case 'calendar':
+          return <CalendarPage onNavigateToProject={handleNavigateToProject} />;
+        default:
+          return <SalesManagerDashboard onNavigateToProject={handleNavigateToProject} />;
+      }
+    }
+
+    // ========================================================================
+    // Sales Rep-specific views
+    // ========================================================================
+    if (dashboardType === 'sales_rep') {
+      switch (currentView) {
+        case 'dashboard':
+          return <SalesRepDashboard onNavigateToProject={handleNavigateToProject} />;
+        case 'projects':
+          return <ProjectsPage isDirectorView={false} isSalesView={true} onNavigateToProject={handleNavigateToProject} />;
+        case 'calendar':
+          return <CalendarPage onNavigateToProject={handleNavigateToProject} />;
+        default:
+          return <SalesRepDashboard onNavigateToProject={handleNavigateToProject} />;
+      }
+    }
+
+    // ========================================================================
+    // Legacy sales dashboard (fallback)
     // ========================================================================
     if (dashboardType === 'sales') {
       switch (currentView) {
         case 'dashboard':
           return <SalesDashboard onNavigateToProject={handleNavigateToProject} />;
         case 'team':
-          // Sales team view - dedicated team page for Sales Managers
           return <SalesTeamPage onNavigateToProject={handleNavigateToProject} />;
         case 'projects':
-          return <ProjectsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
+          return <ProjectsPage isDirectorView={false} isSalesView={true} onNavigateToProject={handleNavigateToProject} />;
         case 'calendar':
           return <CalendarPage onNavigateToProject={handleNavigateToProject} />;
         default:

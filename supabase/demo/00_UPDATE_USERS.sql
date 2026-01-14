@@ -13,6 +13,7 @@
 -- | Matthew McDaniel  | matthew.mcdaniel@sunbeltmodular.com  | Project_Manager    | SNB     |
 -- | Michael Caracciolo| michael.caracciolo@sunbeltmodular.com| Project_Manager    | SNB     |
 -- | Mitch Quintana    | mitch.quintana@nwbsinc.com           | Sales_Manager      | NWBS    |
+-- | Robert Thaler      | robert.thaler@nwbsinc.com            | Sales_Rep          | NWBS    |
 -- | Devin Duvak       | devin.duvak@sunbeltmodular.com       | VP                 | SNB     |
 -- | Joy Thomas        | joy.thomas@sunbeltmodular.com        | IT_Manager         | SNB     |
 -- | Juanita Earnest   | juanita.earnest@phoenixmodular.com   | Project_Coordinator| PMI     |
@@ -92,6 +93,22 @@ ON CONFLICT (id) DO UPDATE SET
   role = 'Project_Coordinator',
   factory = 'PMI',
   name = COALESCE(EXCLUDED.name, users.name);
+
+-- Robert Thaler (Sales_Rep at NWBS - Estimator is a sales position)
+INSERT INTO users (id, email, name, role, factory, created_at)
+VALUES (
+  'aa90ef56-5f69-4531-a24a-5b3d1db608f2',
+  'robert.thaler@nwbsinc.com',
+  'Robert Thaler',
+  'Sales_Rep',
+  'NWBS',
+  NOW()
+)
+ON CONFLICT (id) DO UPDATE SET
+  role = 'Sales_Rep',
+  factory = 'NWBS',
+  name = 'Robert Thaler',
+  email = 'robert.thaler@nwbsinc.com';
 
 -- ============================================================================
 -- VERIFICATION

@@ -1,5 +1,5 @@
 -- ============================================================================
--- STEP 5: GENERATE PROJECT DATA
+-- STEP 6: GENERATE PROJECT DATA
 -- ============================================================================
 -- Creates phase-appropriate data for each project:
 -- - Tasks (linked to workflow stations, prereqs completed)
@@ -10,17 +10,23 @@
 -- - Color Selections (all projects)
 -- - Milestones (4-6 per project)
 --
+-- IMPORTANT: This script REQUIRES that projects exist first (run 05_IMPORT_PROJECTS.sql)
+--
 -- Created: January 13, 2026
+-- Updated: January 14, 2026 - Fixed to work without user assignments
 -- ============================================================================
 
--- ============================================================================
--- HELPER FUNCTION: Get random PM for assignments
--- ============================================================================
-CREATE OR REPLACE FUNCTION get_random_user_id() RETURNS UUID AS $$
+-- First, verify we have projects
+DO $$
+DECLARE
+  v_count INTEGER;
 BEGIN
-  RETURN (SELECT id FROM users WHERE role IN ('PM', 'Director') ORDER BY RANDOM() LIMIT 1);
-END;
-$$ LANGUAGE plpgsql;
+  SELECT COUNT(*) INTO v_count FROM projects;
+  IF v_count = 0 THEN
+    RAISE EXCEPTION 'No projects found! Please run 05_IMPORT_PROJECTS.sql first.';
+  END IF;
+  RAISE NOTICE 'Found % projects to generate data for', v_count;
+END $$;
 
 -- ============================================================================
 -- GENERATE DATA FOR EACH PROJECT
@@ -29,18 +35,27 @@ DO $$
 DECLARE
   v_project RECORD;
   v_pm_id UUID;
-  v_task_num INTEGER;
-  v_rfi_num INTEGER;
-  v_submittal_num INTEGER;
   v_phase INTEGER;
+  v_project_count INTEGER := 0;
+  v_start_date DATE;
+  v_target_date DATE;
 BEGIN
   -- Loop through all projects
   FOR v_project IN SELECT * FROM projects ORDER BY current_phase, created_at LOOP
+    v_project_count := v_project_count + 1;
+
+    -- Try to get PM, but allow NULL if no users exist
     v_pm_id := v_project.primary_pm_id;
+    IF v_pm_id IS NULL THEN
+      SELECT id INTO v_pm_id FROM users LIMIT 1;
+      -- v_pm_id can still be NULL if no users exist - that's OK
+    END IF;
+
     v_phase := COALESCE(v_project.current_phase, 1);
-    v_task_num := 1;
-    v_rfi_num := 1;
-    v_submittal_num := 1;
+
+    -- Default dates for date arithmetic (prevents NULL date errors)
+    v_start_date := COALESCE(v_project.start_date, CURRENT_DATE - INTERVAL '30 days');
+    v_target_date := COALESCE(v_project.target_online_date, CURRENT_DATE + INTERVAL '90 days');
 
     -- ======================================================================
     -- TASKS: Phase-appropriate with prereqs completed
@@ -55,7 +70,7 @@ BEGIN
       'Review sales documentation and complete handoff checklist',
       CASE WHEN v_phase >= 1 THEN 'Completed' ELSE 'Not Started' END,
       'High',
-      v_project.start_date + INTERVAL '3 days',
+      v_start_date + INTERVAL '3 days',
       v_pm_id,
       v_pm_id,
       'pm',
@@ -75,7 +90,7 @@ BEGIN
         ELSE 'Not Started'
       END,
       'High',
-      v_project.start_date + INTERVAL '7 days',
+      v_start_date + INTERVAL '7 days',
       v_pm_id,
       v_pm_id,
       'pm',
@@ -95,7 +110,7 @@ BEGIN
         ELSE 'Not Started'
       END,
       'Medium',
-      v_project.start_date + INTERVAL '14 days',
+      v_start_date + INTERVAL '14 days',
       v_pm_id,
       v_pm_id,
       'pm',
@@ -113,7 +128,7 @@ BEGIN
         'Review preliminary layout drawings and provide feedback',
         CASE WHEN v_phase > 2 OR (v_phase = 2 AND v_project.health_status != 'Critical') THEN 'Completed' ELSE 'Completed' END,
         'High',
-        v_project.start_date + INTERVAL '21 days',
+        v_start_date + INTERVAL '21 days',
         v_pm_id,
         v_pm_id,
         'drafting',
@@ -134,7 +149,7 @@ BEGIN
           ELSE 'Not Started'
         END,
         'High',
-        v_project.start_date + INTERVAL '35 days',
+        v_start_date + INTERVAL '35 days',
         v_pm_id,
         v_pm_id,
         'drafting',
@@ -155,7 +170,7 @@ BEGIN
           ELSE 'Not Started'
         END,
         'High',
-        v_project.start_date + INTERVAL '49 days',
+        v_start_date + INTERVAL '49 days',
         v_pm_id,
         v_pm_id,
         'drafting',
@@ -171,7 +186,7 @@ BEGIN
         'Final construction documents approval',
         CASE WHEN v_phase > 2 THEN 'Completed' ELSE 'Not Started' END,
         'High',
-        v_project.start_date + INTERVAL '63 days',
+        v_start_date + INTERVAL '63 days',
         v_pm_id,
         v_pm_id,
         'drafting',
@@ -191,7 +206,7 @@ BEGIN
           ELSE 'Not Started'
         END,
         'Medium',
-        v_project.start_date + INTERVAL '45 days',
+        v_start_date + INTERVAL '45 days',
         v_pm_id,
         v_pm_id,
         'dealer',
@@ -211,7 +226,7 @@ BEGIN
           ELSE 'Not Started'
         END,
         'High',
-        v_project.start_date + INTERVAL '30 days',
+        v_start_date + INTERVAL '30 days',
         v_pm_id,
         v_pm_id,
         'procurement',
@@ -231,7 +246,7 @@ BEGIN
           ELSE 'Not Started'
         END,
         'Medium',
-        v_project.start_date + INTERVAL '50 days',
+        v_start_date + INTERVAL '50 days',
         v_pm_id,
         v_pm_id,
         'dealer',
@@ -254,7 +269,7 @@ BEGIN
           ELSE 'Completed'
         END,
         'High',
-        v_project.start_date + INTERVAL '70 days',
+        v_start_date + INTERVAL '70 days',
         v_pm_id,
         v_pm_id,
         'engineering',
@@ -274,7 +289,7 @@ BEGIN
           ELSE 'Completed'
         END,
         'Medium',
-        v_project.start_date + INTERVAL '80 days',
+        v_start_date + INTERVAL '80 days',
         v_pm_id,
         v_pm_id,
         'third_party',
@@ -294,7 +309,7 @@ BEGIN
           ELSE 'Completed'
         END,
         'High',
-        v_project.start_date + INTERVAL '85 days',
+        v_start_date + INTERVAL '85 days',
         v_pm_id,
         v_pm_id,
         'state',
@@ -314,7 +329,7 @@ BEGIN
           ELSE 'Not Started'
         END,
         'High',
-        v_project.target_online_date - INTERVAL '90 days',
+        v_target_date - INTERVAL '90 days',
         v_pm_id,
         v_pm_id,
         'pm',
@@ -334,7 +349,7 @@ BEGIN
           ELSE 'Not Started'
         END,
         'Medium',
-        v_project.start_date + INTERVAL '75 days',
+        v_start_date + INTERVAL '75 days',
         v_pm_id,
         v_pm_id,
         'pm',
@@ -357,7 +372,7 @@ BEGIN
           ELSE 'Completed'
         END,
         'High',
-        v_project.target_online_date - INTERVAL '60 days',
+        v_target_date - INTERVAL '60 days',
         v_pm_id,
         v_pm_id,
         'factory',
@@ -377,7 +392,7 @@ BEGIN
           ELSE 'Completed'
         END,
         'High',
-        v_project.target_online_date - INTERVAL '30 days',
+        v_target_date - INTERVAL '30 days',
         v_pm_id,
         v_pm_id,
         'factory',
@@ -397,7 +412,7 @@ BEGIN
           ELSE 'Completed'
         END,
         'High',
-        v_project.target_online_date - INTERVAL '21 days',
+        v_target_date - INTERVAL '21 days',
         v_pm_id,
         v_pm_id,
         'pm',
@@ -413,7 +428,7 @@ BEGIN
         'Units delivered to site',
         CASE WHEN v_project.status = 'Complete' THEN 'Completed' ELSE 'Not Started' END,
         'High',
-        v_project.target_online_date - INTERVAL '14 days',
+        v_target_date - INTERVAL '14 days',
         v_pm_id,
         v_pm_id,
         'pm',
@@ -429,7 +444,7 @@ BEGIN
         'Units set on foundation',
         CASE WHEN v_project.status = 'Complete' THEN 'Completed' ELSE 'Not Started' END,
         'High',
-        v_project.target_online_date - INTERVAL '7 days',
+        v_target_date - INTERVAL '7 days',
         v_pm_id,
         v_pm_id,
         'pm',
@@ -445,7 +460,7 @@ BEGIN
         'Final documentation and project closeout',
         CASE WHEN v_project.status = 'Complete' THEN 'Completed' ELSE 'Not Started' END,
         'Medium',
-        v_project.target_online_date,
+        v_target_date,
         v_pm_id,
         v_pm_id,
         'pm',
@@ -462,7 +477,7 @@ BEGIN
         'URGENT: Resolve Schedule Delays',
         'Address critical path delays and develop recovery plan',
         'In Progress',
-        'Urgent',
+        'Critical',
         CURRENT_DATE - INTERVAL '5 days',
         v_pm_id,
         v_pm_id,
@@ -503,8 +518,8 @@ BEGIN
       CASE WHEN v_phase >= 3 THEN 'Access from the north entrance via Industrial Blvd. Max height clearance is 14ft. Recommend escort vehicle for oversize loads.' ELSE NULL END,
       CASE WHEN v_phase >= 3 THEN 'Closed' WHEN v_phase = 2 THEN 'Open' ELSE 'Draft' END,
       'Medium',
-      CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '10 days' ELSE NULL END,
-      v_project.start_date + INTERVAL '17 days',
+      CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '10 days' ELSE NULL END,
+      v_start_date + INTERVAL '17 days',
       true,
       v_project.client_name,
       v_pm_id,
@@ -522,8 +537,8 @@ BEGIN
       CASE WHEN v_phase >= 2 AND v_project.health_status != 'Critical' THEN 'Relocate electrical panel to west wall of mechanical room. Updated drawings to follow.' ELSE NULL END,
       CASE WHEN v_phase >= 3 THEN 'Closed' WHEN v_phase = 2 AND v_project.health_status = 'Critical' THEN 'Open' WHEN v_phase = 2 THEN 'Answered' ELSE 'Draft' END,
       'High',
-      CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '25 days' ELSE NULL END,
-      v_project.start_date + INTERVAL '32 days',
+      CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '25 days' ELSE NULL END,
+      v_start_date + INTERVAL '32 days',
       true,
       v_project.client_name,
       v_pm_id,
@@ -541,8 +556,8 @@ BEGIN
       CASE WHEN v_phase >= 3 THEN 'Approved. Armstrong Imperial Texture in matching color is acceptable.' ELSE NULL END,
       CASE WHEN v_phase >= 4 THEN 'Closed' WHEN v_phase = 3 THEN 'Answered' WHEN v_phase = 2 THEN 'Pending' ELSE 'Draft' END,
       'Medium',
-      CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '40 days' ELSE NULL END,
-      v_project.start_date + INTERVAL '47 days',
+      CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '40 days' ELSE NULL END,
+      v_start_date + INTERVAL '47 days',
       true,
       v_project.client_name,
       v_pm_id,
@@ -560,7 +575,7 @@ BEGIN
         'We need immediate approval on the 95% drawings to maintain the production schedule. Current delay is impacting delivery timeline.',
         NULL,
         'Open',
-        'Urgent',
+        'Critical',
         CURRENT_DATE - INTERVAL '3 days',
         CURRENT_DATE - INTERVAL '1 day',
         true,
@@ -580,8 +595,8 @@ BEGIN
         CASE WHEN v_phase >= 3 THEN 'Option A approved - route along north wall to avoid conflict with structural beams.' ELSE NULL END,
         CASE WHEN v_phase >= 4 THEN 'Closed' WHEN v_phase >= 3 THEN 'Answered' ELSE 'Draft' END,
         'Medium',
-        CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '55 days' ELSE NULL END,
-        v_project.start_date + INTERVAL '62 days',
+        CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '55 days' ELSE NULL END,
+        v_start_date + INTERVAL '62 days',
         false,
         'Engineering Team',
         v_pm_id,
@@ -603,8 +618,8 @@ BEGIN
       CASE WHEN v_phase >= 3 THEN 'Approved' WHEN v_phase = 2 THEN 'Under Review' ELSE 'Draft' END,
       'Carrier',
       '50XC-024',
-      CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '30 days' ELSE NULL END,
-      CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '37 days' ELSE NULL END,
+      CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '30 days' ELSE NULL END,
+      CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '37 days' ELSE NULL END,
       NOW()
     );
 
@@ -618,8 +633,8 @@ BEGIN
       CASE WHEN v_phase >= 3 THEN 'Approved' WHEN v_phase = 2 THEN 'Submitted' ELSE 'Draft' END,
       'Square D',
       'QO130L200PG',
-      CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '35 days' ELSE NULL END,
-      CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '42 days' ELSE NULL END,
+      CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '35 days' ELSE NULL END,
+      CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '42 days' ELSE NULL END,
       NOW()
     );
 
@@ -633,8 +648,8 @@ BEGIN
       CASE WHEN v_phase >= 4 THEN 'Approved' WHEN v_phase = 3 THEN 'Approved as Noted' WHEN v_phase = 2 THEN 'Under Review' ELSE 'Draft' END,
       'Shaw Contract',
       'Crete II',
-      CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '40 days' ELSE NULL END,
-      CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '50 days' ELSE NULL END,
+      CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '40 days' ELSE NULL END,
+      CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '50 days' ELSE NULL END,
       NOW()
     );
 
@@ -648,8 +663,8 @@ BEGIN
       CASE WHEN v_phase >= 4 THEN 'Approved' WHEN v_phase >= 3 THEN 'Approved' WHEN v_phase = 2 THEN 'Submitted' ELSE 'Draft' END,
       'Milgard',
       'Style Line Series',
-      CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '45 days' ELSE NULL END,
-      CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '55 days' ELSE NULL END,
+      CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '45 days' ELSE NULL END,
+      CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '55 days' ELSE NULL END,
       NOW()
     );
 
@@ -659,17 +674,17 @@ BEGIN
 
     INSERT INTO milestones (project_id, name, due_date, status, created_at)
     VALUES
-      (v_project.id, 'Sales Handoff Complete', v_project.start_date + INTERVAL '7 days',
+      (v_project.id, 'Sales Handoff Complete', v_start_date + INTERVAL '7 days',
        CASE WHEN v_phase >= 1 THEN 'Completed' ELSE 'Not Started' END, NOW()),
-      (v_project.id, '65% Drawings Approved', v_project.start_date + INTERVAL '45 days',
+      (v_project.id, '65% Drawings Approved', v_start_date + INTERVAL '45 days',
        CASE WHEN v_phase >= 3 THEN 'Completed' WHEN v_phase = 2 THEN 'In Progress' ELSE 'Not Started' END, NOW()),
-      (v_project.id, 'Engineering Stamp Received', v_project.start_date + INTERVAL '75 days',
+      (v_project.id, 'Engineering Stamp Received', v_start_date + INTERVAL '75 days',
        CASE WHEN v_phase >= 4 THEN 'Completed' WHEN v_phase = 3 THEN 'In Progress' ELSE 'Not Started' END, NOW()),
-      (v_project.id, 'Production Start', v_project.target_online_date - INTERVAL '60 days',
+      (v_project.id, 'Production Start', v_target_date - INTERVAL '60 days',
        CASE WHEN v_phase = 4 AND v_project.status != 'Complete' THEN 'In Progress' WHEN v_project.status = 'Complete' THEN 'Completed' ELSE 'Not Started' END, NOW()),
-      (v_project.id, 'Delivery Complete', v_project.target_online_date - INTERVAL '14 days',
+      (v_project.id, 'Delivery Complete', v_target_date - INTERVAL '14 days',
        CASE WHEN v_project.status = 'Complete' THEN 'Completed' ELSE 'Not Started' END, NOW()),
-      (v_project.id, 'Project Closeout', v_project.target_online_date,
+      (v_project.id, 'Project Closeout', v_target_date,
        CASE WHEN v_project.status = 'Complete' THEN 'Completed' ELSE 'Not Started' END, NOW());
 
     -- ======================================================================
@@ -685,10 +700,10 @@ BEGIN
         v_project.project_number || '-CO-001',
         CASE WHEN v_phase >= 4 THEN 'Implemented' WHEN v_phase = 3 THEN 'Signed' WHEN v_phase = 2 THEN 'Sent' ELSE 'Draft' END,
         15000.00,
-        v_project.start_date + INTERVAL '50 days',
-        CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '52 days' ELSE NULL END,
-        CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '58 days' ELSE NULL END,
-        CASE WHEN v_phase >= 4 THEN v_project.start_date + INTERVAL '65 days' ELSE NULL END,
+        v_start_date + INTERVAL '50 days',
+        CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '52 days' ELSE NULL END,
+        CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '58 days' ELSE NULL END,
+        CASE WHEN v_phase >= 4 THEN v_start_date + INTERVAL '65 days' ELSE NULL END,
         'Add additional electrical circuits for IT equipment',
         v_pm_id,
         NOW()
@@ -735,9 +750,9 @@ BEGIN
         v_project.project_number || '-CO-002',
         CASE WHEN v_phase >= 4 THEN 'Signed' WHEN v_phase = 3 THEN 'Sent' ELSE 'Draft' END,
         8500.00,
-        v_project.start_date + INTERVAL '70 days',
-        CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '72 days' ELSE NULL END,
-        CASE WHEN v_phase >= 4 THEN v_project.start_date + INTERVAL '78 days' ELSE NULL END,
+        v_start_date + INTERVAL '70 days',
+        CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '72 days' ELSE NULL END,
+        CASE WHEN v_phase >= 4 THEN v_start_date + INTERVAL '78 days' ELSE NULL END,
         'Upgrade interior finishes per client request',
         v_pm_id,
         NOW()
@@ -786,30 +801,30 @@ BEGIN
     INSERT INTO long_lead_items (project_id, item_name, description, manufacturer, model_number, supplier, lead_time_weeks, order_date, expected_delivery, actual_delivery, status, notes, created_at)
     VALUES
       (v_project.id, 'HVAC Package Unit', 'Rooftop package unit for HVAC system', 'Carrier', '50XC-024', 'Ferguson', 8,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '30 days' ELSE NULL END,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '86 days' ELSE NULL END,
-       CASE WHEN v_phase >= 4 THEN v_project.start_date + INTERVAL '82 days' ELSE NULL END,
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '30 days' ELSE NULL END,
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '86 days' ELSE NULL END,
+       CASE WHEN v_phase >= 4 THEN v_start_date + INTERVAL '82 days' ELSE NULL END,
        CASE WHEN v_phase >= 4 THEN 'Delivered' WHEN v_phase >= 3 THEN 'In Transit' WHEN v_phase >= 2 THEN 'Ordered' ELSE 'Pending' END,
        CASE WHEN v_phase >= 2 THEN 'Cutsheet approved' ELSE NULL END, NOW()),
 
       (v_project.id, 'Custom Windows', 'Aluminum frame windows per spec (Qty: 12)', 'Milgard', 'Style Line 3000', 'Milgard Direct', 6,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '35 days' ELSE NULL END,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '77 days' ELSE NULL END,
-       CASE WHEN v_phase >= 4 THEN v_project.start_date + INTERVAL '75 days' ELSE NULL END,
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '35 days' ELSE NULL END,
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '77 days' ELSE NULL END,
+       CASE WHEN v_phase >= 4 THEN v_start_date + INTERVAL '75 days' ELSE NULL END,
        CASE WHEN v_phase >= 4 THEN 'Delivered' WHEN v_phase >= 3 THEN 'In Transit' WHEN v_phase >= 2 THEN 'Ordered' ELSE 'Pending' END,
        NULL, NOW()),
 
       (v_project.id, 'Backup Generator', 'Emergency backup power system', 'Generac', 'RG02724ANAX', 'Power Systems Inc', 10,
-       CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '45 days' ELSE NULL END,
-       CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '115 days' ELSE NULL END,
-       CASE WHEN v_phase >= 4 AND v_project.status = 'Complete' THEN v_project.start_date + INTERVAL '110 days' ELSE NULL END,
+       CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '45 days' ELSE NULL END,
+       CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '115 days' ELSE NULL END,
+       CASE WHEN v_phase >= 4 AND v_project.status = 'Complete' THEN v_start_date + INTERVAL '110 days' ELSE NULL END,
        CASE WHEN v_project.status = 'Complete' THEN 'Delivered' WHEN v_phase >= 4 THEN 'In Transit' WHEN v_phase >= 3 THEN 'Ordered' ELSE 'Pending' END,
        CASE WHEN v_phase >= 3 THEN 'AHJ requires specific model' ELSE NULL END, NOW()),
 
       (v_project.id, 'Fire Suppression System', 'Pre-engineered fire suppression', 'Victaulic', 'Vortex 500', 'Fire Safety Supply', 4,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '40 days' ELSE NULL END,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '68 days' ELSE NULL END,
-       CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '65 days' ELSE NULL END,
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '40 days' ELSE NULL END,
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '68 days' ELSE NULL END,
+       CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '65 days' ELSE NULL END,
        CASE WHEN v_phase >= 3 THEN 'Delivered' WHEN v_phase >= 2 THEN 'Ordered' ELSE 'Pending' END,
        NULL, NOW());
 
@@ -824,66 +839,67 @@ BEGIN
     VALUES
       (v_project.id, 'roofing', 'Metal Roof Panel', 'Charcoal Gray', 'CG-2850', 'MBCI', false,
        CASE WHEN v_phase >= 3 THEN 'Confirmed' WHEN v_phase = 2 THEN 'Submitted' ELSE 'Pending' END,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '25 days' ELSE NULL END,
-       CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '35 days' ELSE NULL END, NOW()),
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '25 days' ELSE NULL END,
+       CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '35 days' ELSE NULL END, NOW()),
 
       (v_project.id, 'exterior_siding', 'Exterior Siding Panel', 'Desert Tan', 'DT-4420', 'James Hardie', false,
        CASE WHEN v_phase >= 3 THEN 'Confirmed' WHEN v_phase = 2 THEN 'Submitted' ELSE 'Pending' END,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '25 days' ELSE NULL END,
-       CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '35 days' ELSE NULL END, NOW()),
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '25 days' ELSE NULL END,
+       CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '35 days' ELSE NULL END, NOW()),
 
       (v_project.id, 'exterior_trim', 'Window & Door Trim', 'Bright White', 'BW-100', 'Azek', false,
        CASE WHEN v_phase >= 3 THEN 'Confirmed' WHEN v_phase = 2 THEN 'Submitted' ELSE 'Pending' END,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '26 days' ELSE NULL END,
-       CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '36 days' ELSE NULL END, NOW()),
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '26 days' ELSE NULL END,
+       CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '36 days' ELSE NULL END, NOW()),
 
       (v_project.id, 'flooring', 'LVT Flooring', 'Warm Oak', 'WO-1122', 'Shaw Contract', false,
        CASE WHEN v_phase >= 3 THEN 'Confirmed' WHEN v_phase = 2 THEN 'Submitted' ELSE 'Pending' END,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '30 days' ELSE NULL END,
-       CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '40 days' ELSE NULL END, NOW()),
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '30 days' ELSE NULL END,
+       CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '40 days' ELSE NULL END, NOW()),
 
       (v_project.id, 'interior_walls', 'Wall Paint', 'Swiss Coffee', 'OC-45', 'Benjamin Moore', false,
        CASE WHEN v_phase >= 3 THEN 'Confirmed' WHEN v_phase = 2 THEN 'Submitted' ELSE 'Pending' END,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '30 days' ELSE NULL END,
-       CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '38 days' ELSE NULL END, NOW()),
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '30 days' ELSE NULL END,
+       CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '38 days' ELSE NULL END, NOW()),
 
       (v_project.id, 'interior_trim', 'Baseboards & Casings', 'Simply White', 'SW-7000', 'Sherwin-Williams', false,
        CASE WHEN v_phase >= 3 THEN 'Confirmed' WHEN v_phase = 2 THEN 'Pending' ELSE 'Pending' END,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '30 days' ELSE NULL END,
-       CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '38 days' ELSE NULL END, NOW()),
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '30 days' ELSE NULL END,
+       CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '38 days' ELSE NULL END, NOW()),
 
       (v_project.id, 'doors', 'Interior Doors', 'White Primer', 'WP-100', 'Masonite', false,
        CASE WHEN v_phase >= 3 THEN 'Confirmed' ELSE 'Pending' END,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '28 days' ELSE NULL END,
-       CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '36 days' ELSE NULL END, NOW()),
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '28 days' ELSE NULL END,
+       CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '36 days' ELSE NULL END, NOW()),
 
       (v_project.id, 'cabinets', 'Kitchen Cabinets', 'Shaker White', 'SW-CAB', 'KraftMaid', false,
        CASE WHEN v_phase >= 4 THEN 'Confirmed' WHEN v_phase >= 2 THEN 'Submitted' ELSE 'Pending' END,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '32 days' ELSE NULL END,
-       CASE WHEN v_phase >= 4 THEN v_project.start_date + INTERVAL '48 days' ELSE NULL END, NOW()),
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '32 days' ELSE NULL END,
+       CASE WHEN v_phase >= 4 THEN v_start_date + INTERVAL '48 days' ELSE NULL END, NOW()),
 
       (v_project.id, 'countertops', 'Laminate Counter', 'Calcutta Marble', 'CM-990', 'Wilsonart', true,
        CASE WHEN v_phase >= 4 THEN 'Confirmed' WHEN v_phase >= 2 THEN 'Pending' ELSE 'Pending' END,
-       CASE WHEN v_phase >= 2 THEN v_project.start_date + INTERVAL '32 days' ELSE NULL END,
-       CASE WHEN v_phase >= 4 THEN v_project.start_date + INTERVAL '50 days' ELSE NULL END, NOW()),
+       CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '32 days' ELSE NULL END,
+       CASE WHEN v_phase >= 4 THEN v_start_date + INTERVAL '50 days' ELSE NULL END, NOW()),
 
       (v_project.id, 'fixtures', 'Plumbing Fixtures', 'Brushed Nickel', 'BN-200', 'Moen', false,
        CASE WHEN v_phase >= 4 THEN 'Confirmed' WHEN v_phase >= 3 THEN 'Submitted' ELSE 'Pending' END,
-       CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '40 days' ELSE NULL END,
-       CASE WHEN v_phase >= 4 THEN v_project.start_date + INTERVAL '52 days' ELSE NULL END, NOW()),
+       CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '40 days' ELSE NULL END,
+       CASE WHEN v_phase >= 4 THEN v_start_date + INTERVAL '52 days' ELSE NULL END, NOW()),
 
       (v_project.id, 'hardware', 'Door & Cabinet Hardware', 'Satin Nickel', 'SN-HW', 'Schlage', false,
        CASE WHEN v_phase >= 4 THEN 'Confirmed' WHEN v_phase >= 3 THEN 'Submitted' ELSE 'Pending' END,
-       CASE WHEN v_phase >= 3 THEN v_project.start_date + INTERVAL '40 days' ELSE NULL END,
-       CASE WHEN v_phase >= 4 THEN v_project.start_date + INTERVAL '52 days' ELSE NULL END, NOW());
+       CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '40 days' ELSE NULL END,
+       CASE WHEN v_phase >= 4 THEN v_start_date + INTERVAL '52 days' ELSE NULL END, NOW());
 
   END LOOP;
 
-  RAISE NOTICE 'Project data generated successfully';
-END $$;
+  RAISE NOTICE 'Project data generated for % projects', v_project_count;
 
--- Clean up helper function
-DROP FUNCTION IF EXISTS get_random_user_id();
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'ERROR in project data generation: % - %', SQLERRM, SQLSTATE;
+  RAISE;
+END $$;
 
 -- ============================================================================
 -- VERIFICATION

@@ -8,12 +8,14 @@ Run all scripts in Supabase SQL Editor in this order:
 
 ```
 01_CLEAR_DATA.sql          → Clears existing project data
-02_FACTORIES_TABLE.sql     → Creates factories with Praxis codes
-03_WORKFLOW_STATIONS.sql   → Creates 21 workflow stations
-04_IMPORT_PROJECTS.sql     → Imports 20 demo projects
-05_PROJECT_DATA.sql        → Generates tasks, RFIs, submittals, etc.
-06_WORKFLOW_STATUS.sql     → Initializes workflow status per project
-07_SALES_DATA.sql          → Creates sales pipeline for Mitch
+02_FACTORIES_TABLE.sql     → Creates 15 factories with addresses & contact info
+03_DEPARTMENTS.sql         → Creates 14 department lookup codes
+04_WORKFLOW_STATIONS.sql   → Creates 21 workflow stations
+05_IMPORT_PROJECTS.sql     → Imports 20 demo projects
+06_PROJECT_DATA.sql        → Generates tasks, RFIs, submittals, etc.
+07_WORKFLOW_STATUS.sql     → Initializes workflow status per project
+08_SALES_DATA.sql          → Creates sales pipeline for Mitch
+09_DIRECTORY_CONTACTS.sql  → Imports 311 employee contacts from directory
 ```
 
 ## What Gets Created

@@ -64,6 +64,9 @@ import WorkflowTracker from './WorkflowTracker';
 import StationDetailModal from '../workflow/StationDetailModal';
 import { WorkflowCanvas } from '../workflow';
 
+// ✅ ADDED: Redesigned Overview tab component
+import OverviewTab from './OverviewTab';
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -436,7 +439,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
             </div>
           ) : (
             <>
-              {/* OVERVIEW TAB - ✅ UPDATED with calendar */}
+              {/* OVERVIEW TAB - ✅ REDESIGNED with health score, blockers, timeline */}
               {activeTab === 'overview' && (
                 <OverviewTab
                   project={project}
@@ -824,104 +827,8 @@ function PlaceholderTab({ icon: Icon, message }) {
 }
 
 // ============================================================================
-// OVERVIEW TAB - ✅ UPDATED with ProjectCalendarWeek
-// ============================================================================
-function OverviewTab({ project, stats, milestones, tasks, rfis, submittals, setEditTask, setEditRFI, setEditSubmittal }) {
-  return (
-    <div>
-      {/* Top Section: Project Info + Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-xl)', marginBottom: 'var(--space-xl)' }}>
-        {/* Project Info */}
-        <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-lg)', border: '1px solid var(--border-color)' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', marginBottom: 'var(--space-md)' }}>Project Details</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
-            <InfoItem label="Client" value={project.client_name} />
-            <InfoItem label="Location" value={project.site_address} />
-            <InfoItem label="Contract Value" value={formatCurrency(project.contract_value)} />
-            <InfoItem label="Target Online" value={formatDate(project.target_online_date)} />
-            <InfoItem label="Project Type" value={project.project_type} />
-            <InfoItem label="Factory" value={project.factory_name || project.factory} />
-          </div>
-          {project.description && (
-            <div style={{ marginTop: 'var(--space-md)', paddingTop: 'var(--space-md)', borderTop: '1px solid var(--border-color)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Description</span>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{project.description}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Stats + Milestones */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
-          {/* Stats Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-md)' }}>
-            <StatCard icon={CheckSquare} label="Tasks Done" value={`${stats.taskCompleted}/${stats.taskTotal}`} color="var(--sunbelt-orange)" />
-            <StatCard icon={MessageSquare} label="Open RFIs" value={stats.rfiOpen} color="var(--info)" />
-            <StatCard icon={ClipboardList} label="Pending Subs" value={stats.subPending} color="var(--warning)" />
-          </div>
-
-          {/* Milestones */}
-          <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-lg)', border: '1px solid var(--border-color)', flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
-              <Flag size={16} style={{ color: 'var(--sunbelt-orange)' }} />
-              <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>Milestones</h3>
-            </div>
-            {milestones.length === 0 ? (
-              <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>No milestones yet</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                {milestones.slice(0, 4).map(m => (
-                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-sm)', background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)' }}>
-                    <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{m.name}</span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{formatDate(m.due_date)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ✅ ADDED: Week Calendar Section */}
-      <div style={{ marginTop: 'var(--space-xl)' }}>
-        <ProjectCalendarWeek
-          project={project}
-          tasks={tasks}
-          rfis={rfis}
-          submittals={submittals}
-          milestones={milestones}
-          onItemClick={(item) => {
-            if (item.type === 'task') setEditTask(item.data);
-            else if (item.type === 'rfi') setEditRFI(item.data);
-            else if (item.type === 'submittal') setEditSubmittal(item.data);
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
 // SUB-COMPONENTS
 // ============================================================================
-function InfoItem({ label, value }) {
-  return (
-    <div>
-      <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>{label}</span>
-      <p style={{ fontSize: '0.9375rem', color: 'var(--text-primary)', fontWeight: '500', marginTop: '2px' }}>{value || '—'}</p>
-    </div>
-  );
-}
-
-function StatCard({ icon: Icon, label, value, color }) {
-  return (
-    <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-md)', border: '1px solid var(--border-color)', textAlign: 'center' }}>
-      <Icon size={24} style={{ color, marginBottom: 'var(--space-xs)' }} />
-      <div style={{ fontSize: '1.5rem', fontWeight: '700', color }}>{value}</div>
-      <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{label}</div>
-    </div>
-  );
-}
-
 function SearchInput({ value, onChange, placeholder }) {
   return (
     <div style={{ position: 'relative', flex: 1, maxWidth: '300px' }}>

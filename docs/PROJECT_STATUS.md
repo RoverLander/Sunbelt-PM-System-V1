@@ -146,6 +146,62 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ## Recent Updates (January 2026)
 
+### January 14, 2026 (Sales Role System & Project Overview Redesign)
+
+- **Separate Sales Manager & Sales Rep Dashboards - Complete**
+  - Created dedicated `SalesManagerDashboard.jsx` component
+    - Factory-based filtering (sees all quotes in their factory)
+    - Team overview section with individual rep performance metrics
+    - Sales funnel visualization, building type charts
+    - Stale quote alerts and PM flagging
+  - Created dedicated `SalesRepDashboard.jsx` component
+    - User-specific filtering (sees only their own quotes)
+    - "Needs Attention" section for overdue and stale quotes
+    - Personal monthly stats and pipeline progress
+    - Simplified view focused on individual performance
+  - Updated `App.jsx` with role-based routing:
+    - `sales_manager` -> SalesManagerDashboard
+    - `sales_rep` -> SalesRepDashboard
+    - Legacy `sales` -> SalesDashboard
+  - Updated `Sidebar.jsx` with role-specific navigation items
+  - Files created:
+    - `src/components/sales/SalesManagerDashboard.jsx`
+    - `src/components/sales/SalesRepDashboard.jsx`
+
+- **Sales Calendar Role Filtering - Complete**
+  - Sales Managers now see only projects linked to quotes in their factory
+  - Sales Reps see only projects linked to their personally assigned quotes
+  - Fixed calendar to use both `project_id` and `converted_to_project_id` for quote-to-project linking
+  - Updated `CalendarPage.jsx` with proper role detection and filtering
+
+- **PM Projects View for Sales - Complete**
+  - Sales users can now view PM Projects tab in read-only mode
+  - "Create Project" and "Import from Praxis" buttons hidden for sales roles
+  - Added `isSalesView` prop to `ProjectsPage.jsx`
+
+- **Demo Data Updates - Complete**
+  - Added Robert Thaler as Sales_Rep at NWBS factory
+  - Created Mitch's quote linked to Hanford project (NWBS-25250) via `converted_to_project_id`
+  - Robert has dedicated quotes for AWS, Boeing, Port of Seattle, Microsoft, etc.
+  - Updated `00_UPDATE_USERS.sql` and `08_SALES_DATA.sql`
+
+- **Project Details Overview Tab Redesign - Complete**
+  - Created new `OverviewTab.jsx` component with modern UI inspired by Procore, BuilderTrend, Monday.com
+  - **Project Health Score** - Visual gauge (0-100) with status factors
+    - Calculates score based on overdue tasks, RFIs, submittals, milestones
+    - Color-coded status: On Track (green), At Risk (yellow), Critical (red)
+  - **Key Dates Timeline** - Progress bar showing milestone completion
+    - Sales handoff, milestones, target online date
+    - Visual indicators for completed, upcoming, and overdue dates
+  - **Blockers & Needs Attention** - Clickable list of overdue items
+    - Shows overdue tasks, RFIs, submittals with days overdue
+    - Items due within 3 days marked as "info" level
+    - Click to open edit modal for quick resolution
+  - **Project Info Card** - Compact key details display
+  - **Recent Activity Feed** - Last 6 updates to tasks, RFIs, submittals
+  - **This Week Calendar Strip** - Mon-Fri view of upcoming items
+  - Integrated into `ProjectDetails.jsx` (removed inline OverviewTab function)
+
 ### January 13, 2026 (Praxis Integration - In Progress)
 
 - **Workflow Canvas Visualization - Complete**

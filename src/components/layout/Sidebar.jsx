@@ -522,7 +522,9 @@ function Sidebar({
       vp: ['vp', 'admin'],
       it: ['it', 'it_manager', 'admin'],
       pc: ['project coordinator', 'pc', 'plant manager', 'director', 'vp', 'admin'],
-      sales: ['sales_rep', 'sales_manager', 'vp', 'admin']
+      sales: ['sales_rep', 'sales_manager', 'vp', 'admin'],
+      sales_manager: ['sales_manager', 'vp', 'admin'],
+      sales_rep: ['sales_rep', 'vp', 'admin']
     };
 
     return access[type]?.includes(role) || false;
@@ -548,7 +550,9 @@ function Sidebar({
       vp: { icon: TrendingUp, label: 'VP Dashboard', color: '#8b5cf6' },
       it: { icon: Shield, label: 'IT Dashboard', color: '#06b6d4' },
       pc: { icon: Factory, label: 'PC Dashboard', color: '#ec4899' },
-      sales: { icon: Receipt, label: 'Sales Dashboard', color: '#10b981' }
+      sales: { icon: Receipt, label: 'Sales Dashboard', color: '#10b981' },
+      sales_manager: { icon: Receipt, label: 'Sales Manager', color: '#10b981' },
+      sales_rep: { icon: Receipt, label: 'My Sales', color: '#3b82f6' }
     };
     return configs[type] || configs.pm;
   };
@@ -913,7 +917,9 @@ function Sidebar({
         );
 
       case 'sales':
-        const showTeamStats = currentUser?.role === 'Sales_Manager' || currentUser?.role === 'VP' || currentUser?.role === 'Admin';
+      case 'sales_manager':
+      case 'sales_rep':
+        const showTeamStats = dashboardType === 'sales_manager' || currentUser?.role === 'Sales_Manager' || currentUser?.role === 'VP' || currentUser?.role === 'Admin';
         return (
           <div style={{ padding: '0 var(--space-md)', marginBottom: 'var(--space-sm)' }}>
             {/* Pipeline value */}
@@ -1056,13 +1062,20 @@ function Sidebar({
         ];
 
       case 'sales':
-        // Sales: Dashboard → Team (for managers) → Projects (read-only), Calendar
-        // Note: Sales dashboard has quotes management built-in
-        // Team nav item shows for Sales Managers to access team performance tracking
-        const isSalesManager = currentUser?.role === 'Sales_Manager' || currentUser?.role === 'VP' || currentUser?.role === 'Admin';
+      case 'sales_manager':
+        // Sales Manager: Dashboard → Team → Projects (read-only), Calendar
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          ...(isSalesManager ? [{ id: 'team', label: 'Team', icon: Users }] : []),
+          { id: 'team', label: 'Team', icon: Users },
+          { id: 'projects', label: 'PM Projects', icon: FolderKanban },
+          { id: 'calendar', label: 'Calendar', icon: Calendar },
+        ];
+
+      case 'sales_rep':
+        // Sales Rep: Dashboard → Projects (read-only), Calendar
+        // No team page - they only see their own data
+        return [
+          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'projects', label: 'PM Projects', icon: FolderKanban },
           { id: 'calendar', label: 'Calendar', icon: Calendar },
         ];

@@ -175,7 +175,20 @@ function QuoteForm({ quote, customers, onSave, onCancel }) {
   // HANDLERS
   // ==========================================================================
   const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+
+      // Auto-populate factory from salesperson's location (Sales Reps only)
+      // Regional Sales Managers don't have a specific factory assignment
+      if (field === 'assigned_to' && value) {
+        const selectedUser = salesUsers.find(u => u.id === value);
+        if (selectedUser?.factory && selectedUser.role === 'Sales_Rep') {
+          updated.factory = selectedUser.factory;
+        }
+      }
+
+      return updated;
+    });
   };
 
   const handleSubmit = async (e) => {

@@ -322,6 +322,17 @@ function StationNode({ data, selected }) {
                 <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>{taskCount}</span>
               </div>
             </div>
+            {/* Click hint */}
+            <div style={{
+              marginTop: '8px',
+              paddingTop: '6px',
+              borderTop: '1px solid var(--border-color)',
+              fontSize: '0.65rem',
+              color: 'var(--sunbelt-orange)',
+              textAlign: 'center'
+            }}>
+              {taskCount > 0 ? 'Click to view/edit tasks' : 'Click to add a task'}
+            </div>
             {/* Tooltip arrow */}
             <div style={{
               position: 'absolute',

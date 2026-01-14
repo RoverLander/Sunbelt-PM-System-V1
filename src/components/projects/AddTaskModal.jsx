@@ -370,6 +370,19 @@ function AddTaskModal({
     }
   }, [isOpen, user, prefilledStationKey]);
 
+  // Auto-fill task title based on prefilled station key
+  useEffect(() => {
+    if (prefilledStationKey && workflowStations.length > 0 && !formData.title) {
+      const station = workflowStations.find(s => s.station_key === prefilledStationKey);
+      if (station) {
+        setFormData(prev => ({
+          ...prev,
+          title: station.name
+        }));
+      }
+    }
+  }, [prefilledStationKey, workflowStations]);
+
   // ==========================================================================
   // GROUPED CONTACTS FOR DROPDOWN
   // ==========================================================================
