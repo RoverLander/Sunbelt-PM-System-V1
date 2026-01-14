@@ -1,21 +1,21 @@
 -- ============================================================================
--- STEP 4: IMPORT 20 DEMO PROJECTS
+-- STEP 4: IMPORT 20 DEMO PROJECTS (Based on actual PM assignments)
 -- ============================================================================
--- Imports 20 demo projects with:
--- - Praxis factory codes
--- - DYNAMIC DATES relative to CURRENT_DATE (today)
--- - PM assignments distributed across team
--- - Distributed across 4 workflow phases
+-- Imports 20 real projects with:
+-- - Actual project numbers, names, clients, salespeople
+-- - Actual PM assignments (primary and backup)
+-- - Actual start dates and target delivery dates
+-- - Factory assignments matching Praxis codes
 --
--- Date Strategy (relative to today):
--- - Phase 1: Started 1-3 weeks ago, target 4-6 months out
--- - Phase 2: Started 4-8 weeks ago, target 3-5 months out
--- - Phase 3: Started 8-12 weeks ago, target 2-3 months out
--- - Phase 4: Started 12-16 weeks ago, target 2-6 weeks out
--- - Complete: Finished last week
+-- Project Counts by Primary PM:
+-- - Candy Juhnke: 1 project
+-- - Crystal Myers: 12 projects
+-- - Hector Vazquez: 1 project
+-- - Matthew McDaniel: 3 projects
+-- - Michael Caracciolo: 3 projects
 --
 -- Created: January 13, 2026
--- Updated: January 14, 2026 - Dynamic dates
+-- Updated: January 14, 2026 - Rebuilt with actual project data
 -- ============================================================================
 
 -- ============================================================================
@@ -27,11 +27,10 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS contract_value NUMERIC(12,2);
 -- CLEAR EXISTING DEMO PROJECTS (allows re-running this script)
 -- ============================================================================
 DELETE FROM projects WHERE project_number IN (
-  'SMM-21145', 'PMI-6798', 'DO-0521-1-25', 'SMM-21103',
-  'PMI-6781', 'SMM-21055', 'SMM-21056', 'SMM-21057',
-  'SMM-21003', 'SSI-7669', 'SSI-7670', 'SME-23038',
-  'SSI-7671', 'SSI-7672', 'SMM-21020', 'SSI-7547',
-  'SMM-21054', '25B579-584', 'PMI-6749-6763', 'NWBS-25250'
+  'PMI-6781', 'SMM-21003', 'SMM-21054', 'SMM-21055', 'SMM-21056', 'SMM-21057',
+  'SSI-7669', 'SSI-7670', 'SSI-7671', 'SSI-7672', 'SMM-21103', 'SMM-21145',
+  'SMM-21020', '25B579-584', 'NWBS-25250', 'PMI-6798', 'SSI-7547',
+  'PMI-6881', 'SME-23038', 'PMI-6749-6763'
 );
 
 -- ============================================================================
@@ -44,8 +43,6 @@ DECLARE
   v_matthew_id UUID;
   v_hector_id UUID;
   v_michael_id UUID;
-  v_project_id UUID;
-  v_today DATE := CURRENT_DATE;
 BEGIN
   -- Get existing PM IDs from users table
   -- Use specific patterns to avoid matching wrong users
@@ -64,65 +61,15 @@ BEGIN
   IF v_hector_id IS NULL THEN v_hector_id := v_candy_id; END IF;
   IF v_michael_id IS NULL THEN v_michael_id := v_candy_id; END IF;
 
-  -- ========================================================================
-  -- PHASE 1 PROJECTS: INITIATION (4 projects - newest/planning stage)
-  -- Started 1-3 weeks ago, target 4-6 months out
-  -- ========================================================================
-
-  -- Project 1: ACIC GERMANY (Phase 1 - Kickoff in progress)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'SMM-21145', 'ACIC GERMANY- II-B', 'SMM - Southeast Modular',
-    'MODULAR MANAGEMENT GROUP', 'Jason King',
-    v_today - INTERVAL '5 days', v_today + INTERVAL '5 months', 'Planning', 'On Track',
-    v_candy_id, v_candy_id, v_candy_id, 1, 850000.00, NOW()
-  );
-
-  -- Project 2: Aambe Health Facility (Phase 1 - Sales handoff)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'PMI-6798', 'M/B - 52x68 & 36x72 Aambe Health Facility', 'PMI - Phoenix Modular',
-    'HEALTHCARE PARTNERS', 'George Avila',
-    v_today - INTERVAL '10 days', v_today + INTERVAL '6 months', 'Planning', 'On Track',
-    v_candy_id, v_candy_id, v_candy_id, 1, 1250000.00, NOW()
-  );
-
-  -- Project 3: LASD Div 4 Facility (Phase 1 - Site survey pending)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'DO-0521-1-25', 'B- LASD Div 4 Facility', 'PMI - Phoenix Modular',
-    'LA COUNTY SHERIFF', 'George Avila',
-    v_today - INTERVAL '14 days', v_today + INTERVAL '5 months', 'Planning', 'On Track',
-    v_michael_id, v_candy_id, v_michael_id, 1, 2100000.00, NOW()
-  );
-
-  -- Project 4: SCIF WA State (Phase 1 - Just started)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'SMM-21103', '2B 24x50 SCIF WA State PE Certification 160mph', 'SMM - Southeast Modular',
-    'DEPARTMENT OF DEFENSE', 'Jason King',
-    v_today - INTERVAL '21 days', v_today + INTERVAL '4 months', 'Planning', 'On Track',
-    v_crystal_id, v_candy_id, v_crystal_id, 1, 1850000.00, NOW()
-  );
+  -- Debug: Log which users we found
+  RAISE NOTICE 'PM IDs found - Candy: %, Crystal: %, Matthew: %, Hector: %, Michael: %',
+    v_candy_id, v_crystal_id, v_matthew_id, v_hector_id, v_michael_id;
 
   -- ========================================================================
-  -- PHASE 2 PROJECTS: DEALER SIGN-OFFS (8 projects - mid-progress)
-  -- Started 4-8 weeks ago, target 3-5 months out
+  -- CANDY JUHNKE PROJECTS (1 project as Primary PM)
   -- ========================================================================
 
-  -- Project 5: Florence AZ Medical (Phase 2 - 65% drawings)
+  -- PMI-6781: Florence AZ Medical (Candy primary, Candy backup - self)
   INSERT INTO projects (
     project_number, name, factory, client_name, salesperson,
     start_date, target_online_date, status, health_status,
@@ -130,48 +77,15 @@ BEGIN
   ) VALUES (
     'PMI-6781', 'I-3 - Florence AZ Medical Intake/X-Ray Ctr 2-Story', 'PMI - Phoenix Modular',
     'SPECIALIZED TESTING & CONSTRUCTION', 'George Avila',
-    v_today - INTERVAL '35 days', v_today + INTERVAL '4 months', 'In Progress', 'On Track',
-    v_candy_id, v_candy_id, v_candy_id, 2, 450000.00, NOW()
+    '2025-09-25', '2026-08-25', 'In Progress', 'On Track',
+    v_candy_id, v_candy_id, v_candy_id, 2, 1850000.00, NOW()
   );
 
-  -- Project 6: VA-PREP MODULE (Phase 2 - Long lead items)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'SMM-21055', '12''X56'' VA-PREP MODULE (FL,TX,SC)', 'SMM - Southeast Modular',
-    'KITCHENS TO GO', 'Jason King',
-    v_today - INTERVAL '42 days', v_today + INTERVAL '3 months', 'In Progress', 'On Track',
-    v_crystal_id, v_candy_id, v_crystal_id, 2, 185000.00, NOW()
-  );
+  -- ========================================================================
+  -- CRYSTAL MYERS PROJECTS (12 projects as Primary PM)
+  -- ========================================================================
 
-  -- Project 7: VA-WASH MODULE (Phase 2 - Color selections)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'SMM-21056', '12''X56'' VA-WASH MODULE (FL,TX,SC)', 'SMM - Southeast Modular',
-    'KITCHENS TO GO', 'Jason King',
-    v_today - INTERVAL '42 days', v_today + INTERVAL '3 months' + INTERVAL '7 days', 'In Progress', 'On Track',
-    v_crystal_id, v_candy_id, v_crystal_id, 2, 185000.00, NOW()
-  );
-
-  -- Project 8: VA-COOK MODULE (Phase 2 - Cutsheets)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'SMM-21057', '12''X56'' VA-COOK MODULE (FL,TX,SC)', 'SMM - Southeast Modular',
-    'KITCHENS TO GO', 'Jason King',
-    v_today - INTERVAL '42 days', v_today + INTERVAL '3 months' + INTERVAL '14 days', 'In Progress', 'On Track',
-    v_crystal_id, v_candy_id, v_crystal_id, 2, 185000.00, NOW()
-  );
-
-  -- Project 9: Disney Conference Building (Phase 2 - STUCK at 95% - CRITICAL)
-  -- This one is intentionally behind schedule
+  -- SMM-21003: Disney Conference (Crystal primary, Candy backup) - PAST DUE
   INSERT INTO projects (
     project_number, name, factory, client_name, salesperson,
     start_date, target_online_date, status, health_status,
@@ -179,153 +93,239 @@ BEGIN
   ) VALUES (
     'SMM-21003', '96X60 DISNEY CONFERENCE BUILDING 160MPH', 'SMM - Southeast Modular',
     'MOBILE MODULAR- AUBURNDALE', 'Shawn Durante',
-    v_today - INTERVAL '60 days', v_today + INTERVAL '14 days', 'In Progress', 'Critical',
-    v_crystal_id, v_candy_id, v_crystal_id, 2, 1650000.00, NOW()
+    '2024-07-16', '2025-02-04', 'In Progress', 'Critical',
+    v_crystal_id, v_candy_id, v_crystal_id, 3, 1650000.00, NOW()
   );
 
-  -- Project 10: Mike Dover A-B (Phase 2 - 95% drawings)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'SSI-7669', '140''X68'' MIKE DOVER A-B 8-CR 120MPH 57#SN/LD', 'SSI - Specialized Structures',
-    'DOVER INDUSTRIES', 'Mike Rodriguez',
-    v_today - INTERVAL '45 days', v_today + INTERVAL '4 months', 'In Progress', 'On Track',
-    v_matthew_id, v_candy_id, v_matthew_id, 2, 2200000.00, NOW()
-  );
-
-  -- Project 11: Mike Dover C-D Custom (Phase 2 - 100% drawings pending - AT RISK)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'SSI-7670', 'CUSTOM COMPLEX MIKE DOVER 8-CR C-D 120MPH 57#SN/LD', 'SSI - Specialized Structures',
-    'DOVER INDUSTRIES', 'Mike Rodriguez',
-    v_today - INTERVAL '50 days', v_today + INTERVAL '3 months', 'In Progress', 'At Risk',
-    v_matthew_id, v_candy_id, v_matthew_id, 2, 2400000.00, NOW()
-  );
-
-  -- Project 12: Brooklyn Lot Cleaning (Phase 2 - Awaiting long lead)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'SME-23038', 'DSNY - Brooklyn Lot Cleaning Garage Facility', 'PRM - Pro-Mod Manufacturing',
-    'NYC SANITATION', 'Tony Deluca',
-    v_today - INTERVAL '38 days', v_today + INTERVAL '5 months', 'In Progress', 'On Track',
-    v_hector_id, v_candy_id, v_hector_id, 2, 3200000.00, NOW()
-  );
-
-  -- ========================================================================
-  -- PHASE 3 PROJECTS: INTERNAL APPROVALS (4 projects - advanced)
-  -- Started 8-12 weeks ago, target 2-3 months out
-  -- ========================================================================
-
-  -- Project 13: Mike Dover Multi Purpose (Phase 3 - Engineering review)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'SSI-7671', '84''X55'' MIKE DOVER MULTI PURPOSE 120MPH 57#SN/LD', 'SSI - Specialized Structures',
-    'DOVER INDUSTRIES', 'Mike Rodriguez',
-    v_today - INTERVAL '70 days', v_today + INTERVAL '2 months', 'In Progress', 'On Track',
-    v_matthew_id, v_candy_id, v_matthew_id, 3, 950000.00, NOW()
-  );
-
-  -- Project 14: Mike Food Service (Phase 3 - Third party review)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'SSI-7672', '14''X55'' MIKE FOOD SERVICE 120MPH 57#SN/LD', 'SSI - Specialized Structures',
-    'DOVER INDUSTRIES', 'Mike Rodriguez',
-    v_today - INTERVAL '75 days', v_today + INTERVAL '2 months' + INTERVAL '14 days', 'In Progress', 'On Track',
-    v_matthew_id, v_candy_id, v_matthew_id, 3, 380000.00, NOW()
-  );
-
-  -- Project 15: Patrick Space Force Base (Phase 3 - State approval - AT RISK)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'SMM-21020', 'Patrick Space Force Base Building 1, 160MPH', 'SMM - Southeast Modular',
-    'US SPACE FORCE', 'Shawn Durante',
-    v_today - INTERVAL '84 days', v_today + INTERVAL '45 days', 'In Progress', 'At Risk',
-    v_crystal_id, v_candy_id, v_crystal_id, 3, 3200000.00, NOW()
-  );
-
-  -- Project 16: BASF Georgia 2 Story (Phase 3 - Change orders - AT RISK)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'SSI-7547', 'BASF Georgia 2 Story 120 MPH', 'SSI - Specialized Structures',
-    'BASF CORPORATION', 'Mike Rodriguez',
-    v_today - INTERVAL '80 days', v_today + INTERVAL '60 days', 'In Progress', 'At Risk',
-    v_michael_id, v_candy_id, v_michael_id, 3, 2750000.00, NOW()
-  );
-
-  -- ========================================================================
-  -- PHASE 4 PROJECTS: DELIVERY (4 projects - near complete)
-  -- Started 12-16 weeks ago, target 2-6 weeks out
-  -- ========================================================================
-
-  -- Project 17: Google Summerville VA-WASH (Phase 4 - Production started)
+  -- SMM-21054: VA-WASH Google Summerville (Crystal primary, Candy backup)
   INSERT INTO projects (
     project_number, name, factory, client_name, salesperson,
     start_date, target_online_date, status, health_status,
     primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
   ) VALUES (
     'SMM-21054', '12''X56'' VA-WASH MODULE (GOOGLE SUMMERVILLE)', 'SMM - Southeast Modular',
-    'GOOGLE INC', 'Jason King',
-    v_today - INTERVAL '100 days', v_today + INTERVAL '6 weeks', 'In Progress', 'On Track',
+    'KITCHENS TO GO', 'Jason King',
+    '2025-02-24', '2025-05-22', 'Complete', 'On Track',
     v_crystal_id, v_candy_id, v_crystal_id, 4, 195000.00, NOW()
   );
 
-  -- Project 18: Point Magu Naval Base (Phase 4 - QC Inspection)
+  -- SMM-21055: VA-PREP Module (Crystal primary, Candy backup)
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'SMM-21055', '12''X56'' VA-PREP MODULE (FL,TX,SC)', 'SMM - Southeast Modular',
+    'KITCHENS TO GO', 'Jason King',
+    '2025-02-24', '2025-07-12', 'Complete', 'On Track',
+    v_crystal_id, v_candy_id, v_crystal_id, 4, 185000.00, NOW()
+  );
+
+  -- SMM-21056: VA-WASH Module (Crystal primary, Candy backup)
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'SMM-21056', '12''X56'' VA-WASH MODULE (FL,TX,SC)', 'SMM - Southeast Modular',
+    'KITCHENS TO GO', 'Jason King',
+    '2025-02-24', '2025-07-19', 'Complete', 'On Track',
+    v_crystal_id, v_candy_id, v_crystal_id, 4, 185000.00, NOW()
+  );
+
+  -- SMM-21057: VA-COOK Module (Crystal primary, Candy backup)
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'SMM-21057', '12''X56'' VA-COOK MODULE (FL,TX,SC)', 'SMM - Southeast Modular',
+    'KITCHENS TO GO', 'Jason King',
+    '2025-02-24', '2025-07-26', 'Complete', 'On Track',
+    v_crystal_id, v_candy_id, v_crystal_id, 4, 185000.00, NOW()
+  );
+
+  -- SSI-7669: Mike Dover A-B (Crystal primary, Candy backup)
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'SSI-7669', '140''X68'' MIKE DOVER A-B 8-CR 120MPH 57#SN/LD', 'SSI - Specialized Structures',
+    'MOBILEASE MODULAR SPACE, INC.', 'Josh Ellis',
+    '2025-12-11', '2026-02-04', 'In Progress', 'On Track',
+    v_crystal_id, v_candy_id, v_crystal_id, 2, 2200000.00, NOW()
+  );
+
+  -- SSI-7670: Mike Dover C-D (Crystal primary, Candy backup)
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'SSI-7670', 'CUSTOM COMPLEX MIKE DOVER 8-CR C-D 120MPH 57#SN/LD', 'SSI - Specialized Structures',
+    'MOBILEASE MODULAR SPACE, INC.', 'Josh Ellis',
+    '2025-12-11', '2025-12-29', 'In Progress', 'At Risk',
+    v_crystal_id, v_candy_id, v_crystal_id, 3, 2400000.00, NOW()
+  );
+
+  -- SSI-7671: Mike Dover Multi Purpose (Crystal primary, Candy backup)
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'SSI-7671', '84''X55'' MIKE DOVER MULTI PURPOSE 120MPH 57#SN/LD', 'SSI - Specialized Structures',
+    'MOBILEASE MODULAR SPACE, INC.', 'Josh Ellis',
+    '2025-12-11', '2026-01-21', 'In Progress', 'On Track',
+    v_crystal_id, v_candy_id, v_crystal_id, 2, 950000.00, NOW()
+  );
+
+  -- SSI-7672: Mike Food Service (Crystal primary, Candy backup)
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'SSI-7672', '14''X55'' MIKE FOOD SERVICE 120MPH 57#SN/LD', 'SSI - Specialized Structures',
+    'MOBILEASE MODULAR SPACE, INC.', 'Josh Ellis',
+    '2025-12-11', '2026-01-26', 'In Progress', 'On Track',
+    v_crystal_id, v_candy_id, v_crystal_id, 2, 380000.00, NOW()
+  );
+
+  -- SMM-21103: SCIF WA State (Crystal primary, Crystal backup - self)
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'SMM-21103', '2B 24x50 SCIF WA State PE Certification 160mph', 'SMM - Southeast Modular',
+    'AFFORDABLE STRUCTURES - TAVARES', 'Roger Diamond',
+    '2025-06-24', '2026-02-19', 'In Progress', 'On Track',
+    v_crystal_id, v_crystal_id, v_crystal_id, 2, 1850000.00, NOW()
+  );
+
+  -- SMM-21145: ACIC Germany (Crystal primary, Hector backup) - No target date
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'SMM-21145', 'ACIC GERMANY- II-B', 'SMM - Southeast Modular',
+    'MODULAR MANAGEMENT GROUP', 'Jason King',
+    '2025-11-19', NULL, 'Planning', 'On Track',
+    v_crystal_id, v_hector_id, v_crystal_id, 1, 850000.00, NOW()
+  );
+
+  -- SMM-21020: Patrick Space Force Base (Crystal primary, Matthew backup)
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'SMM-21020', 'Patrick Space Force Base Building 1, 160MPH', 'SMM - Southeast Modular',
+    'MODULAR MANAGEMENT GROUP', 'Don Eisman',
+    '2024-09-30', '2025-04-07', 'In Progress', 'At Risk',
+    v_crystal_id, v_matthew_id, v_crystal_id, 3, 3200000.00, NOW()
+  );
+
+  -- ========================================================================
+  -- HECTOR VAZQUEZ PROJECTS (1 project as Primary PM)
+  -- ========================================================================
+
+  -- 25B579-584: Point Magu Naval Base (Hector primary, Michael backup)
   INSERT INTO projects (
     project_number, name, factory, client_name, salesperson,
     start_date, target_online_date, status, health_status,
     primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
   ) VALUES (
     '25B579-584', 'POINT MAGU NAVAL BASE (REACT) CA', 'IBI - Indicom Buildings',
-    'US NAVY', 'Robert Chen',
-    v_today - INTERVAL '110 days', v_today + INTERVAL '4 weeks', 'In Progress', 'On Track',
-    v_michael_id, v_candy_id, v_michael_id, 4, 4800000.00, NOW()
+    'MODULAR MANAGEMENT GROUP', 'Jason King',
+    '2025-07-15', '2026-02-26', 'In Progress', 'On Track',
+    v_hector_id, v_michael_id, v_hector_id, 2, 4800000.00, NOW()
   );
 
-  -- Project 19: R-OCC Homeless Units (Phase 4 - Delivery scheduled)
-  INSERT INTO projects (
-    project_number, name, factory, client_name, salesperson,
-    start_date, target_online_date, status, health_status,
-    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
-  ) VALUES (
-    'PMI-6749-6763', 'R-OCC Homeless Units - CD 15 E 116th Place', 'PMI - Phoenix Modular',
-    'LA COUNTY HOUSING', 'George Avila',
-    v_today - INTERVAL '105 days', v_today + INTERVAL '3 weeks', 'In Progress', 'On Track',
-    v_candy_id, v_candy_id, v_candy_id, 4, 6200000.00, NOW()
-  );
+  -- ========================================================================
+  -- MATTHEW MCDANIEL PROJECTS (3 projects as Primary PM)
+  -- ========================================================================
 
-  -- Project 20: Hanford AMPS (Phase 4 - COMPLETE - Showcase project)
+  -- NWBS-25250: Hanford AMPS (Matthew primary, Candy backup)
   INSERT INTO projects (
     project_number, name, factory, client_name, salesperson,
     start_date, target_online_date, status, health_status,
     primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
   ) VALUES (
     'NWBS-25250', '168x66 Hanford AMPS Project MMG', 'NWBS - Northwest Building Systems',
-    'MOBILE MODULAR GROUP', 'Sarah Johnson',
-    v_today - INTERVAL '120 days', v_today - INTERVAL '7 days', 'Complete', 'On Track',
-    v_candy_id, v_candy_id, v_candy_id, 4, 2850000.00, NOW()
+    'Mobile Modular Management Corporation', 'Mitch Quintana',
+    '2025-07-21', '2026-05-12', 'In Progress', 'On Track',
+    v_matthew_id, v_candy_id, v_matthew_id, 2, 2850000.00, NOW()
   );
 
-  RAISE NOTICE 'Imported 20 projects successfully with dynamic dates';
+  -- PMI-6798: Aambe Health Facility (Matthew primary, Candy backup)
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'PMI-6798', 'M/B - 52x68 & 36x72 Aambe Health Facility', 'PMI - Phoenix Modular',
+    'MOBILE MODULAR MANAGEMENT', 'George Avila',
+    '2025-11-04', '2026-01-30', 'In Progress', 'On Track',
+    v_matthew_id, v_candy_id, v_matthew_id, 2, 1250000.00, NOW()
+  );
+
+  -- SSI-7547: BASF Georgia 2 Story (Matthew primary, Michael backup) - Offline, delivery 2/9/26
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'SSI-7547', 'BASF Georgia 2 Story 120 MPH', 'SSI - Specialized Structures',
+    'MODULAR GENIUS, INC.', 'Barbara Hicks',
+    '2025-10-20', '2026-02-09', 'In Progress', 'On Track',
+    v_matthew_id, v_michael_id, v_matthew_id, 3, 2750000.00, NOW()
+  );
+
+  -- ========================================================================
+  -- MICHAEL CARACCIOLO PROJECTS (3 projects as Primary PM)
+  -- ========================================================================
+
+  -- PMI-6881: LASD Div 4 Facility (Michael primary, Candy backup)
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'PMI-6881', 'B- LASD Div 4 Facility', 'PMI - Phoenix Modular',
+    'WILLIAMS SCOTSMAN', 'Casey Knipp',
+    '2026-01-07', '2026-08-24', 'Planning', 'On Track',
+    v_michael_id, v_candy_id, v_michael_id, 1, 2100000.00, NOW()
+  );
+
+  -- SME-23038: Brooklyn Lot Cleaning (Michael primary, Candy backup)
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'SME-23038', 'DSNY - Brooklyn Lot Cleaning Garage Facility', 'PRM - Pro-Mod Manufacturing',
+    'CASSONE LEASING, INC.', 'Dean Long',
+    '2025-09-15', '2026-02-16', 'In Progress', 'On Track',
+    v_michael_id, v_candy_id, v_michael_id, 2, 3200000.00, NOW()
+  );
+
+  -- PMI-6749-6763: R-OCC Homeless Units (Michael primary, Candy backup)
+  INSERT INTO projects (
+    project_number, name, factory, client_name, salesperson,
+    start_date, target_online_date, status, health_status,
+    primary_pm_id, backup_pm_id, owner_id, current_phase, contract_value, created_at
+  ) VALUES (
+    'PMI-6749-6763', 'R-OCC Homeless Units - CD 15 E 116th Place', 'PMI - Phoenix Modular',
+    'MOBILE MODULAR MANAGEMENT CORP.', 'Casey Knipp',
+    '2025-07-28', '2026-09-18', 'In Progress', 'On Track',
+    v_michael_id, v_candy_id, v_michael_id, 2, 6200000.00, NOW()
+  );
+
+  RAISE NOTICE 'Imported 20 projects successfully with actual PM assignments';
 END $$;
 
 -- ============================================================================
@@ -378,3 +378,25 @@ FROM projects p
 LEFT JOIN users u ON u.id = p.primary_pm_id
 GROUP BY u.id, u.name, u.email
 ORDER BY u.name;
+
+SELECT 'Projects with Backup PM:' AS status;
+SELECT
+  p.project_number,
+  pm.name as primary_pm,
+  backup.name as backup_pm
+FROM projects p
+LEFT JOIN users pm ON pm.id = p.primary_pm_id
+LEFT JOIN users backup ON backup.id = p.backup_pm_id
+WHERE p.backup_pm_id IS NOT NULL
+ORDER BY pm.name, p.project_number;
+
+SELECT 'Portfolio Summary:' AS status;
+SELECT
+  COUNT(*) as total_projects,
+  SUM(contract_value) as total_portfolio_value,
+  COUNT(*) FILTER (WHERE status = 'Complete') as completed,
+  COUNT(*) FILTER (WHERE status = 'In Progress') as in_progress,
+  COUNT(*) FILTER (WHERE status = 'Planning') as planning,
+  COUNT(*) FILTER (WHERE health_status = 'Critical') as critical,
+  COUNT(*) FILTER (WHERE health_status = 'At Risk') as at_risk
+FROM projects;

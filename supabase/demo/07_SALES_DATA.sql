@@ -271,16 +271,21 @@ BEGIN
   -- CREATE SALES CUSTOMERS
   -- ========================================================================
 
+  -- Actual clients from project list
   INSERT INTO sales_customers (id, company_name, company_type, contact_name, contact_email, contact_phone, address_line1, city, state, zip_code, factory, created_at)
   VALUES
     (uuid_generate_v4(), 'SPECIALIZED TESTING & CONSTRUCTION', 'contractor', 'John Smith', 'jsmith@spectest.com', '(480) 555-1001', '1234 Industrial Blvd', 'Phoenix', 'AZ', '85001', 'PMI', NOW()),
     (uuid_generate_v4(), 'MODULAR MANAGEMENT GROUP', 'dealer', 'Sarah Johnson', 'sjohnson@mmg.com', '(404) 555-2002', '5678 Corporate Dr', 'Atlanta', 'GA', '30301', 'SMM', NOW()),
     (uuid_generate_v4(), 'KITCHENS TO GO', 'direct', 'Mike Williams', 'mwilliams@ktg.com', '(305) 555-3003', '9012 Culinary Way', 'Miami', 'FL', '33101', 'SMM', NOW()),
-    (uuid_generate_v4(), 'DOVER INDUSTRIES', 'direct', 'Robert Dover', 'rdover@doverindustries.com', '(512) 555-4004', '3456 Manufacturing Pkwy', 'Austin', 'TX', '78701', 'SSI', NOW()),
-    (uuid_generate_v4(), 'PACIFIC MOBILE STRUCTURES', 'dealer', 'Lisa Chen', 'lchen@pmsi.com', '(206) 555-5005', '7890 Harbor View Rd', 'Seattle', 'WA', '98101', 'NWBS', NOW()),
-    (uuid_generate_v4(), 'UNITED RENTALS', 'dealer', 'Tom Anderson', 'tanderson@ur.com', '(203) 555-6006', '2468 Equipment Lane', 'Stamford', 'CT', '06901', 'SSI', NOW()),
-    (uuid_generate_v4(), 'GOOGLE FACILITIES', 'direct', 'Amy Park', 'apark@google.com', '(650) 555-7007', '1600 Amphitheatre Pkwy', 'Mountain View', 'CA', '94043', 'PMI', NOW()),
-    (uuid_generate_v4(), 'US SPACE FORCE', 'government', 'Col. Marcus Reed', 'marcus.reed@spaceforce.mil', '(321) 555-8008', 'Patrick SFB', 'Cocoa Beach', 'FL', '32931', 'SMM', NOW())
+    (uuid_generate_v4(), 'MOBILE MODULAR- AUBURNDALE', 'dealer', 'Tony Deluca', 'tdeluca@mobilmod.com', '(863) 555-1001', '456 Modular Way', 'Auburndale', 'FL', '33823', 'SMM', NOW()),
+    (uuid_generate_v4(), 'MOBILEASE MODULAR SPACE, INC.', 'dealer', 'Josh Ellis', 'jellis@mobilease.com', '(770) 555-2001', '789 Lease Dr', 'Atlanta', 'GA', '30301', 'SSI', NOW()),
+    (uuid_generate_v4(), 'AFFORDABLE STRUCTURES - TAVARES', 'dealer', 'Roger Diamond', 'rdiamond@affordable.com', '(352) 555-3001', '123 Budget Blvd', 'Tavares', 'FL', '32778', 'SMM', NOW()),
+    (uuid_generate_v4(), 'Mobile Modular Management Corporation', 'dealer', 'Mitch Quintana', 'mquintana@mmmc.com', '(509) 555-4001', '456 Hanford Rd', 'Richland', 'WA', '99352', 'NWBS', NOW()),
+    (uuid_generate_v4(), 'MOBILE MODULAR MANAGEMENT', 'dealer', 'George Avila', 'gavila@mmm.com', '(480) 555-5001', '789 Phoenix Dr', 'Phoenix', 'AZ', '85001', 'PMI', NOW()),
+    (uuid_generate_v4(), 'MODULAR GENIUS, INC.', 'dealer', 'Barbara Hicks', 'bhicks@modgenius.com', '(404) 555-6001', '321 Genius Way', 'Atlanta', 'GA', '30301', 'SSI', NOW()),
+    (uuid_generate_v4(), 'WILLIAMS SCOTSMAN', 'dealer', 'Casey Knipp', 'cknipp@willscot.com', '(602) 555-7001', '654 Scotsman Blvd', 'Phoenix', 'AZ', '85001', 'PMI', NOW()),
+    (uuid_generate_v4(), 'CASSONE LEASING, INC.', 'dealer', 'Dean Long', 'dlong@cassone.com', '(718) 555-8001', '987 Brooklyn Ave', 'Brooklyn', 'NY', '11201', 'PRM', NOW()),
+    (uuid_generate_v4(), 'MOBILE MODULAR MANAGEMENT CORP.', 'dealer', 'Casey Knipp', 'cknipp@mmmc.com', '(213) 555-9001', '159 LA St', 'Los Angeles', 'CA', '90001', 'PMI', NOW())
   ON CONFLICT DO NOTHING;
 
   -- ========================================================================
