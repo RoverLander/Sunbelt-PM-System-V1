@@ -146,6 +146,99 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ## Recent Updates (January 2026)
 
+### January 14, 2026 (Night - Sales Data & Status Fixes)
+
+- **Sales Quotes Data Fix - Complete**
+  - Fixed Robert Thaler (Sales_Rep at NWBS) having no quotes assigned
+  - Root cause: User query searched for `role IN ('Sales', 'Sales_Manager')` but missed `Sales_Rep`
+  - Added 7 new quotes for Robert at NWBS factory:
+    - Q-2026-NWBS-R01: AWS Seattle ($3.2M, negotiating)
+    - Q-2026-NWBS-R02: Boeing Everett ($1.85M, sent)
+    - Q-2026-NWBS-R03: Port of Seattle ($980K, pending)
+    - Q-2026-NWBS-R04: Microsoft Redmond ($2.1M, draft, PM flagged)
+    - Q-2026-NWBS-R05: Starbucks ($420K, sent)
+    - Q-2025-NWBS-R10: Won quote ($650K)
+    - Q-2025-NWBS-R11: Lost quote ($1.1M)
+  - Added 5 new NWBS customers: AWS Seattle, Boeing, Port of Seattle, Microsoft Campus, Starbucks
+  - Created `FIX_SALES_DATA.sql` standalone fix script
+
+- **Sidebar Sales Stats Fix - Complete**
+  - Fixed sidebar showing $0 pipeline value for Sales Manager
+  - Root cause: Was fetching ALL quotes globally instead of filtering by user
+  - Now filters quotes by `assigned_to = user.id` for personal stats
+  - Added `pending` to active statuses array
+  - Fixed dashboard type switching for sales_manager role
+  - Added sales_manager to dashboard dropdown options
+
+- **Sales Status Configuration Fix - Complete**
+  - Added `pending` status to STATUS_CONFIG in all sales components
+  - Added `pending` to ACTIVE_STATUSES in:
+    - `Sidebar.jsx`
+    - `SalesManagerDashboard.jsx`
+    - `SalesRepDashboard.jsx`
+    - `SalesDashboard.jsx`
+    - `SalesTeamPage.jsx`
+  - Status order updated: draft → pending → sent → negotiating → awaiting_po → po_received → won → lost → expired → converted
+
+- **Quote Display Clarifications - Complete**
+  - Fixed "Untitled Quote" display - now shows `quote.notes || customer.company_name`
+  - Clarified "X of Y quotes" message to explain won/lost/expired are hidden
+  - Message now shows: "Showing 7 active quotes (3 won/lost/expired not shown)"
+
+- **Files Modified:**
+  - `supabase/demo/MASTER_DEMO_DATA.sql` - Fixed user lookup, added Robert's quotes
+  - `supabase/demo/FIX_SALES_DATA.sql` - NEW: Standalone fix script
+  - `src/components/layout/Sidebar.jsx` - Personal quote filtering, dashboard switching
+  - `src/components/sales/SalesManagerDashboard.jsx` - Added pending status, quote count clarification
+  - `src/components/sales/SalesRepDashboard.jsx` - Added pending status, quote count clarification
+  - `src/components/sales/SalesDashboard.jsx` - Added pending status, quote count clarification
+  - `src/components/sales/SalesTeamPage.jsx` - Added pending status
+
+- **Debug Logging Cleanup - Complete**
+  - Removed debug console.log statements from PMDashboard.jsx
+  - Removed debug console.log statements from ProjectDetails.jsx
+
+### January 14, 2026 (Evening - ProjectsPage Redesign & Demo Data Completion)
+
+- **ProjectsPage Complete Redesign - Complete**
+  - Redesigned entire `ProjectsPage.jsx` with modern UI inspired by SalesManagerDashboard and OverviewTab
+  - **Enhanced StatCard Component:**
+    - Icon + metric boxes with colored backgrounds
+    - 6 key metrics: Total, Active, This Week deliveries, At Risk, Critical, Completed
+    - Clickable stat cards for quick filtering
+  - **New ProjectCard Component:**
+    - Left border color indicator based on health status (On Track=green, At Risk=yellow, Critical=red)
+    - Phase badge with visual indicator (1-4: Initiation, Dealer Sign-Offs, Internal Approvals, Delivery)
+    - Delivery countdown with urgency coloring (red ≤7d, yellow ≤14d, blue ≤30d)
+    - Health status dot/indicator
+    - Project info: number, name, client, PM, factory
+  - **New Filters:**
+    - Health filter dropdown (All, On Track, At Risk, Critical)
+    - "Clear Filters" button
+    - Results count display
+  - **Visual Polish:**
+    - Consistent use of CSS custom properties
+    - Smooth hover effects with shadow elevation
+    - Better empty states
+
+- **MASTER_DEMO_DATA.sql Deep Review & Fixes - Complete**
+  - Fixed NWBS-25250 project status inconsistency (was marking workflow as complete but project still 'In Progress')
+  - Added all 311 directory contacts (was missing 122):
+    - AMT - AMTEX (19 contacts)
+    - BUSA - Britco USA (17 contacts)
+    - C&B - C&B Custom Modular (11 contacts)
+    - MRS - MR Steel (10 contacts)
+    - WM-EAST - Whitley Manufacturing East (18 contacts)
+    - WM-EVERGREEN - Whitley Manufacturing Evergreen (10 contacts)
+    - WM-SOUTH - Whitley Manufacturing South Whitley (26 contacts)
+    - WM-ROCHESTER - Whitley Manufacturing Rochester (11 contacts)
+  - Script is now fully self-contained (no need to run 09_DIRECTORY_CONTACTS.sql separately)
+  - Verified:
+    - Mitch Quintana correctly setup as Sales_Manager at NWBS
+    - Robert Thaler correctly setup as Sales_Rep at NWBS
+    - sales_quotes table has factory column for calendar filtering
+    - Quote-to-project linkage via converted_to_project_id working
+
 ### January 14, 2026 (Sales Role System & Project Overview Redesign)
 
 - **Separate Sales Manager & Sales Rep Dashboards - Complete**

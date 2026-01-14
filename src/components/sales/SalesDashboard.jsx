@@ -56,18 +56,19 @@ import PraxisQuoteImportModal from './PraxisQuoteImportModal';
 // ============================================================================
 const STATUS_CONFIG = {
   draft: { label: 'Draft', color: '#64748b', icon: FileText, bgColor: 'rgba(100, 116, 139, 0.1)', order: 1 },
-  sent: { label: 'Sent', color: '#3b82f6', icon: Send, bgColor: 'rgba(59, 130, 246, 0.1)', order: 2 },
-  negotiating: { label: 'Negotiating', color: '#f59e0b', icon: Clock, bgColor: 'rgba(245, 158, 11, 0.1)', order: 3 },
-  awaiting_po: { label: 'Awaiting PO', color: '#8b5cf6', icon: Timer, bgColor: 'rgba(139, 92, 246, 0.1)', order: 4 },
-  po_received: { label: 'PO Received', color: '#06b6d4', icon: CheckCircle, bgColor: 'rgba(6, 182, 212, 0.1)', order: 5 },
-  won: { label: 'Won', color: '#22c55e', icon: Award, bgColor: 'rgba(34, 197, 94, 0.1)', order: 6 },
-  lost: { label: 'Lost', color: '#ef4444', icon: XCircle, bgColor: 'rgba(239, 68, 68, 0.1)', order: 7 },
-  expired: { label: 'Expired', color: '#6b7280', icon: Clock, bgColor: 'rgba(107, 114, 128, 0.1)', order: 8 },
-  converted: { label: 'Converted', color: '#10b981', icon: ArrowRight, bgColor: 'rgba(16, 185, 129, 0.1)', order: 9 }
+  pending: { label: 'Pending', color: '#a855f7', icon: Clock, bgColor: 'rgba(168, 85, 247, 0.1)', order: 2 },
+  sent: { label: 'Sent', color: '#3b82f6', icon: Send, bgColor: 'rgba(59, 130, 246, 0.1)', order: 3 },
+  negotiating: { label: 'Negotiating', color: '#f59e0b', icon: Clock, bgColor: 'rgba(245, 158, 11, 0.1)', order: 4 },
+  awaiting_po: { label: 'Awaiting PO', color: '#8b5cf6', icon: Timer, bgColor: 'rgba(139, 92, 246, 0.1)', order: 5 },
+  po_received: { label: 'PO Received', color: '#06b6d4', icon: CheckCircle, bgColor: 'rgba(6, 182, 212, 0.1)', order: 6 },
+  won: { label: 'Won', color: '#22c55e', icon: Award, bgColor: 'rgba(34, 197, 94, 0.1)', order: 7 },
+  lost: { label: 'Lost', color: '#ef4444', icon: XCircle, bgColor: 'rgba(239, 68, 68, 0.1)', order: 8 },
+  expired: { label: 'Expired', color: '#6b7280', icon: Clock, bgColor: 'rgba(107, 114, 128, 0.1)', order: 9 },
+  converted: { label: 'Converted', color: '#10b981', icon: ArrowRight, bgColor: 'rgba(16, 185, 129, 0.1)', order: 10 }
 };
 
 // Active pipeline statuses (for filtering and metrics)
-const ACTIVE_STATUSES = ['draft', 'sent', 'negotiating', 'awaiting_po', 'po_received'];
+const ACTIVE_STATUSES = ['draft', 'sent', 'negotiating', 'pending', 'awaiting_po', 'po_received'];
 
 // Building types from Praxis
 const BUILDING_TYPES = ['CUSTOM', 'FLEET/STOCK', 'GOVERNMENT', 'Business'];
@@ -1347,7 +1348,12 @@ function SalesDashboard() {
         color: 'var(--text-tertiary)',
         marginBottom: '12px'
       }}>
-        Showing {filteredQuotes.length} of {quotes.length} quotes
+        Showing {filteredQuotes.length} {statusFilter === 'active' ? 'active' : ''} quotes
+        {statusFilter === 'active' && quotes.length > filteredQuotes.length && (
+          <span style={{ color: 'var(--text-tertiary)' }}>
+            {' '}({quotes.length - filteredQuotes.length} won/lost/expired not shown)
+          </span>
+        )}
       </div>
 
       {/* Quotes List */}
@@ -1446,7 +1452,7 @@ function SalesDashboard() {
                       color: 'var(--text-primary)',
                       fontSize: '0.95rem'
                     }}>
-                      {quote.project_name || 'Untitled Quote'}
+                      {quote.notes || quote.customer?.company_name || 'Untitled Quote'}
                     </span>
                     <code style={{
                       fontSize: '0.7rem',

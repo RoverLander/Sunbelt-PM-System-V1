@@ -365,24 +365,50 @@ function Sidebar({
 
   const fetchSalesStats = async () => {
     try {
-      const activeStatuses = ['draft', 'sent', 'negotiating'];
+      // Include 'pending' in active statuses (used in demo data)
+      const activeStatuses = ['draft', 'sent', 'negotiating', 'pending'];
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
 
-      const [quotesRes, teamRes] = await Promise.all([
-        supabase
-          .from('sales_quotes')
-          .select('id, status, total_price, won_date, created_at'),
-        supabase
+      // First, get the current user's role and factory
+      let userRole = '';
+      let userFactory = null;
+
+      if (user?.id) {
+        const { data: userData } = await supabase
           .from('users')
-          .select('id', { count: 'exact', head: true })
-          .in('role', ['Sales_Rep', 'Sales_Manager'])
-          .eq('is_active', true)
-      ]);
+          .select('role, factory')
+          .eq('id', user.id)
+          .single();
+
+        if (userData) {
+          userRole = (userData.role || '').toLowerCase();
+          userFactory = userData.factory;
+        }
+      }
+
+      // Sidebar stats always show the user's PERSONAL quotes (assigned_to = user.id)
+      // The main dashboard shows factory-wide or team stats, but sidebar is personal
+      let quotesQuery = supabase
+        .from('sales_quotes')
+        .select('id, status, total_price, won_date, assigned_to, factory, created_at')
+        .eq('assigned_to', user.id);
+
+      // Count team members in the same factory (for Sales Manager)
+      let teamQuery = supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .in('role', ['Sales_Rep', 'Sales_Manager'])
+        .eq('is_active', true);
+
+      if (userRole === 'sales_manager' && userFactory) {
+        teamQuery = teamQuery.eq('factory', userFactory);
+      }
+
+      const [quotesRes, teamRes] = await Promise.all([quotesQuery, teamQuery]);
 
       const quotes = quotesRes.data || [];
-
       const activeQuotes = quotes.filter(q => activeStatuses.includes(q.status));
 
       const pipelineValue = activeQuotes.reduce((sum, q) => sum + (q.total_price || 0), 0);
@@ -432,11 +458,12 @@ function Sidebar({
       fetchITStats();
     } else if (dashboardType === 'pc') {
       fetchPCStats();
-    } else if (dashboardType === 'sales') {
+    } else if ((dashboardType === 'sales' || dashboardType === 'sales_manager') && user?.id) {
+      // Sales stats needs user.id to fetch role/factory, so wait for user
       fetchSalesStats();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dashboardType]);
+  }, [dashboardType, user?.id]);
 
   // Fetch PM stats only after currentUser is loaded
   useEffect(() => {
@@ -467,7 +494,10 @@ function Sidebar({
         } else if (userRole === 'project coordinator' || userRole === 'pc') {
           setDashboardType('pc');
           localStorage.setItem('dashboardType', 'pc');
-        } else if (userRole === 'sales_rep' || userRole === 'sales_manager') {
+        } else if (userRole === 'sales_manager') {
+          setDashboardType('sales_manager');
+          localStorage.setItem('dashboardType', 'sales_manager');
+        } else if (userRole === 'sales_rep') {
           setDashboardType('sales');
           localStorage.setItem('dashboardType', 'sales');
         } else {
@@ -1162,7 +1192,7 @@ function Sidebar({
               zIndex: 200,
               overflow: 'hidden'
             }}>
-              {['pm', 'director', 'vp', 'it', 'sales'].map(type => {
+              {['pm', 'director', 'vp', 'it', 'sales', 'sales_manager'].map(type => {
                 if (!canAccessDashboard(type)) return null;
                 const config = getDashboardConfig(type);
                 const Icon = config.icon;

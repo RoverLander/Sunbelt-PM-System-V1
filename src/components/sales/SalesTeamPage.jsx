@@ -32,7 +32,7 @@ import { useAuth } from '../../context/AuthContext';
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-const ACTIVE_STATUSES = ['draft', 'sent', 'negotiating', 'awaiting_po', 'po_received'];
+const ACTIVE_STATUSES = ['draft', 'sent', 'negotiating', 'pending', 'awaiting_po', 'po_received'];
 
 // ============================================================================
 // HELPER FUNCTIONS

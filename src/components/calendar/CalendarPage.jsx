@@ -65,7 +65,7 @@ function CalendarPage() {
       if (user?.id) {
         const { data: userData } = await supabase
           .from('users')
-          .select('role, factory, factory_id, factories:factory_id(code)')
+          .select('role, factory')
           .eq('id', user.id)
           .single();
 
@@ -75,12 +75,9 @@ function CalendarPage() {
         }
 
         // Get factory code for PC/Plant Manager/Sales users
-        // Check both direct factory column and factory_id join
+        // Users table has direct 'factory' column with factory code (e.g., 'PMI', 'NWBS')
         if (userData?.factory) {
           factoryCode = userData.factory;
-          setUserFactoryCode(factoryCode);
-        } else if (userData?.factories?.code) {
-          factoryCode = userData.factories.code;
           setUserFactoryCode(factoryCode);
         }
       }
@@ -96,6 +93,10 @@ function CalendarPage() {
 
       // Check if this user is a Sales Rep (should only see projects they're assigned to via quotes)
       const shouldFilterBySalesRep = salesRepRoles.includes(userRole.toLowerCase()) && user?.id;
+
+      // Debug logging for calendar filtering
+      console.log('[Calendar] User role:', userRole, '| Factory code:', factoryCode);
+      console.log('[Calendar] Filter flags - PM:', shouldFilterByPM, '| SalesManager:', shouldFilterBySalesManager, '| SalesRep:', shouldFilterBySalesRep);
 
       // Fetch all tasks, RFIs, submittals, milestones WITH embedded project info
       // This bypasses RLS issues where PC users can't read projects directly

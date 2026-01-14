@@ -816,14 +816,20 @@ function TasksPage({
           internal_owner:internal_owner_id(name)
         `);
 
+      // Debug logging
+      console.log('[TasksPage] isDirectorView:', isDirectorView);
+      console.log('[TasksPage] Projects found:', projectsData?.length || 0);
+      console.log('[TasksPage] All tasks fetched:', allTasksData?.length || 0);
+
       // Client-side filter and sort
       const tasksData = (allTasksData || [])
         .filter(t => projectIdsSet.has(t.project_id))
         .sort((a, b) => new Date(a.due_date || '9999') - new Date(b.due_date || '9999'));
 
+      console.log('[TasksPage] Tasks after filter:', tasksData.length);
       setTasks(tasksData);
     } catch (error) {
-      console.error('Error fetching tasks:', error);
+      console.error('[TasksPage] Error fetching tasks:', error);
     } finally {
       setLoading(false);
     }

@@ -146,6 +146,13 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
   // ==========================================================================
   const [project, setProject] = useState(initialProject);
   const [loading, setLoading] = useState(true);
+
+  // Sync project state when initialProject prop changes (e.g., navigating between projects)
+  useEffect(() => {
+    if (initialProject?.id && initialProject.id !== project?.id) {
+      setProject(initialProject);
+    }
+  }, [initialProject?.id]);
   const [activeTab, setActiveTab] = useState(initialTab ? initialTab.toLowerCase() : 'overview');
   
   // Data
@@ -222,8 +229,16 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
   // DATA FETCHING
   // ==========================================================================
   const fetchProjectData = useCallback(async () => {
-    if (!project?.id) return;
+    if (!project?.id) {
+      console.log('[ProjectDetails] No project.id, skipping fetch');
+      return;
+    }
     setLoading(true);
+    console.log('[ProjectDetails] Fetching data for project:', project.id, project.project_number);
+
+    // DEBUG: Fetch all tasks to see what project_ids exist
+    const { data: allTasks } = await supabase.from('tasks').select('id, project_id, title').limit(5);
+    console.log('[ProjectDetails DEBUG] Sample of ALL tasks in DB:', allTasks?.map(t => ({ id: t.id, project_id: t.project_id, title: t.title?.substring(0, 30) })));
 
     try {
       const [tasksRes, rfisRes, submittalsRes, milestonesRes] = await Promise.all([
@@ -232,6 +247,22 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
         supabase.from('submittals').select('*').eq('project_id', project.id).order('created_at', { ascending: false }),
         supabase.from('milestones').select('*').eq('project_id', project.id).order('due_date')
       ]);
+
+      // Debug logging - comprehensive
+      console.log('[ProjectDetails] Query project_id used:', project.id);
+      console.log('[ProjectDetails] Tasks result:', {
+        count: tasksRes.data?.length || 0,
+        error: tasksRes.error,
+        firstTask: tasksRes.data?.[0] ? { id: tasksRes.data[0].id, project_id: tasksRes.data[0].project_id, title: tasksRes.data[0].title } : null
+      });
+      console.log('[ProjectDetails] RFIs result:', {
+        count: rfisRes.data?.length || 0,
+        error: rfisRes.error
+      });
+      console.log('[ProjectDetails] Submittals result:', {
+        count: submittalsRes.data?.length || 0,
+        error: submittalsRes.error
+      });
 
       setTasks(tasksRes.data || []);
       setRFIs(rfisRes.data || []);
