@@ -48,11 +48,12 @@ DECLARE
   v_today DATE := CURRENT_DATE;
 BEGIN
   -- Get existing PM IDs from users table
-  SELECT id INTO v_candy_id FROM users WHERE email ILIKE '%candy%' OR name ILIKE '%candy%juhnke%' LIMIT 1;
-  SELECT id INTO v_crystal_id FROM users WHERE email ILIKE '%crystal%' OR name ILIKE '%crystal%me%' LIMIT 1;
-  SELECT id INTO v_matthew_id FROM users WHERE email ILIKE '%matthew%' OR name ILIKE '%matthew%' LIMIT 1;
-  SELECT id INTO v_hector_id FROM users WHERE email ILIKE '%hector%' OR name ILIKE '%hector%vazquez%' LIMIT 1;
-  SELECT id INTO v_michael_id FROM users WHERE email ILIKE '%michael%caracciolo%' OR name ILIKE '%michael%caracciolo%' LIMIT 1;
+  -- Use specific patterns to avoid matching wrong users
+  SELECT id INTO v_candy_id FROM users WHERE email ILIKE '%candy.juhnke%' OR name ILIKE '%candy%juhnke%' LIMIT 1;
+  SELECT id INTO v_crystal_id FROM users WHERE email ILIKE '%crystal.me%' OR name ILIKE '%crystal%me%' LIMIT 1;
+  SELECT id INTO v_matthew_id FROM users WHERE email ILIKE '%matthew.mcdaniel%' OR name ILIKE '%matthew%mcdaniel%' LIMIT 1;
+  SELECT id INTO v_hector_id FROM users WHERE email ILIKE '%hector.vazquez%' OR name ILIKE '%hector%vazquez%' LIMIT 1;
+  SELECT id INTO v_michael_id FROM users WHERE email ILIKE '%michael.caracciolo%' OR name ILIKE '%michael%caracciolo%' LIMIT 1;
 
   -- Fallback: If no PMs found, use the first available user
   IF v_candy_id IS NULL THEN
@@ -366,3 +367,14 @@ FROM projects
 WHERE target_online_date IS NOT NULL
 GROUP BY current_phase
 ORDER BY current_phase;
+
+SELECT 'Projects by Primary PM (verify assignments):' AS status;
+SELECT
+  u.name as pm_name,
+  u.email as pm_email,
+  COUNT(*) as project_count,
+  STRING_AGG(p.project_number, ', ' ORDER BY p.project_number) as projects
+FROM projects p
+LEFT JOIN users u ON u.id = p.primary_pm_id
+GROUP BY u.id, u.name, u.email
+ORDER BY u.name;
