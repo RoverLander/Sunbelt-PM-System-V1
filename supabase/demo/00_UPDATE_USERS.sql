@@ -8,7 +8,7 @@
 -- | Name              | Email                                | Role               | Factory |
 -- |-------------------|--------------------------------------|--------------------|---------|
 -- | Candy Juhnke      | candy.juhnke@sunbeltmodular.com      | Director           | SNB     |
--- | Crystal Medina    | crystal.meyers@sunbeltmodular.com    | Project_Manager    | SNB     |
+-- | Crystal Myers     | crystal.myers@sunbeltmodular.com     | Project_Manager    | SNB     |
 -- | Hector Vazquez    | hector.vazquez@sunbeltmodular.com    | Project_Manager    | SNB     |
 -- | Matthew McDaniel  | matthew.mcdaniel@sunbeltmodular.com  | Project_Manager    | SNB     |
 -- | Michael Caracciolo| michael.caracciolo@sunbeltmodular.com| Project_Manager    | SNB     |

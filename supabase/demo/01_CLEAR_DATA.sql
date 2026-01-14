@@ -8,6 +8,7 @@
 -- Run this FIRST before any other demo scripts.
 -- Created: January 13, 2026
 -- Updated: January 14, 2026 - Handle non-existent tables gracefully
+-- Updated: January 14, 2026 - Added directory_contacts, external_contacts, departments
 -- ============================================================================
 
 -- ============================================================================
@@ -21,6 +22,14 @@ BEGIN
   END IF;
 END;
 $$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- CLEAR DIRECTORY CONTACT DATA
+-- ============================================================================
+SELECT safe_truncate('project_external_contacts');
+SELECT safe_truncate('external_contacts');
+SELECT safe_truncate('directory_contacts');
+SELECT safe_truncate('departments');
 
 -- ============================================================================
 -- CLEAR FLOOR PLAN DATA

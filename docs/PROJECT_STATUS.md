@@ -521,3 +521,148 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 - **Database**: Supabase (PostgreSQL)
 - **Storage**: Supabase Storage
 - **Hosting**: [To be configured]
+
+---
+
+## Upcoming Features & Roadmap
+
+### Directory System (In Progress - January 14, 2026)
+
+**Status:** Building
+
+**Overview:** Company-wide contact directory for all Sunbelt employees across 15 factories, with integration into forms (RFIs, Tasks, Submittals) for contact selection.
+
+**Data Source:** `docs/Sunbelt Directory Q3-2025 Updated 07-25-25.xlsx` (15 sheets, ~300+ contacts)
+
+**Database Changes:**
+- [ ] Update `factories` table - Add address, phone, email_domain columns
+- [ ] Add WM-ROCHESTER factory (missing from current list)
+- [ ] Create `departments` lookup table
+- [ ] Create `directory_contacts` table (internal Sunbelt employees)
+- [ ] Create `external_contacts` table (customers, vendors, external stakeholders)
+
+**Departments (14 total):**
+| Department | Example Positions |
+|------------|-------------------|
+| Executive | CEO, CFO, CRO, VP's, President |
+| Accounting | Controller, Accounting Manager, AP, Staff Accountant |
+| HR | HR Manager, Payroll, Benefits |
+| Marketing | Marketing Director, Coordinator |
+| Sales | Sales Manager, Estimator, Business Development |
+| Operations | VP Operations, Plant General Manager, Project Manager, Project Coordinator |
+| Production | Production Manager, Supervisor, Foreman |
+| Purchasing | Purchasing Manager, Purchasing Agent, Material Control |
+| Engineering | Engineer, Director of Engineering |
+| Drafting | Drafting Manager, Drafter, Designer |
+| Quality | QA Manager, QC Inspector |
+| Safety | Safety Coordinator, Safety Manager |
+| IT | IT Manager, Programmer, Network Admin |
+| Service | Service Manager, Service Technician, Warranty |
+
+**UI Components:**
+- [ ] Directory sidebar page (full page in nav)
+- [ ] Contact card layout with factory logos
+- [ ] Search with type-ahead
+- [ ] Filter by factory, department
+- [ ] Sort by name, department, factory
+- [ ] Recent contacts section
+
+**Form Integration:**
+- [ ] Contact picker component for RFIs/Tasks/Submittals
+- [ ] "Assigned To" field - single contact with FK + snapshot
+- [ ] "Notify" field - multiple contacts (combines CC functionality)
+- [ ] Factory context filtering (default to project's factory)
+- [ ] Keyboard navigation support
+
+**Contact Selection Schema Pattern:**
+```sql
+-- Example for tasks table
+assigned_to_id UUID REFERENCES directory_contacts(id),
+assigned_to_name VARCHAR(100),      -- Snapshot at assignment
+assigned_to_email VARCHAR(255),     -- Snapshot at assignment
+notify_contacts JSONB               -- Array of {id, name, email} snapshots
+```
+
+---
+
+### Collapsible Sidebar (Planned)
+
+**Status:** Planned
+
+**Overview:** Make sidebar collapsible across all dashboards to maximize screen real estate.
+
+**Features:**
+- [ ] Collapse to icons only (like VS Code)
+- [ ] Remember state per user (localStorage)
+- [ ] Keyboard shortcut (Cmd/Ctrl + B)
+- [ ] Smooth animation transition
+
+---
+
+### External Contacts & Portal (Future)
+
+**Status:** Planning
+
+**Overview:** Separate system for external contacts (customers, architects, inspectors, vendors) with a sanitized external portal for project collaboration.
+
+**External Contacts Table:**
+- Company, contact name, email, phone
+- Contact type (Customer, Architect, Inspector, Vendor, Other)
+- Associated projects (many-to-many)
+- Access level for portal
+
+**External Portal (Procore-style):**
+- Sanitized view of specific projects
+- View RFIs, Submittals, Tasks assigned to them
+- Respond to RFIs directly
+- Upload submittal documents
+- Limited project info (no financials, internal notes)
+- Authentication separate from internal users
+
+**Use Cases:**
+- Customer can view project status and respond to RFIs
+- Architect can review and approve submittals
+- Inspector can view inspection-related tasks
+- Dealer can track order status
+
+---
+
+### Notification System Foundation (Future)
+
+**Status:** Planning
+
+**Overview:** Foundation for email and in-app notifications triggered by contact assignments.
+
+**Components:**
+- [ ] Notification preferences table (per user)
+- [ ] Notification queue table
+- [ ] Email templates for RFI, Task, Submittal notifications
+- [ ] In-app notification bell with unread count
+- [ ] Real-time updates via Supabase subscriptions
+
+**Triggers:**
+- Assigned to a task/RFI/submittal
+- Added to notify list
+- RFI answered (notify requester)
+- Submittal approved/rejected
+- Due date approaching (24h, same day)
+
+---
+
+### Department-Based Smart Defaults (Future)
+
+**Status:** Planning
+
+**Overview:** Auto-suggest contacts based on item type and department.
+
+**Smart Suggestions:**
+| Item Type | Suggested Departments |
+|-----------|----------------------|
+| RFI (Technical) | Engineering, Drafting |
+| RFI (Drawing) | Drafting |
+| RFI (Material) | Purchasing |
+| Submittal | Engineering, QA |
+| Task (Production) | Production, Operations |
+| Task (QC) | Quality, Safety |
+
+---
