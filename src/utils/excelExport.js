@@ -368,6 +368,366 @@ export const exportSubmittalLog = (submittals, projectInfo) => {
 };
 
 // ============================================================================
+// TASK LOG EXPORT
+// ============================================================================
+
+/**
+ * Export Task Log to Excel
+ * @param {Array} tasks - Array of Task objects
+ * @param {Object} projectInfo - Project information { name, projectNumber, client, factory }
+ */
+export const exportTaskLog = (tasks, projectInfo) => {
+  const generatedDate = new Date().toLocaleString();
+
+  // Create header section
+  const headerRows = createWorksheetWithHeader(
+    projectInfo,
+    'TASK LOG',
+    generatedDate
+  );
+
+  // Column headers
+  const columnHeaders = [
+    'Task',
+    'Description',
+    'Status',
+    'Priority',
+    'Assigned To',
+    'Start Date',
+    'Due Date',
+    'Days Open',
+    'Milestone',
+    'Workflow Station',
+    'Court',
+    'Completed Date',
+    'Overdue'
+  ];
+
+  // Sort tasks by due date
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (!a.due_date && !b.due_date) return 0;
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return new Date(a.due_date) - new Date(b.due_date);
+  });
+
+  // Map task data to rows
+  const dataRows = sortedTasks.map(task => {
+    const closedStatuses = ['Completed', 'Cancelled'];
+    const daysOpen = daysBetween(
+      task.start_date || task.created_at,
+      closedStatuses.includes(task.status) ? task.completed_date : null
+    );
+    const overdue = isOverdue(task.due_date, task.status, closedStatuses);
+
+    // Get assignee name
+    const assignee = task.is_external
+      ? `${task.external_assignee_name || 'External'} (External)`
+      : task.assignee?.name || task.assigned_to_name || '';
+
+    return [
+      task.title || '',
+      task.description || '',
+      task.status || '',
+      task.priority || '',
+      assignee,
+      formatDate(task.start_date),
+      formatDate(task.due_date),
+      daysOpen,
+      task.milestone?.name || '',
+      task.workflow_station_key || '',
+      task.assigned_court || '',
+      formatDate(task.completed_date),
+      overdue ? 'YES' : ''
+    ];
+  });
+
+  // Summary section
+  const totalTasks = tasks.length;
+  const notStarted = tasks.filter(t => t.status === 'Not Started').length;
+  const inProgress = tasks.filter(t => t.status === 'In Progress').length;
+  const awaitingResponse = tasks.filter(t => t.status === 'Awaiting Response' || t.status === 'On Hold').length;
+  const completed = tasks.filter(t => t.status === 'Completed').length;
+  const cancelled = tasks.filter(t => t.status === 'Cancelled').length;
+  const overdueTasks = tasks.filter(t =>
+    isOverdue(t.due_date, t.status, ['Completed', 'Cancelled'])
+  ).length;
+
+  const summaryRows = [
+    [],
+    ['SUMMARY'],
+    ['Total Tasks:', totalTasks],
+    ['Not Started:', notStarted],
+    ['In Progress:', inProgress],
+    ['Awaiting Response:', awaitingResponse],
+    ['Completed:', completed],
+    ['Cancelled:', cancelled],
+    ['Overdue:', overdueTasks]
+  ];
+
+  // Priority breakdown
+  const priorityRows = [
+    [],
+    ['BY PRIORITY']
+  ];
+  const priorityCounts = tasks.reduce((acc, t) => {
+    const priority = t.priority || 'Medium';
+    acc[priority] = (acc[priority] || 0) + 1;
+    return acc;
+  }, {});
+  Object.entries(priorityCounts).forEach(([priority, count]) => {
+    priorityRows.push([`${priority}:`, count]);
+  });
+
+  // Combine all rows
+  const allRows = [
+    ...headerRows,
+    columnHeaders,
+    ...dataRows,
+    ...summaryRows,
+    ...priorityRows
+  ];
+
+  // Create worksheet
+  const worksheet = XLSX.utils.aoa_to_sheet(allRows);
+
+  // Set column widths
+  setColumnWidths(worksheet, dataRows, columnHeaders);
+
+  // Merge title cell
+  worksheet['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }
+  ];
+
+  // Create workbook and add worksheet
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Task Log');
+
+  // Generate filename
+  const filename = `${projectInfo.projectNumber}_Task_Log_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+  // Download file
+  XLSX.writeFile(workbook, filename);
+
+  return filename;
+};
+
+// ============================================================================
+// GLOBAL RFI/SUBMITTAL/TASK EXPORT (All Projects)
+// ============================================================================
+
+/**
+ * Export all RFIs across projects to Excel
+ * @param {Array} rfis - Array of RFI objects with project relation
+ */
+export const exportAllRFIs = (rfis) => {
+  const generatedDate = new Date().toLocaleString();
+
+  const headerRows = [
+    ['ALL RFIs REPORT'],
+    [],
+    ['Generated:', generatedDate],
+    ['Total RFIs:', rfis.length],
+    []
+  ];
+
+  const columnHeaders = [
+    'RFI #',
+    'Project',
+    'Subject',
+    'Status',
+    'Priority',
+    'Sent To',
+    'Due Date',
+    'Days Open',
+    'Answered',
+    'Overdue'
+  ];
+
+  const sortedRFIs = [...rfis].sort((a, b) => {
+    if (!a.due_date && !b.due_date) return 0;
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return new Date(a.due_date) - new Date(b.due_date);
+  });
+
+  const dataRows = sortedRFIs.map(rfi => {
+    const closedStatuses = ['Answered', 'Closed'];
+    const daysOpen = daysBetween(
+      rfi.date_sent || rfi.created_at,
+      closedStatuses.includes(rfi.status) ? rfi.date_answered : null
+    );
+    const overdue = isOverdue(rfi.due_date, rfi.status, closedStatuses);
+
+    return [
+      rfi.rfi_number || '',
+      rfi.project?.project_number || '',
+      rfi.subject || '',
+      rfi.status || '',
+      rfi.priority || '',
+      rfi.sent_to || '',
+      formatDate(rfi.due_date),
+      daysOpen,
+      formatDate(rfi.date_answered),
+      overdue ? 'YES' : ''
+    ];
+  });
+
+  const allRows = [...headerRows, columnHeaders, ...dataRows];
+  const worksheet = XLSX.utils.aoa_to_sheet(allRows);
+  setColumnWidths(worksheet, dataRows, columnHeaders);
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'All RFIs');
+
+  const filename = `All_RFIs_${new Date().toISOString().split('T')[0]}.xlsx`;
+  XLSX.writeFile(workbook, filename);
+  return filename;
+};
+
+/**
+ * Export all Submittals across projects to Excel
+ * @param {Array} submittals - Array of Submittal objects with project relation
+ */
+export const exportAllSubmittals = (submittals) => {
+  const generatedDate = new Date().toLocaleString();
+
+  const headerRows = [
+    ['ALL SUBMITTALS REPORT'],
+    [],
+    ['Generated:', generatedDate],
+    ['Total Submittals:', submittals.length],
+    []
+  ];
+
+  const columnHeaders = [
+    'Sub #',
+    'Project',
+    'Title',
+    'Type',
+    'Status',
+    'Priority',
+    'Sent To',
+    'Due Date',
+    'Days in Review',
+    'Approved Date',
+    'Overdue'
+  ];
+
+  const sortedSubmittals = [...submittals].sort((a, b) => {
+    if (!a.due_date && !b.due_date) return 0;
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return new Date(a.due_date) - new Date(b.due_date);
+  });
+
+  const dataRows = sortedSubmittals.map(sub => {
+    const closedStatuses = ['Approved', 'Approved as Noted', 'Rejected'];
+    const daysInReview = daysBetween(
+      sub.date_submitted,
+      closedStatuses.includes(sub.status) ? sub.date_approved : null
+    );
+    const overdue = isOverdue(sub.due_date, sub.status, closedStatuses);
+
+    return [
+      sub.submittal_number || '',
+      sub.project?.project_number || '',
+      sub.title || '',
+      sub.submittal_type || '',
+      sub.status || '',
+      sub.priority || '',
+      sub.sent_to || '',
+      formatDate(sub.due_date),
+      daysInReview,
+      formatDate(sub.date_approved),
+      overdue ? 'YES' : ''
+    ];
+  });
+
+  const allRows = [...headerRows, columnHeaders, ...dataRows];
+  const worksheet = XLSX.utils.aoa_to_sheet(allRows);
+  setColumnWidths(worksheet, dataRows, columnHeaders);
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'All Submittals');
+
+  const filename = `All_Submittals_${new Date().toISOString().split('T')[0]}.xlsx`;
+  XLSX.writeFile(workbook, filename);
+  return filename;
+};
+
+/**
+ * Export all Tasks across projects to Excel
+ * @param {Array} tasks - Array of Task objects with project relation
+ */
+export const exportAllTasks = (tasks) => {
+  const generatedDate = new Date().toLocaleString();
+
+  const headerRows = [
+    ['ALL TASKS REPORT'],
+    [],
+    ['Generated:', generatedDate],
+    ['Total Tasks:', tasks.length],
+    []
+  ];
+
+  const columnHeaders = [
+    'Task',
+    'Project',
+    'Status',
+    'Priority',
+    'Assigned To',
+    'Due Date',
+    'Days Open',
+    'Completed',
+    'Overdue'
+  ];
+
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (!a.due_date && !b.due_date) return 0;
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return new Date(a.due_date) - new Date(b.due_date);
+  });
+
+  const dataRows = sortedTasks.map(task => {
+    const closedStatuses = ['Completed', 'Cancelled'];
+    const daysOpen = daysBetween(
+      task.start_date || task.created_at,
+      closedStatuses.includes(task.status) ? task.completed_date : null
+    );
+    const overdue = isOverdue(task.due_date, task.status, closedStatuses);
+
+    const assignee = task.is_external
+      ? `${task.external_assignee_name || 'External'}`
+      : task.assignee?.name || task.assigned_to_name || '';
+
+    return [
+      task.title || '',
+      task.project?.project_number || '',
+      task.status || '',
+      task.priority || '',
+      assignee,
+      formatDate(task.due_date),
+      daysOpen,
+      formatDate(task.completed_date),
+      overdue ? 'YES' : ''
+    ];
+  });
+
+  const allRows = [...headerRows, columnHeaders, ...dataRows];
+  const worksheet = XLSX.utils.aoa_to_sheet(allRows);
+  setColumnWidths(worksheet, dataRows, columnHeaders);
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'All Tasks');
+
+  const filename = `All_Tasks_${new Date().toISOString().split('T')[0]}.xlsx`;
+  XLSX.writeFile(workbook, filename);
+  return filename;
+};
+
+// ============================================================================
 // COMBINED EXPORT (Both logs in one workbook)
 // ============================================================================
 
@@ -466,5 +826,9 @@ export const exportProjectLogs = (rfis, submittals, projectInfo) => {
 export default {
   exportRFILog,
   exportSubmittalLog,
+  exportTaskLog,
+  exportAllRFIs,
+  exportAllSubmittals,
+  exportAllTasks,
   exportProjectLogs
 };

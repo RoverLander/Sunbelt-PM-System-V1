@@ -34,10 +34,12 @@ import {
   ToggleRight,
   ChevronUp,
   ChevronDown,
-  ChevronsUpDown
+  ChevronsUpDown,
+  Download
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
+import { exportAllRFIs } from '../../utils/excelExport';
 
 // ============================================================================
 // CONSTANTS
@@ -325,29 +327,57 @@ function RFIsPage({
             </p>
           </div>
 
-          {/* Include Backup Projects Toggle */}
-          {!isDirectorView && onToggleBackupProjects && (
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {/* Export to Excel */}
             <button
-              onClick={() => onToggleBackupProjects(!includeBackupProjects)}
+              onClick={() => exportAllRFIs(rfis)}
+              disabled={rfis.length === 0}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
                 padding: '8px 14px',
-                background: includeBackupProjects ? 'rgba(249, 115, 22, 0.1)' : 'var(--bg-secondary)',
-                border: `1px solid ${includeBackupProjects ? 'var(--sunbelt-orange)' : 'var(--border-color)'}`,
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
                 borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-                color: includeBackupProjects ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+                cursor: rfis.length === 0 ? 'not-allowed' : 'pointer',
+                color: 'var(--text-secondary)',
                 fontSize: '0.8125rem',
                 fontWeight: '500',
+                opacity: rfis.length === 0 ? 0.5 : 1,
                 transition: 'all 0.15s'
               }}
+              title="Export to Excel"
             >
-              {includeBackupProjects ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
-              Include backup PM projects
+              <Download size={16} />
+              Export
             </button>
-          )}
+
+            {/* Include Backup Projects Toggle */}
+            {!isDirectorView && onToggleBackupProjects && (
+              <button
+                onClick={() => onToggleBackupProjects(!includeBackupProjects)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 14px',
+                  background: includeBackupProjects ? 'rgba(249, 115, 22, 0.1)' : 'var(--bg-secondary)',
+                  border: `1px solid ${includeBackupProjects ? 'var(--sunbelt-orange)' : 'var(--border-color)'}`,
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  color: includeBackupProjects ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+                  fontSize: '0.8125rem',
+                  fontWeight: '500',
+                  transition: 'all 0.15s'
+                }}
+              >
+                {includeBackupProjects ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                Include backup PM projects
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
