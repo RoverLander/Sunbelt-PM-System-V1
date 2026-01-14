@@ -8,7 +8,59 @@
 --
 -- Created: January 13, 2026
 -- Updated: January 14, 2026 - Fixed sales_customers schema
+-- Updated: January 14, 2026 - Added dealers table and FK constraints for Supabase joins
 -- ============================================================================
+
+-- ============================================================================
+-- CREATE DEALERS TABLE (for dealer relationships in quotes)
+-- ============================================================================
+-- Dealers are modular building distributors who resell Sunbelt products
+CREATE TABLE IF NOT EXISTS dealers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  code VARCHAR(20) UNIQUE NOT NULL,
+  name VARCHAR(200) NOT NULL,
+  branch_name VARCHAR(100),
+  contact_name VARCHAR(100),
+  contact_email VARCHAR(255),
+  contact_phone VARCHAR(50),
+  address_line1 VARCHAR(255),
+  city VARCHAR(100),
+  state VARCHAR(2),
+  zip_code VARCHAR(20),
+  factory VARCHAR(20),
+  is_active BOOLEAN DEFAULT true,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS on dealers
+ALTER TABLE dealers ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "dealers_all" ON dealers;
+CREATE POLICY "dealers_all" ON dealers FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Create index
+CREATE INDEX IF NOT EXISTS idx_dealers_code ON dealers(code);
+CREATE INDEX IF NOT EXISTS idx_dealers_factory ON dealers(factory);
+
+-- ============================================================================
+-- INSERT DEALER DATA
+-- ============================================================================
+INSERT INTO dealers (code, name, branch_name, contact_name, contact_email, contact_phone, city, state, factory)
+VALUES
+  ('PMSI', 'Pacific Mobile Structures Inc', 'Seattle Main', 'Lisa Chen', 'lchen@pmsi.com', '(206) 555-5005', 'Seattle', 'WA', 'NWBS'),
+  ('PMSI-LA', 'Pacific Mobile Structures Inc', 'Los Angeles', 'Mark Torres', 'mtorres@pmsi.com', '(310) 555-5006', 'Los Angeles', 'CA', 'PMI'),
+  ('MMG', 'Modular Management Group', 'Atlanta HQ', 'Sarah Johnson', 'sjohnson@mmg.com', '(404) 555-2002', 'Atlanta', 'GA', 'SMM'),
+  ('MMG-FL', 'Modular Management Group', 'Florida', 'Carlos Martinez', 'cmartinez@mmg.com', '(305) 555-2003', 'Miami', 'FL', 'SMM'),
+  ('URENT', 'United Rentals Modular', 'Corporate', 'Tom Anderson', 'tanderson@ur.com', '(203) 555-6006', 'Stamford', 'CT', 'SSI'),
+  ('WESCO', 'Wesco Modular Solutions', 'Texas Region', 'David Wilson', 'dwilson@wesco.com', '(214) 555-7001', 'Dallas', 'TX', 'SSI'),
+  ('MOBPRO', 'Mobile Pro Dealers', 'Phoenix', 'Jennifer Adams', 'jadams@mobpro.com', '(480) 555-8001', 'Phoenix', 'AZ', 'PMI')
+ON CONFLICT (code) DO UPDATE SET
+  name = EXCLUDED.name,
+  branch_name = EXCLUDED.branch_name,
+  contact_name = EXCLUDED.contact_name,
+  updated_at = NOW();
 
 -- ============================================================================
 -- CREATE SALES_QUOTES TABLE (if not exists)
@@ -77,6 +129,7 @@ CREATE POLICY "sales_quotes_all" ON sales_quotes FOR ALL TO authenticated USING 
 CREATE INDEX IF NOT EXISTS idx_sales_quotes_customer ON sales_quotes(customer_id);
 CREATE INDEX IF NOT EXISTS idx_sales_quotes_status ON sales_quotes(status);
 CREATE INDEX IF NOT EXISTS idx_sales_quotes_assigned ON sales_quotes(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_sales_quotes_dealer ON sales_quotes(dealer_id);
 
 -- ============================================================================
 -- CREATE SALES_QUOTE_REVISIONS TABLE (if not exists)
@@ -150,6 +203,38 @@ CREATE POLICY "sales_customers_all" ON sales_customers FOR ALL TO authenticated 
 -- Create index
 CREATE INDEX IF NOT EXISTS idx_sales_customers_company ON sales_customers(company_name);
 CREATE INDEX IF NOT EXISTS idx_sales_customers_factory ON sales_customers(factory);
+
+-- ============================================================================
+-- ADD FOREIGN KEY CONSTRAINTS FOR SUPABASE JOINS
+-- ============================================================================
+-- Supabase join syntax requires actual FK constraints to work
+-- e.g., customer:customer_id(id, company_name) needs FK from customer_id to sales_customers.id
+
+-- Drop constraints if they exist (for re-running script)
+DO $$
+BEGIN
+  -- Customer FK
+  IF EXISTS (SELECT 1 FROM information_schema.table_constraints
+             WHERE constraint_name = 'sales_quotes_customer_id_fkey' AND table_name = 'sales_quotes') THEN
+    ALTER TABLE sales_quotes DROP CONSTRAINT sales_quotes_customer_id_fkey;
+  END IF;
+
+  -- Dealer FK
+  IF EXISTS (SELECT 1 FROM information_schema.table_constraints
+             WHERE constraint_name = 'sales_quotes_dealer_id_fkey' AND table_name = 'sales_quotes') THEN
+    ALTER TABLE sales_quotes DROP CONSTRAINT sales_quotes_dealer_id_fkey;
+  END IF;
+END $$;
+
+-- Add FK from sales_quotes.customer_id to sales_customers.id
+ALTER TABLE sales_quotes
+ADD CONSTRAINT sales_quotes_customer_id_fkey
+FOREIGN KEY (customer_id) REFERENCES sales_customers(id) ON DELETE SET NULL;
+
+-- Add FK from sales_quotes.dealer_id to dealers.id
+ALTER TABLE sales_quotes
+ADD CONSTRAINT sales_quotes_dealer_id_fkey
+FOREIGN KEY (dealer_id) REFERENCES dealers(id) ON DELETE SET NULL;
 
 -- ============================================================================
 -- GET SALES USER IDs

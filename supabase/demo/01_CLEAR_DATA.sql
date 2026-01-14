@@ -69,6 +69,7 @@ SELECT safe_truncate('sales_quote_revisions');
 SELECT safe_truncate('sales_activities');
 SELECT safe_truncate('sales_quotes');
 SELECT safe_truncate('sales_customers');
+SELECT safe_truncate('dealers');
 
 -- ============================================================================
 -- CLEAR PROJECTS (MAIN TABLE)
