@@ -6,6 +6,13 @@
 
 ---
 
+## Related Documentation
+
+- **[ARCHITECTURE_ANALYSIS.md](./ARCHITECTURE_ANALYSIS.md)** - Full system topology, security analysis, dependency graph, and improvement recommendations (Jan 14, 2026)
+- **[PRAXIS_INTEGRATION_ANALYSIS.md](./PRAXIS_INTEGRATION_ANALYSIS.md)** - Praxis field mappings and integration details
+
+---
+
 ## Overview
 
 The Sunbelt PM System is a comprehensive project management platform built for Sunbelt Modular and its subsidiary factories. The system is fully functional and deployed, supporting multiple user roles and factory locations.
