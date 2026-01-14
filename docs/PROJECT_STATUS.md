@@ -1,7 +1,7 @@
 # Project Status
 
 **Last Updated:** January 14, 2026
-**Version:** 1.2.1
+**Version:** 1.3.0
 **Status:** Production Ready (Beta) + Praxis Integration In Progress
 
 ---
@@ -154,6 +154,60 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 ---
 
 ## Recent Updates (January 2026)
+
+### January 14, 2026 (Late Night - Executive Reports Enhancement)
+
+- **Executive Reports - Major Upgrade**
+  - Added date range filtering with 6 preset options (30/60/90 days, Quarter, Year, All Time)
+  - Added PDF export capability for branded executive reports
+  - Added 4 new report sections to the dashboard
+
+  - **Date Range Filtering (NEW):**
+    - Dropdown selector with 6 presets
+    - Last 30/60/90 Days options
+    - This Quarter / This Year options
+    - All Time option
+    - Filter affects all report metrics
+
+  - **PDF Export (NEW):**
+    - Export current report as branded PDF
+    - Professional Sunbelt branding header
+    - Portfolio overview metrics
+    - Workflow phase distribution table
+    - Items requiring attention section
+    - Footer with document control
+
+  - **Delivery Pipeline Report (NEW):**
+    - Upcoming deliveries by time horizon (30/60/90+ days)
+    - Pipeline value by delivery window
+    - Sortable table of upcoming deliveries
+    - Days until delivery with urgency coloring
+
+  - **PM Workload Report (NEW):**
+    - Project manager capacity analysis
+    - Projects/PM, Tasks/PM metrics
+    - Utilization percentage with visual bars
+    - Overdue task tracking by PM
+    - Portfolio value per PM
+
+  - **Factory Capacity Report (NEW):**
+    - Factory utilization metrics
+    - Active projects by factory
+    - Month-to-date completions
+    - Upcoming deliveries (30 days)
+    - Portfolio value breakdown
+    - Capacity utilization bars
+
+  - **Risk Assessment Report (NEW):**
+    - Critical and at-risk project counts
+    - Project health distribution
+    - Total overdue items breakdown
+    - Risk-scored project ranking
+    - High-risk projects table
+    - Color-coded health status badges
+
+- **Files Modified:**
+  - `src/components/reports/ExecutiveReports.jsx` - Added 4 new reports, date filter, PDF export
 
 ### January 14, 2026 (Late Night - System Configuration Expansion)
 
@@ -1042,11 +1096,11 @@ notify_contacts JSONB               -- Array of {id, name, email} snapshots
 
 ---
 
-### Executive Reports Enhancement (Planned)
+### Executive Reports Enhancement (Complete)
 
-**Status:** Planning
+**Status:** Complete (January 14, 2026)
 
-**Overview:** Upgrade executive reports with new report types, improved visualizations, and professional PDF export with branding.
+**Overview:** Upgraded executive reports with new report types, date filtering, and professional PDF export with branding.
 
 **Current Reports:**
 - Portfolio Summary

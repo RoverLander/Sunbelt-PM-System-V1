@@ -5,15 +5,17 @@
 // Provides workflow analytics, performance metrics, and trend analysis.
 //
 // Created: January 10, 2026
+// Updated: January 14, 2026 - Added date filtering, PDF export, new report types
 // ============================================================================
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   BarChart3,
   TrendingUp,
   TrendingDown,
   AlertTriangle,
   CheckCircle2,
+  CheckSquare,
   Clock,
   DollarSign,
   FileText,
@@ -31,7 +33,14 @@ import {
   GitBranch,
   AlertCircle,
   ChevronRight,
-  PieChart
+  PieChart,
+  Printer,
+  Truck,
+  UserCheck,
+  Factory,
+  ShieldAlert,
+  CalendarDays,
+  ChevronDown
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -60,7 +69,20 @@ const REPORT_SECTIONS = [
   { id: 'changes', label: 'Change Orders', icon: Layers },
   { id: 'supply', label: 'Supply Chain', icon: Package },
   { id: 'delivery', label: 'Delivery Performance', icon: Target },
+  { id: 'pipeline', label: 'Delivery Pipeline', icon: Truck },
+  { id: 'workload', label: 'PM Workload', icon: UserCheck },
+  { id: 'capacity', label: 'Factory Capacity', icon: Factory },
+  { id: 'risk', label: 'Risk Assessment', icon: ShieldAlert },
   { id: 'trends', label: 'Trends', icon: TrendingUp }
+];
+
+const DATE_RANGE_OPTIONS = [
+  { id: '30', label: 'Last 30 Days', days: 30 },
+  { id: '60', label: 'Last 60 Days', days: 60 },
+  { id: '90', label: 'Last 90 Days', days: 90 },
+  { id: 'quarter', label: 'This Quarter', days: null },
+  { id: 'year', label: 'This Year', days: null },
+  { id: 'all', label: 'All Time', days: null }
 ];
 
 // ============================================================================
@@ -213,6 +235,309 @@ function DataTable({ columns, data, emptyMessage = 'No data available' }) {
   );
 }
 
+function DateRangeSelector({ value, onChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selected = DATE_RANGE_OPTIONS.find(opt => opt.id === value) || DATE_RANGE_OPTIONS[3];
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '10px 16px',
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border-color)',
+          borderRadius: 'var(--radius-md)',
+          color: 'var(--text-primary)',
+          cursor: 'pointer',
+          fontWeight: '500',
+          fontSize: '0.875rem',
+          minWidth: '160px',
+          justifyContent: 'space-between'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <CalendarDays size={16} style={{ color: 'var(--sunbelt-orange)' }} />
+          {selected.label}
+        </div>
+        <ChevronDown size={14} style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+      </button>
+      {isOpen && (
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+            onClick={() => setIsOpen(false)}
+          />
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            marginTop: '4px',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-lg)',
+            zIndex: 100,
+            minWidth: '180px',
+            overflow: 'hidden'
+          }}>
+            {DATE_RANGE_OPTIONS.map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => { onChange(opt.id); setIsOpen(false); }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '10px 16px',
+                  background: value === opt.id ? 'var(--sunbelt-orange)15' : 'transparent',
+                  border: 'none',
+                  color: value === opt.id ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+                  fontSize: '0.875rem',
+                  fontWeight: value === opt.id ? '600' : '500',
+                  textAlign: 'left',
+                  cursor: 'pointer'
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// PDF EXPORT FUNCTION
+// ============================================================================
+const generateReportPDF = (metrics, activeSection, dateRangeLabel, projects, tasks) => {
+  const today = new Date().toLocaleDateString('en-US', {
+    year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  const formatCurrency = (amount) => {
+    if (!amount) return '$0';
+    if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
+    if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
+    return `$${amount.toLocaleString()}`;
+  };
+
+  const sectionTitle = REPORT_SECTIONS.find(s => s.id === activeSection)?.label || 'Executive Report';
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Sunbelt Executive Report - ${sectionTitle}</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          color: #1e293b;
+          line-height: 1.5;
+          padding: 40px;
+        }
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          border-bottom: 3px solid #FF6B35;
+          padding-bottom: 20px;
+          margin-bottom: 30px;
+        }
+        .logo { font-size: 24px; font-weight: 700; color: #FF6B35; }
+        .logo-sub { font-size: 12px; color: #64748b; }
+        .report-title { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+        .report-subtitle { font-size: 14px; color: #64748b; }
+        .meta { text-align: right; font-size: 12px; color: #64748b; }
+        .section { margin-bottom: 30px; }
+        .section-title {
+          font-size: 18px;
+          font-weight: 600;
+          color: #1e293b;
+          border-bottom: 1px solid #e2e8f0;
+          padding-bottom: 8px;
+          margin-bottom: 16px;
+        }
+        .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .metric-card {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 16px;
+        }
+        .metric-label { font-size: 12px; color: #64748b; margin-bottom: 4px; }
+        .metric-value { font-size: 24px; font-weight: 700; color: #1e293b; }
+        .metric-sub { font-size: 11px; color: #94a3b8; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        th {
+          background: #f8fafc;
+          padding: 10px 12px;
+          text-align: left;
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          color: #64748b;
+          border-bottom: 2px solid #e2e8f0;
+        }
+        td {
+          padding: 10px 12px;
+          border-bottom: 1px solid #e2e8f0;
+          font-size: 13px;
+        }
+        .status-good { color: #22c55e; }
+        .status-warning { color: #f59e0b; }
+        .status-danger { color: #ef4444; }
+        .footer {
+          margin-top: 40px;
+          padding-top: 20px;
+          border-top: 1px solid #e2e8f0;
+          font-size: 11px;
+          color: #94a3b8;
+          display: flex;
+          justify-content: space-between;
+        }
+        @media print {
+          body { padding: 20px; }
+          .no-print { display: none; }
+        }
+        @page { margin: 0.5in; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <div class="logo">SUNBELT MODULAR</div>
+          <div class="logo-sub">Project Management System</div>
+        </div>
+        <div style="text-align: center; flex: 1;">
+          <div class="report-title">${sectionTitle}</div>
+          <div class="report-subtitle">Executive Dashboard Report</div>
+        </div>
+        <div class="meta">
+          <div>Generated: ${today}</div>
+          <div>Period: ${dateRangeLabel}</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Portfolio Overview</div>
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">Active Projects</div>
+            <div class="metric-value">${metrics?.portfolio?.activeProjects || 0}</div>
+            <div class="metric-sub">${metrics?.portfolio?.totalProjects || 0} total</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Active Pipeline</div>
+            <div class="metric-value">${formatCurrency(metrics?.portfolio?.activeContractValue)}</div>
+            <div class="metric-sub">${formatCurrency(metrics?.portfolio?.totalContractValue)} total</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">On-Time Delivery</div>
+            <div class="metric-value">${metrics?.performance?.onTimeDeliveryRate || 0}%</div>
+            <div class="metric-sub">Completed projects</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Total Overdue</div>
+            <div class="metric-value">${metrics?.health?.totalOverdue || 0}</div>
+            <div class="metric-sub">${metrics?.health?.overdueTasks || 0} tasks, ${metrics?.health?.overdueRFIs || 0} RFIs</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Performance Metrics</div>
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">Drawing Approval Rate</div>
+            <div class="metric-value">${metrics?.performance?.drawingApprovalRate || 0}%</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Avg Drawing Cycle</div>
+            <div class="metric-value">${metrics?.performance?.avgDrawingCycleTime || 'N/A'}${metrics?.performance?.avgDrawingCycleTime ? 'd' : ''}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Pending Change Orders</div>
+            <div class="metric-value">${metrics?.health?.pendingChangeOrders || 0}</div>
+            <div class="metric-sub">${formatCurrency(metrics?.financial?.pendingChangeOrderValue)}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Delayed Long Lead</div>
+            <div class="metric-value">${metrics?.health?.delayedLongLeadItems || 0}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Workflow Phase Distribution</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Phase</th>
+              <th>Projects</th>
+              <th>Percentage</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(metrics?.workflow?.breakdown || []).map(phase => `
+              <tr>
+                <td>${phase.phaseName}</td>
+                <td>${phase.count}</td>
+                <td>${phase.percentage}%</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      ${(metrics?.topConcerns || []).length > 0 ? `
+      <div class="section">
+        <div class="section-title">Items Requiring Attention</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Issue Type</th>
+              <th>Count</th>
+              <th>Severity</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${metrics.topConcerns.map(concern => `
+              <tr>
+                <td>${concern.type}</td>
+                <td>${concern.count}</td>
+                <td class="${concern.severity === 'high' ? 'status-danger' : 'status-warning'}">${concern.severity.toUpperCase()}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      ` : ''}
+
+      <div class="footer">
+        <div>Sunbelt Modular - Confidential</div>
+        <div>Page 1 of 1</div>
+        <div>Report ID: RPT-${Date.now()}</div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const printWindow = window.open('', '_blank', 'width=900,height=700');
+  if (!printWindow) {
+    alert('Please allow popups to generate PDF. Check your browser settings.');
+    return;
+  }
+  printWindow.document.write(htmlContent);
+  printWindow.document.close();
+  printWindow.onload = () => setTimeout(() => printWindow.print(), 300);
+};
+
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -223,10 +548,12 @@ function ExecutiveReports() {
   // State
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState('overview');
-  const [dateRange, setDateRange] = useState('quarter'); // month, quarter, year, all
+  const [dateRange, setDateRange] = useState('90'); // Default to 90 days
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Data state
   const [projects, setProjects] = useState([]);
+  const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [rfis, setRFIs] = useState([]);
   const [submittals, setSubmittals] = useState([]);
@@ -235,6 +562,7 @@ function ExecutiveReports() {
   const [drawingVersions, setDrawingVersions] = useState([]);
   const [changeOrders, setChangeOrders] = useState([]);
   const [longLeadItems, setLongLeadItems] = useState([]);
+  const [factories, setFactories] = useState([]);
 
   // Fetch all data
   useEffect(() => {
@@ -246,6 +574,7 @@ function ExecutiveReports() {
     try {
       const [
         projectsRes,
+        usersRes,
         tasksRes,
         rfisRes,
         submittalsRes,
@@ -253,9 +582,11 @@ function ExecutiveReports() {
         statusesRes,
         drawingsRes,
         changeOrdersRes,
-        longLeadRes
+        longLeadRes,
+        factoriesRes
       ] = await Promise.all([
         supabase.from('projects').select('*'),
+        supabase.from('users').select('*'),
         supabase.from('tasks').select('*'),
         supabase.from('rfis').select('*'),
         supabase.from('submittals').select('*'),
@@ -263,10 +594,12 @@ function ExecutiveReports() {
         supabase.from('project_workflow_status').select('*'),
         supabase.from('drawing_versions').select('*'),
         supabase.from('change_orders').select('*'),
-        supabase.from('long_lead_items').select('*')
+        supabase.from('long_lead_items').select('*'),
+        supabase.from('factories').select('*')
       ]);
 
       setProjects(projectsRes.data || []);
+      setUsers(usersRes.data || []);
       setTasks(tasksRes.data || []);
       setRFIs(rfisRes.data || []);
       setSubmittals(submittalsRes.data || []);
@@ -275,12 +608,44 @@ function ExecutiveReports() {
       setDrawingVersions(drawingsRes.data || []);
       setChangeOrders(changeOrdersRes.data || []);
       setLongLeadItems(longLeadRes.data || []);
+      setFactories(factoriesRes.data || []);
     } catch (error) {
       console.error('Error fetching report data:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  // Get date range label
+  const dateRangeLabel = useMemo(() => {
+    const option = DATE_RANGE_OPTIONS.find(opt => opt.id === dateRange);
+    return option?.label || 'All Time';
+  }, [dateRange]);
+
+  // Filter data by date range
+  const getDateFilter = useCallback(() => {
+    const option = DATE_RANGE_OPTIONS.find(opt => opt.id === dateRange);
+    if (!option) return null;
+
+    const now = new Date();
+    let startDate = null;
+
+    if (option.days) {
+      startDate = new Date(now.getTime() - option.days * 24 * 60 * 60 * 1000);
+    } else if (option.id === 'quarter') {
+      const quarter = Math.floor(now.getMonth() / 3);
+      startDate = new Date(now.getFullYear(), quarter * 3, 1);
+    } else if (option.id === 'year') {
+      startDate = new Date(now.getFullYear(), 0, 1);
+    }
+
+    return startDate;
+  }, [dateRange]);
+
+  // Handle PDF export
+  const handleExportPDF = useCallback(() => {
+    generateReportPDF(metrics, activeSection, dateRangeLabel, projects, tasks);
+  }, [metrics, activeSection, dateRangeLabel, projects, tasks]);
 
   // Calculate all metrics
   const metrics = useMemo(() => {
@@ -1103,6 +1468,543 @@ function ExecutiveReports() {
   };
 
   // ============================================================================
+  // NEW REPORT SECTIONS
+  // ============================================================================
+
+  const renderPipeline = () => {
+    // Calculate delivery pipeline data
+    const activeProjects = projects.filter(p => p.status === 'Active' || p.status === 'In Progress');
+    const now = new Date();
+    const next30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const next60 = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+    const next90 = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+
+    const deliveriesNext30 = activeProjects.filter(p => {
+      const delivery = p.delivery_date ? new Date(p.delivery_date) : null;
+      return delivery && delivery <= next30;
+    });
+    const deliveriesNext60 = activeProjects.filter(p => {
+      const delivery = p.delivery_date ? new Date(p.delivery_date) : null;
+      return delivery && delivery > next30 && delivery <= next60;
+    });
+    const deliveriesNext90 = activeProjects.filter(p => {
+      const delivery = p.delivery_date ? new Date(p.delivery_date) : null;
+      return delivery && delivery > next60 && delivery <= next90;
+    });
+    const deliveriesBeyond = activeProjects.filter(p => {
+      const delivery = p.delivery_date ? new Date(p.delivery_date) : null;
+      return delivery && delivery > next90;
+    });
+
+    const pipelineValue30 = deliveriesNext30.reduce((sum, p) => sum + (p.contract_value || 0), 0);
+    const pipelineValue60 = deliveriesNext60.reduce((sum, p) => sum + (p.contract_value || 0), 0);
+    const pipelineValue90 = deliveriesNext90.reduce((sum, p) => sum + (p.contract_value || 0), 0);
+
+    return (
+      <div>
+        <SectionHeader
+          icon={Truck}
+          title="Delivery Pipeline"
+          subtitle="Upcoming deliveries and scheduling overview"
+        />
+
+        {/* Pipeline Summary */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '16px',
+          marginBottom: '24px'
+        }}>
+          <MetricCard
+            icon={Truck}
+            label="Next 30 Days"
+            value={deliveriesNext30.length}
+            subValue={formatCurrency(pipelineValue30)}
+            color="#ef4444"
+            large
+          />
+          <MetricCard
+            icon={Truck}
+            label="31-60 Days"
+            value={deliveriesNext60.length}
+            subValue={formatCurrency(pipelineValue60)}
+            color="#f59e0b"
+          />
+          <MetricCard
+            icon={Truck}
+            label="61-90 Days"
+            value={deliveriesNext90.length}
+            subValue={formatCurrency(pipelineValue90)}
+            color="#22c55e"
+          />
+          <MetricCard
+            icon={Calendar}
+            label="Beyond 90 Days"
+            value={deliveriesBeyond.length}
+            color="var(--info)"
+          />
+        </div>
+
+        {/* Upcoming Deliveries Table */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--border-color)',
+          overflow: 'hidden'
+        }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color)' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
+              Upcoming Deliveries (Next 90 Days)
+            </h3>
+          </div>
+          <DataTable
+            columns={[
+              { key: 'project_number', header: 'Project #' },
+              { key: 'name', header: 'Project Name' },
+              { key: 'factory', header: 'Factory' },
+              { key: 'delivery_date', header: 'Delivery Date', render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+              { key: 'daysUntil', header: 'Days Until', align: 'center', render: (_, row) => {
+                const delivery = row.delivery_date ? new Date(row.delivery_date) : null;
+                if (!delivery) return '—';
+                const days = Math.ceil((delivery - now) / (1000 * 60 * 60 * 24));
+                return (
+                  <span style={{ color: days <= 14 ? 'var(--danger)' : days <= 30 ? 'var(--warning)' : 'var(--text-primary)' }}>
+                    {days}d
+                  </span>
+                );
+              }},
+              { key: 'contract_value', header: 'Value', align: 'right', render: (v) => formatCurrency(v) }
+            ]}
+            data={[...deliveriesNext30, ...deliveriesNext60, ...deliveriesNext90].sort((a, b) =>
+              new Date(a.delivery_date) - new Date(b.delivery_date)
+            ).slice(0, 15)}
+            emptyMessage="No upcoming deliveries"
+          />
+        </div>
+      </div>
+    );
+  };
+
+  const renderWorkload = () => {
+    // Calculate PM workload
+    const pms = users.filter(u => u.role === 'PM' || u.role === 'Project_Manager');
+    const pmWorkload = pms.map(pm => {
+      const pmProjects = projects.filter(p => p.pm_id === pm.id && (p.status === 'Active' || p.status === 'In Progress'));
+      const pmTasks = tasks.filter(t => t.assigned_to === pm.id && t.status !== 'Completed');
+      const pmOverdueTasks = pmTasks.filter(t => t.due_date && new Date(t.due_date) < new Date());
+      const pmRFIs = rfis.filter(r => r.internal_owner === pm.id && r.status !== 'Answered');
+      const totalValue = pmProjects.reduce((sum, p) => sum + (p.contract_value || 0), 0);
+
+      return {
+        name: pm.name,
+        projectCount: pmProjects.length,
+        taskCount: pmTasks.length,
+        overdueTasks: pmOverdueTasks.length,
+        openRFIs: pmRFIs.length,
+        totalValue,
+        utilization: Math.min(100, Math.round((pmProjects.length / 8) * 100)) // Assume 8 projects is 100% capacity
+      };
+    }).sort((a, b) => b.projectCount - a.projectCount);
+
+    const avgProjects = pmWorkload.length > 0 ? (pmWorkload.reduce((sum, pm) => sum + pm.projectCount, 0) / pmWorkload.length).toFixed(1) : 0;
+    const avgTasks = pmWorkload.length > 0 ? (pmWorkload.reduce((sum, pm) => sum + pm.taskCount, 0) / pmWorkload.length).toFixed(1) : 0;
+    const totalOverdue = pmWorkload.reduce((sum, pm) => sum + pm.overdueTasks, 0);
+
+    return (
+      <div>
+        <SectionHeader
+          icon={UserCheck}
+          title="PM Workload Analysis"
+          subtitle="Project manager capacity and task distribution"
+        />
+
+        {/* Summary */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '16px',
+          marginBottom: '24px'
+        }}>
+          <MetricCard
+            icon={Users}
+            label="Active PMs"
+            value={pms.length}
+            color="var(--sunbelt-orange)"
+            large
+          />
+          <MetricCard
+            icon={Building2}
+            label="Avg Projects/PM"
+            value={avgProjects}
+            color="var(--info)"
+          />
+          <MetricCard
+            icon={CheckSquare}
+            label="Avg Tasks/PM"
+            value={avgTasks}
+            color="var(--success)"
+          />
+          <MetricCard
+            icon={AlertTriangle}
+            label="Total Overdue Tasks"
+            value={totalOverdue}
+            color={totalOverdue > 10 ? 'var(--danger)' : 'var(--warning)'}
+          />
+        </div>
+
+        {/* PM Table */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--border-color)',
+          overflow: 'hidden'
+        }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color)' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
+              Project Manager Workload
+            </h3>
+          </div>
+          <DataTable
+            columns={[
+              { key: 'name', header: 'Project Manager' },
+              { key: 'projectCount', header: 'Projects', align: 'center' },
+              { key: 'taskCount', header: 'Open Tasks', align: 'center' },
+              { key: 'overdueTasks', header: 'Overdue', align: 'center', render: (v) => (
+                <span style={{ color: v > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>{v}</span>
+              )},
+              { key: 'openRFIs', header: 'Open RFIs', align: 'center' },
+              { key: 'totalValue', header: 'Portfolio Value', align: 'right', render: (v) => formatCurrency(v) },
+              { key: 'utilization', header: 'Utilization', align: 'center', render: (v) => (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '60px',
+                    height: '8px',
+                    background: 'var(--bg-tertiary)',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${v}%`,
+                      background: v >= 90 ? 'var(--danger)' : v >= 70 ? 'var(--warning)' : 'var(--success)',
+                      borderRadius: '4px'
+                    }} />
+                  </div>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{v}%</span>
+                </div>
+              )}
+            ]}
+            data={pmWorkload}
+            emptyMessage="No project managers found"
+          />
+        </div>
+      </div>
+    );
+  };
+
+  const renderCapacity = () => {
+    // Calculate factory capacity
+    const factoryData = factories.map(factory => {
+      const factoryProjects = projects.filter(p => p.factory === factory.code && (p.status === 'Active' || p.status === 'In Progress'));
+      const completedThisMonth = projects.filter(p => {
+        if (p.factory !== factory.code || p.status !== 'Completed') return false;
+        const completed = p.actual_delivery ? new Date(p.actual_delivery) : null;
+        if (!completed) return false;
+        const now = new Date();
+        return completed.getMonth() === now.getMonth() && completed.getFullYear() === now.getFullYear();
+      }).length;
+
+      const upcoming30 = factoryProjects.filter(p => {
+        const delivery = p.delivery_date ? new Date(p.delivery_date) : null;
+        if (!delivery) return false;
+        const now = new Date();
+        const next30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        return delivery <= next30;
+      }).length;
+
+      const totalValue = factoryProjects.reduce((sum, p) => sum + (p.contract_value || 0), 0);
+
+      return {
+        factory: factory.code,
+        name: factory.name,
+        activeProjects: factoryProjects.length,
+        completedThisMonth,
+        upcoming30,
+        totalValue,
+        capacity: factory.capacity || 10,
+        utilization: Math.round((factoryProjects.length / (factory.capacity || 10)) * 100)
+      };
+    }).filter(f => f.activeProjects > 0 || f.completedThisMonth > 0);
+
+    const totalActive = factoryData.reduce((sum, f) => sum + f.activeProjects, 0);
+    const totalCapacity = factoryData.reduce((sum, f) => sum + f.capacity, 0);
+    const avgUtilization = totalCapacity > 0 ? Math.round((totalActive / totalCapacity) * 100) : 0;
+
+    return (
+      <div>
+        <SectionHeader
+          icon={Factory}
+          title="Factory Capacity"
+          subtitle="Production capacity and factory utilization"
+        />
+
+        {/* Summary */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '16px',
+          marginBottom: '24px'
+        }}>
+          <MetricCard
+            icon={Factory}
+            label="Active Factories"
+            value={factoryData.length}
+            color="var(--sunbelt-orange)"
+            large
+          />
+          <MetricCard
+            icon={Building2}
+            label="Total Active Projects"
+            value={totalActive}
+            color="var(--info)"
+          />
+          <MetricCard
+            icon={Activity}
+            label="Avg Utilization"
+            value={`${avgUtilization}%`}
+            color={avgUtilization >= 90 ? 'var(--danger)' : avgUtilization >= 70 ? 'var(--warning)' : 'var(--success)'}
+          />
+          <MetricCard
+            icon={Truck}
+            label="Upcoming (30d)"
+            value={factoryData.reduce((sum, f) => sum + f.upcoming30, 0)}
+            color="var(--warning)"
+          />
+        </div>
+
+        {/* Factory Table */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--border-color)',
+          overflow: 'hidden'
+        }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color)' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>
+              Factory Performance
+            </h3>
+          </div>
+          <DataTable
+            columns={[
+              { key: 'factory', header: 'Code' },
+              { key: 'name', header: 'Factory Name' },
+              { key: 'activeProjects', header: 'Active', align: 'center' },
+              { key: 'completedThisMonth', header: 'Completed (MTD)', align: 'center' },
+              { key: 'upcoming30', header: 'Due (30d)', align: 'center' },
+              { key: 'totalValue', header: 'Portfolio Value', align: 'right', render: (v) => formatCurrency(v) },
+              { key: 'utilization', header: 'Utilization', align: 'center', render: (v) => (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '60px',
+                    height: '8px',
+                    background: 'var(--bg-tertiary)',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${Math.min(100, v)}%`,
+                      background: v >= 100 ? 'var(--danger)' : v >= 80 ? 'var(--warning)' : 'var(--success)',
+                      borderRadius: '4px'
+                    }} />
+                  </div>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{v}%</span>
+                </div>
+              )}
+            ]}
+            data={factoryData.sort((a, b) => b.utilization - a.utilization)}
+            emptyMessage="No factory data available"
+          />
+        </div>
+      </div>
+    );
+  };
+
+  const renderRisk = () => {
+    // Calculate risk metrics
+    const activeProjects = projects.filter(p => p.status === 'Active' || p.status === 'In Progress');
+    const now = new Date();
+
+    // Project health distribution
+    const healthCounts = { 'On Track': 0, 'At Risk': 0, 'Behind': 0, 'Critical': 0 };
+    activeProjects.forEach(p => {
+      const health = p.health_status || 'On Track';
+      if (healthCounts[health] !== undefined) healthCounts[health]++;
+    });
+
+    // Overdue items
+    const overdueTasks = tasks.filter(t => t.status !== 'Completed' && t.due_date && new Date(t.due_date) < now);
+    const overdueRFIs = rfis.filter(r => r.status !== 'Answered' && r.due_date && new Date(r.due_date) < now);
+    const overdueSubmittals = submittals.filter(s => s.status !== 'Approved' && s.due_date && new Date(s.due_date) < now);
+
+    // Projects with multiple issues
+    const projectRisks = activeProjects.map(p => {
+      const pTasks = tasks.filter(t => t.project_id === p.id && t.status !== 'Completed' && t.due_date && new Date(t.due_date) < now);
+      const pRFIs = rfis.filter(r => r.project_id === p.id && r.status !== 'Answered' && r.due_date && new Date(r.due_date) < now);
+      const pSubmittals = submittals.filter(s => s.project_id === p.id && s.status !== 'Approved' && s.due_date && new Date(s.due_date) < now);
+      const deliveryDays = p.delivery_date ? Math.ceil((new Date(p.delivery_date) - now) / (1000 * 60 * 60 * 24)) : null;
+
+      const riskScore = pTasks.length * 1 + pRFIs.length * 2 + pSubmittals.length * 1.5 +
+        (p.health_status === 'Critical' ? 10 : p.health_status === 'Behind' ? 5 : p.health_status === 'At Risk' ? 3 : 0) +
+        (deliveryDays !== null && deliveryDays <= 14 && deliveryDays > 0 ? 3 : 0);
+
+      return {
+        ...p,
+        overdueTasks: pTasks.length,
+        overdueRFIs: pRFIs.length,
+        overdueSubmittals: pSubmittals.length,
+        deliveryDays,
+        riskScore
+      };
+    }).filter(p => p.riskScore > 0).sort((a, b) => b.riskScore - a.riskScore);
+
+    const criticalProjects = projectRisks.filter(p => p.riskScore >= 10);
+    const atRiskProjects = projectRisks.filter(p => p.riskScore >= 5 && p.riskScore < 10);
+
+    return (
+      <div>
+        <SectionHeader
+          icon={ShieldAlert}
+          title="Risk Assessment"
+          subtitle="Portfolio risk analysis and project health overview"
+        />
+
+        {/* Risk Summary */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '16px',
+          marginBottom: '24px'
+        }}>
+          <MetricCard
+            icon={AlertCircle}
+            label="Critical Projects"
+            value={criticalProjects.length}
+            color="var(--danger)"
+            large
+          />
+          <MetricCard
+            icon={AlertTriangle}
+            label="At Risk Projects"
+            value={atRiskProjects.length}
+            color="var(--warning)"
+          />
+          <MetricCard
+            icon={Clock}
+            label="Overdue Items"
+            value={overdueTasks.length + overdueRFIs.length + overdueSubmittals.length}
+            subValue={`${overdueTasks.length} tasks, ${overdueRFIs.length} RFIs`}
+            color="var(--danger)"
+          />
+          <MetricCard
+            icon={CheckCircle2}
+            label="On Track"
+            value={healthCounts['On Track']}
+            color="var(--success)"
+          />
+        </div>
+
+        {/* Health Distribution */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 2fr',
+          gap: '24px',
+          marginBottom: '24px'
+        }}>
+          <div style={{
+            background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '24px',
+            border: '1px solid var(--border-color)'
+          }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '20px' }}>
+              Project Health Distribution
+            </h3>
+            {Object.entries(healthCounts).map(([status, count]) => (
+              <div key={status} style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '12px 0',
+                borderBottom: '1px solid var(--border-color)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    background: status === 'On Track' ? 'var(--success)' :
+                               status === 'At Risk' ? 'var(--warning)' :
+                               status === 'Behind' ? 'var(--sunbelt-orange)' : 'var(--danger)'
+                  }} />
+                  <span style={{ color: 'var(--text-primary)' }}>{status}</span>
+                </div>
+                <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{count}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* High Risk Projects */}
+          <div style={{
+            background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-color)',
+            overflow: 'hidden'
+          }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color)', background: 'rgba(239, 68, 68, 0.1)' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--danger)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle size={18} />
+                High Risk Projects
+              </h3>
+            </div>
+            <DataTable
+              columns={[
+                { key: 'project_number', header: 'Project #' },
+                { key: 'name', header: 'Name' },
+                { key: 'health_status', header: 'Health', render: (v) => (
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    background: v === 'Critical' ? 'rgba(239, 68, 68, 0.2)' :
+                               v === 'Behind' ? 'rgba(245, 158, 11, 0.2)' :
+                               v === 'At Risk' ? 'rgba(251, 191, 36, 0.2)' : 'rgba(34, 197, 94, 0.2)',
+                    color: v === 'Critical' ? 'var(--danger)' :
+                           v === 'Behind' ? 'var(--warning)' :
+                           v === 'At Risk' ? '#b45309' : 'var(--success)'
+                  }}>{v || 'On Track'}</span>
+                )},
+                { key: 'overdueTasks', header: 'Overdue Tasks', align: 'center' },
+                { key: 'overdueRFIs', header: 'Overdue RFIs', align: 'center' },
+                { key: 'deliveryDays', header: 'Days to Delivery', align: 'center', render: (v) => (
+                  v !== null ? (
+                    <span style={{ color: v <= 14 ? 'var(--danger)' : v <= 30 ? 'var(--warning)' : 'var(--text-primary)' }}>
+                      {v}d
+                    </span>
+                  ) : '—'
+                )}
+              ]}
+              data={projectRisks.slice(0, 10)}
+              emptyMessage="No high-risk projects identified"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================================
   // MAIN RENDER
   // ============================================================================
 
@@ -1112,7 +2014,7 @@ function ExecutiveReports() {
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         marginBottom: '24px'
       }}>
         <div>
@@ -1124,24 +2026,47 @@ function ExecutiveReports() {
             Comprehensive analytics and performance metrics
           </p>
         </div>
-        <button
-          onClick={fetchAllData}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 20px',
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-primary)',
-            cursor: 'pointer',
-            fontWeight: '500'
-          }}
-        >
-          <RefreshCw size={16} />
-          Refresh Data
-        </button>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <DateRangeSelector value={dateRange} onChange={setDateRange} />
+          <button
+            onClick={handleExportPDF}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 16px',
+              background: 'var(--sunbelt-orange)',
+              border: 'none',
+              borderRadius: 'var(--radius-md)',
+              color: 'white',
+              cursor: 'pointer',
+              fontWeight: '500',
+              fontSize: '0.875rem'
+            }}
+          >
+            <Printer size={16} />
+            Export PDF
+          </button>
+          <button
+            onClick={fetchAllData}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 16px',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              fontWeight: '500',
+              fontSize: '0.875rem'
+            }}
+          >
+            <RefreshCw size={16} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Section Navigation */}
@@ -1196,6 +2121,10 @@ function ExecutiveReports() {
         {activeSection === 'changes' && renderChangeOrders()}
         {activeSection === 'supply' && renderSupplyChain()}
         {activeSection === 'delivery' && renderDelivery()}
+        {activeSection === 'pipeline' && renderPipeline()}
+        {activeSection === 'workload' && renderWorkload()}
+        {activeSection === 'capacity' && renderCapacity()}
+        {activeSection === 'risk' && renderRisk()}
         {activeSection === 'trends' && renderTrends()}
       </div>
     </div>
