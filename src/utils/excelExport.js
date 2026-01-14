@@ -199,8 +199,6 @@ const addProjectHeader = (worksheet, projectInfo, title, generatedDate) => {
   worksheet.addRow([]);
 
   // Project info rows
-  const infoStyle = { font: FONTS.bold };
-
   const projectRow = worksheet.addRow(['Project:', projectInfo.name]);
   projectRow.getCell(1).font = FONTS.bold;
 
@@ -293,7 +291,6 @@ export const exportRFILog = async (rfis, projectInfo) => {
 
   const headerRow = worksheet.addRow(columnHeaders);
   styleHeaderRow(headerRow);
-  const headerRowNum = headerRow.number;
 
   // Sort RFIs by number
   const sortedRFIs = [...rfis].sort((a, b) => (a.number || 0) - (b.number || 0));

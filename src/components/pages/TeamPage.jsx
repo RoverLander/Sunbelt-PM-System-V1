@@ -251,8 +251,6 @@ function PMCard({ pm, isDragging, onDragStart, onDragEnd, showRemove, onRemove, 
 function TeamColumn({
   team,
   members,
-  allPMs,
-  teamMemberIds,
   onDrop,
   onRemoveMember,
   onEditTeam,
@@ -1320,8 +1318,6 @@ function TeamPage() {
                   key={team.id}
                   team={team}
                   members={getTeamMembers(team.id)}
-                  allPMs={pmData}
-                  teamMemberIds={assignedPMIds}
                   onDrop={handleAddMemberToTeam}
                   onRemoveMember={handleRemoveMemberFromTeam}
                   onEditTeam={(t) => { setEditingTeam(t); setShowTeamModal(true); }}
