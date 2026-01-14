@@ -203,7 +203,7 @@ function PrivilegedUserCard({ user }) {
         fontSize: '0.75rem',
         fontWeight: '600'
       }}>
-        {user.role}
+        {user.role?.replace(/_/g, ' ')}
       </div>
       <div style={{
         display: 'flex',

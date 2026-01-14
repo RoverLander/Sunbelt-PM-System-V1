@@ -264,7 +264,7 @@ const PMHealthPanel = ({ expanded = false, showTeam = false }) => {
             <div className="font-semibold text-white">
               {currentUser?.name || 'Loading...'}
             </div>
-            <div className="text-xs text-slate-400">{currentUser?.role}</div>
+            <div className="text-xs text-slate-400">{currentUser?.role?.replace(/_/g, ' ')}</div>
 
             {/* Health bar */}
             <div className="mt-2">

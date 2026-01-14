@@ -439,7 +439,6 @@ function AddTaskModal({
       const { data, error } = await supabase
         .from('workflow_stations')
         .select('*')
-        .eq('is_active', true)
         .order('display_order');
 
       if (error) throw error;

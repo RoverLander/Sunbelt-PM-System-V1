@@ -121,7 +121,7 @@ function AppContent() {
           localStorage.setItem('dashboardType', 'it');
         }
         // PM users default to pm dashboard
-        else if (role === 'pm' || role === 'project manager') {
+        else if (role === 'pm' || role === 'project manager' || role === 'project_manager') {
           const storedType = localStorage.getItem('dashboardType');
           // PMs can only access pm dashboard
           if (storedType !== 'pm') {

@@ -516,7 +516,7 @@ function Sidebar({
     const role = (currentUser.role || '').toLowerCase();
 
     const access = {
-      pm: ['pm', 'director', 'vp', 'it', 'it_manager', 'admin', 'project coordinator', 'plant manager'],
+      pm: ['pm', 'project_manager', 'director', 'vp', 'it', 'it_manager', 'admin', 'project coordinator', 'plant manager'],
       director: ['director', 'vp', 'admin'],
       vp: ['vp', 'admin'],
       it: ['it', 'it_manager', 'admin'],
@@ -1274,7 +1274,7 @@ function Sidebar({
               {currentUser?.name || 'Loading...'}
             </div>
             <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
-              {currentUser?.role || '—'}
+              {currentUser?.role?.replace(/_/g, ' ') || '—'}
             </div>
           </div>
         </div>

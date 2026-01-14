@@ -1,61 +1,122 @@
 # Demo Data Setup
 
-Run these scripts **in order** to prepare the database for demo.
+Run these SQL scripts **in order** to reset and populate demo data.
 
-## Scripts
+## Quick Start
 
-| Order | File | What it does |
-|-------|------|--------------|
-| 1 | `01_CLEAR_DATA.sql` | Clears all project data (keeps users) |
-| 2 | `02_CREATE_PC_USER.sql` | Creates Juanita Earnest PC account |
-| 3 | `03_IMPORT_PROJECTS.sql` | Imports 20 real projects from Excel |
-| 4 | `04_GENERATE_SAMPLE_DATA.sql` | Creates tasks, RFIs, submittals, milestones |
+Run all scripts in Supabase SQL Editor in this order:
 
-## After Running SQL Scripts
-
-**Create the PC user in Supabase Auth:**
-1. Go to Supabase Dashboard → Authentication → Users
-2. Click "Add User"
-3. Email: `juanita.earnest@phoenixmodular.com`
-4. Set a password
-5. User can now log in
+```
+01_CLEAR_DATA.sql          → Clears existing project data
+02_FACTORIES_TABLE.sql     → Creates factories with Praxis codes
+03_WORKFLOW_STATIONS.sql   → Creates 21 workflow stations
+04_IMPORT_PROJECTS.sql     → Imports 20 demo projects
+05_PROJECT_DATA.sql        → Generates tasks, RFIs, submittals, etc.
+06_WORKFLOW_STATUS.sql     → Initializes workflow status per project
+07_SALES_DATA.sql          → Creates sales pipeline for Mitch
+```
 
 ## What Gets Created
 
-### 20 Projects by Factory:
-- **Phoenix** (4): PMI-6781, PMI-6798, DO-0521-1-25, PMI-6749-6763
-- **Southeast** (8): SMM-21145, SMM-21003, SMM-21055, SMM-21056, SMM-21057, SMM-21054, SMM-21103, SMM-21020
-- **SSI** (5): SSI-7669, SSI-7670, SSI-7671, SSI-7672, SSI-7547
-- **Indicom** (1): 25B579-584
-- **NWBS** (1): NWBS-25250
-- **Promod** (1): SME-23038
+### 20 Projects by Workflow Phase
 
-### Project Status Mix:
-- In Progress: ~8 projects
-- Planning: ~8 projects
-- PM Handoff: ~3 projects
-- Critical health: 1 (Disney - past due)
-- At Risk health: 3
+| Phase | Projects | Status |
+|-------|----------|--------|
+| **Phase 1: Initiation** | SMM-21145, PMI-6798, DO-0521-1-25, SMM-21103 | Planning |
+| **Phase 2: Dealer Sign-Offs** | PMI-6781, SMM-21055, SMM-21056, SMM-21057, SMM-21003 (Critical), SSI-7669, SSI-7670, SME-23038 | In Progress |
+| **Phase 3: Internal Approvals** | SSI-7671, SSI-7672, SMM-21020, SSI-7547 | In Progress |
+| **Phase 4: Delivery** | SMM-21054, 25B579-584, PMI-6749-6763, NWBS-25250 | In Progress / Complete |
 
-### Sample Data per Project:
-- **Tasks**: 5-8 each (mix of completed, in progress, not started, overdue)
-- **RFIs**: 2-3 each (mix of draft, open, closed, urgent)
-- **Submittals**: 2-3 each (mix of draft, under review, approved, rejected)
-- **Milestones**: 4 each (sales handoff, drawings, production, delivery)
+### Projects by Factory (Praxis Codes)
 
-### PM Assignments:
-- Candy Juhnke: 2 projects (primary), 6 projects (backup)
-- Crystal Myers: 10 projects (primary), 1 project (backup)
-- Matthew McDaniel: 3 projects (primary), 2 projects (backup)
-- Hector Vazquez: 1 project (primary)
-- Michael Caracciolo: 4 projects (primary), 2 projects (backup)
+| Factory | Count | Projects |
+|---------|-------|----------|
+| SMM - Southeast Modular | 8 | VA modules, Disney, Google, SCIF, Patrick |
+| PMI - Phoenix Modular | 4 | Florence Medical, Aambe, LASD, R-OCC Homeless |
+| SSI - Specialized Structures | 5 | Mike Dover (4), BASF |
+| IBI - Indicom Buildings | 1 | Point Magu Naval Base |
+| NWBS - Northwest Building | 1 | Hanford AMPS |
+| PRM - Pro-Mod | 1 | Brooklyn Lot Cleaning |
+
+### Data Per Project
+
+- **Tasks**: 3-20 per project (phase-appropriate)
+- **RFIs**: 3-4 per project
+- **Submittals**: 4 per project
+- **Change Orders**: 1-2 per project (phase 2+)
+- **Long Lead Items**: 4 per project
+- **Color Selections**: 6 per project
+- **Milestones**: 6 per project
+
+### Sales Pipeline
+
+| Status | Count | Total Value |
+|--------|-------|-------------|
+| PO Received | 1 | $3,200,000 |
+| Awaiting PO | 1 | $1,450,000 |
+| Negotiating | 2 | $5,375,000 |
+| Sent | 1 | $2,100,000 |
+| Draft | 1 | $680,000 |
+| Won (Converted) | 3 | $4,500,000 |
+| Lost | 1 | $550,000 |
+| Expired | 1 | $420,000 |
+
+### PM Assignments
+
+| PM | Primary | Backup |
+|----|---------|--------|
+| Candy Juhnke | 4 | All others |
+| Crystal Meyers | 7 | - |
+| Matthew McDaniel | 5 | - |
+| Michael Caracciolo | 2 | - |
+| Hector Vazquez | 1 | - |
 
 ## Demo Highlights
 
-Show these during demo:
+### 1. Workflow Canvas (React Flow)
+- Open any project → Workflow tab → Canvas view
+- **Best projects to demo:**
+  - PMI-6781 (Phase 2 - 65% drawings in progress)
+  - SSI-7671 (Phase 3 - Engineering review)
+  - SMM-21054 (Phase 4 - Production started)
 
-1. **Critical Project**: SMM-21003 (Disney) - Past due, overdue tasks
-2. **At Risk Projects**: SSI-7670, SMM-21020, SSI-7547 - Schedule concerns
-3. **Multiple related projects**: VA modules (4 Kitchens To Go projects)
-4. **Factory diversity**: Projects across all 6 factories
-5. **Workflow tracking**: Tasks linked to workflow stations
+### 2. Critical Project Alert
+- SMM-21003 (Disney) - Past due, blocked at 95% drawings
+- Overdue tasks and urgent RFIs
+
+### 3. Sales Pipeline
+- Login as Sales Manager
+- View quotes in various stages
+- 2 quotes flagged for PM attention
+
+### 4. Factory Distribution
+- Projects across 6 different factories
+- Test factory filtering in dashboards
+
+## Health Status Distribution
+
+| Status | Count |
+|--------|-------|
+| On Track | 15 |
+| At Risk | 4 |
+| Critical | 1 |
+
+## Troubleshooting
+
+### No PM users found
+If PMs aren't assigned, ensure these users exist in Supabase Auth:
+- candy.juhnke@sunbeltmodular.com
+- crystal.meyers@sunbeltmodular.com
+- matthew.mcdaniel@sunbeltmodular.com
+
+### Workflow Canvas shows empty
+1. Check `workflow_stations` table has 21 records
+2. Check `project_workflow_status` has records for the project
+3. Verify project has `current_phase` set (1-4)
+
+### Sales quotes not showing
+Ensure `sales_quotes` table exists and has the Praxis fields from migration.
+
+---
+
+*Created: January 13, 2026*

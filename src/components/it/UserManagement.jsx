@@ -528,7 +528,7 @@ function UserManagement({ showToast }) {
                       background: `${ROLE_COLORS[user.role] || 'var(--text-tertiary)'}20`,
                       color: ROLE_COLORS[user.role] || 'var(--text-tertiary)'
                     }}>
-                      {user.role || 'No Role'}
+                      {user.role?.replace(/_/g, ' ') || 'No Role'}
                     </span>
                   </td>
 
