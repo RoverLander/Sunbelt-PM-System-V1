@@ -155,6 +155,76 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ## Recent Updates (January 2026)
 
+### January 14, 2026 (Team Builder & Excel Export Enhancement)
+
+- **Team Builder Feature - Complete**
+  - New Kanban-style team management system for Directors and VPs
+  - **Database Schema:**
+    - `teams` table - Team definitions with name, description, color
+    - `team_members` junction table - Many-to-many PM-to-team assignments
+    - RLS policies restricting access to Director/VP/Admin roles
+  - **TeamPage Redesign:**
+    - Two tabs: "All Team Members" and "Team Builder"
+    - "All Team Members" tab shows existing workload metrics
+    - "Team Builder" tab with drag-and-drop interface
+  - **Drag-and-Drop Team Assignment:**
+    - PM Pool on left side (unassigned PMs)
+    - Team columns on right (create multiple teams)
+    - Native HTML5 drag-and-drop (no external library)
+    - Visual feedback during drag operations
+    - PMs can belong to multiple teams
+  - **Team CRUD Operations:**
+    - Create teams with name, description, color picker
+    - Edit existing teams
+    - Delete teams (with confirmation)
+    - Team statistics auto-update (projects, tasks, capacity)
+  - **PM Cards Display:**
+    - Active projects count
+    - Open tasks count
+    - Pending RFIs count
+    - Visual capacity indicator (overloaded, at capacity, available)
+  - **Role-Based Visibility:**
+    - Directors see: PMs only
+    - VPs see: PMs, Directors, and Plant Managers
+  - **Migration:** `supabase/migrations/20260114_team_builder.sql`
+  - **Files Modified:** `src/components/pages/TeamPage.jsx` (complete rewrite)
+
+- **Excel Export Beautification - Complete**
+  - Upgraded from basic `xlsx` library to `exceljs` for professional styling
+  - **RFI Log Export Styling:**
+    - Dark blue header row with white bold text
+    - Frozen header row
+    - Auto-width columns
+    - Status-based row coloring (Answered=green, Open=yellow, Pending=orange)
+    - Overdue item highlighting (light red background)
+    - Summary section at bottom (totals by status)
+  - **Submittal Log Export Styling:**
+    - Same professional header styling
+    - Status-based row coloring (Approved=green, Rejected=red, Under Review=yellow)
+    - Overdue highlighting
+    - Summary section
+  - **Files Modified:** `src/utils/excelExport.js` (complete rewrite)
+  - **Package Added:** `exceljs` (npm install)
+
+- **PM Workload Report Fix - Complete**
+  - Fixed PM Workload Analysis showing all zeros
+  - Root cause: Code was using non-existent `p.pm_id` field
+  - Fixed to use `p.owner_id || p.primary_pm_id` (matches PMDashboard pattern)
+  - **Files Fixed:**
+    - `src/components/reports/ExecutiveReports.jsx`
+    - `src/components/dashboards/TeamWorkloadView.jsx`
+    - `src/components/pages/TeamPage.jsx`
+
+- **VP Team View Fix - Complete**
+  - VP's team now correctly shows all PMs, Directors, and Plant Managers
+  - Previously was only showing Director role
+  - Updated role filter array in TeamPage.jsx
+
+- **Personnel Management Page (Future)**
+  - Feature idea documented for future implementation
+  - Will include employee management, onboarding, training tracking
+  - Tabled for later planning phase
+
 ### January 14, 2026 (Late Night - Executive Reports Enhancement)
 
 - **Executive Reports - Major Upgrade**

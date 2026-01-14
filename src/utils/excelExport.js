@@ -1,30 +1,55 @@
 // ============================================================================
 // excelExport.js - Professional Excel Export for RFI and Submittal Logs
 // ============================================================================
-// Generates professionally formatted Excel spreadsheets for:
-// - RFI (Request for Information) Log
-// - Submittal Log
-//
-// Features:
-// - Project header information
-// - Styled column headers
+// Generates professionally formatted Excel spreadsheets with:
+// - Styled headers with colored backgrounds
+// - Status-based conditional formatting
+// - Overdue highlighting
 // - Auto-width columns
-// - Status-based highlighting
-// - Summary statistics
-// - Professional formatting
+// - Professional borders and typography
 // ============================================================================
 
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 // ============================================================================
-// CONSTANTS
+// STYLE CONSTANTS
 // ============================================================================
 
-const RFI_STATUSES = ['Draft', 'Open', 'Pending', 'Answered', 'Closed'];
-const SUBMITTAL_STATUSES = [
-  'Pending', 'Submitted', 'Under Review',
-  'Approved', 'Approved as Noted', 'Revise and Resubmit', 'Rejected'
-];
+const COLORS = {
+  // Header colors
+  headerBg: '2563EB',      // Blue-600
+  headerText: 'FFFFFF',    // White
+
+  // Status colors
+  approved: 'DCFCE7',      // Green-100
+  pending: 'FEF3C7',       // Amber-100
+  rejected: 'FEE2E2',      // Red-100
+  inProgress: 'DBEAFE',    // Blue-100
+  overdue: 'FEE2E2',       // Red-100
+
+  // General
+  sectionHeader: 'F3F4F6', // Gray-100
+  altRow: 'F9FAFB',        // Gray-50
+  border: 'E5E7EB',        // Gray-200
+  titleBg: '1E40AF',       // Blue-800
+};
+
+const FONTS = {
+  title: { bold: true, size: 16, color: { argb: 'FFFFFF' } },
+  header: { bold: true, size: 11, color: { argb: 'FFFFFF' } },
+  sectionHeader: { bold: true, size: 11 },
+  normal: { size: 10 },
+  bold: { bold: true, size: 10 },
+};
+
+const BORDERS = {
+  thin: {
+    top: { style: 'thin', color: { argb: COLORS.border } },
+    left: { style: 'thin', color: { argb: COLORS.border } },
+    bottom: { style: 'thin', color: { argb: COLORS.border } },
+    right: { style: 'thin', color: { argb: COLORS.border } },
+  },
+};
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -64,10 +89,85 @@ const isOverdue = (dueDate, status, closedStatuses) => {
 };
 
 /**
- * Set column widths based on content
+ * Get background color based on status
  */
-const setColumnWidths = (worksheet, data, headers) => {
-  const colWidths = headers.map((header, i) => {
+const getStatusColor = (status, type = 'rfi') => {
+  const statusLower = (status || '').toLowerCase();
+
+  if (type === 'rfi') {
+    if (statusLower === 'answered' || statusLower === 'closed') return COLORS.approved;
+    if (statusLower === 'open' || statusLower === 'pending') return COLORS.pending;
+    if (statusLower === 'draft') return COLORS.altRow;
+  } else if (type === 'submittal') {
+    if (statusLower === 'approved' || statusLower === 'approved as noted') return COLORS.approved;
+    if (statusLower === 'under review' || statusLower === 'submitted') return COLORS.inProgress;
+    if (statusLower === 'pending') return COLORS.pending;
+    if (statusLower === 'revise and resubmit' || statusLower === 'rejected') return COLORS.rejected;
+  } else if (type === 'task') {
+    if (statusLower === 'completed') return COLORS.approved;
+    if (statusLower === 'in progress') return COLORS.inProgress;
+    if (statusLower === 'not started' || statusLower === 'pending') return COLORS.pending;
+    if (statusLower === 'on hold' || statusLower === 'awaiting response') return COLORS.altRow;
+    if (statusLower === 'cancelled') return COLORS.rejected;
+  }
+
+  return null;
+};
+
+/**
+ * Style a header row
+ */
+const styleHeaderRow = (row) => {
+  row.eachCell((cell) => {
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: COLORS.headerBg }
+    };
+    cell.font = FONTS.header;
+    cell.border = BORDERS.thin;
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  });
+  row.height = 28;
+};
+
+/**
+ * Style a data row
+ */
+const styleDataRow = (row, isOverdueRow, statusColor, isAltRow) => {
+  row.eachCell((cell) => {
+    // Priority: Overdue > Status color > Alternating row
+    if (isOverdueRow) {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: COLORS.overdue }
+      };
+    } else if (statusColor) {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: statusColor }
+      };
+    } else if (isAltRow) {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: COLORS.altRow }
+      };
+    }
+    cell.font = FONTS.normal;
+    cell.border = BORDERS.thin;
+    cell.alignment = { vertical: 'middle', wrapText: true };
+  });
+  row.height = 22;
+};
+
+/**
+ * Auto-fit column widths
+ */
+const autoFitColumns = (worksheet, headers, data) => {
+  headers.forEach((header, i) => {
     const maxLength = Math.max(
       header.length,
       ...data.map(row => {
@@ -75,26 +175,89 @@ const setColumnWidths = (worksheet, data, headers) => {
         return cell ? String(cell).length : 0;
       })
     );
-    return { wch: Math.min(Math.max(maxLength + 2, 10), 50) };
+    worksheet.getColumn(i + 1).width = Math.min(Math.max(maxLength + 2, 10), 50);
   });
-  worksheet['!cols'] = colWidths;
 };
 
 /**
- * Create worksheet with header rows
+ * Add project header to worksheet
  */
-const createWorksheetWithHeader = (projectInfo, title, generatedDate) => {
-  const headerRows = [
-    [title],
-    [],
-    ['Project:', projectInfo.name],
-    ['Project Number:', projectInfo.projectNumber],
-    ['Client:', projectInfo.client || 'N/A'],
-    ['Factory:', projectInfo.factory || 'N/A'],
-    ['Generated:', generatedDate],
-    []
-  ];
-  return headerRows;
+const addProjectHeader = (worksheet, projectInfo, title, generatedDate) => {
+  // Title row
+  const titleRow = worksheet.addRow([title]);
+  titleRow.font = FONTS.title;
+  titleRow.height = 30;
+  worksheet.mergeCells(titleRow.number, 1, titleRow.number, 6);
+  titleRow.getCell(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: COLORS.titleBg }
+  };
+  titleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+
+  // Empty row
+  worksheet.addRow([]);
+
+  // Project info rows
+  const infoStyle = { font: FONTS.bold };
+
+  const projectRow = worksheet.addRow(['Project:', projectInfo.name]);
+  projectRow.getCell(1).font = FONTS.bold;
+
+  const numberRow = worksheet.addRow(['Project Number:', projectInfo.projectNumber]);
+  numberRow.getCell(1).font = FONTS.bold;
+
+  const clientRow = worksheet.addRow(['Client:', projectInfo.client || 'N/A']);
+  clientRow.getCell(1).font = FONTS.bold;
+
+  const factoryRow = worksheet.addRow(['Factory:', projectInfo.factory || 'N/A']);
+  factoryRow.getCell(1).font = FONTS.bold;
+
+  const genRow = worksheet.addRow(['Generated:', generatedDate]);
+  genRow.getCell(1).font = FONTS.bold;
+
+  // Empty row before data
+  worksheet.addRow([]);
+
+  return worksheet.rowCount;
+};
+
+/**
+ * Add summary section
+ */
+const addSummarySection = (worksheet, summaryData) => {
+  worksheet.addRow([]);
+
+  const summaryHeaderRow = worksheet.addRow(['SUMMARY']);
+  summaryHeaderRow.font = FONTS.sectionHeader;
+  summaryHeaderRow.getCell(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: COLORS.sectionHeader }
+  };
+  worksheet.mergeCells(summaryHeaderRow.number, 1, summaryHeaderRow.number, 2);
+
+  summaryData.forEach(([label, value]) => {
+    const row = worksheet.addRow([label, value]);
+    row.getCell(1).font = FONTS.bold;
+  });
+};
+
+/**
+ * Save workbook and trigger download
+ */
+const downloadWorkbook = async (workbook, filename) => {
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.URL.revokeObjectURL(url);
+  return filename;
 };
 
 // ============================================================================
@@ -106,49 +269,45 @@ const createWorksheetWithHeader = (projectInfo, title, generatedDate) => {
  * @param {Array} rfis - Array of RFI objects
  * @param {Object} projectInfo - Project information { name, projectNumber, client, factory }
  */
-export const exportRFILog = (rfis, projectInfo) => {
+export const exportRFILog = async (rfis, projectInfo) => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Sunbelt PM System';
+  workbook.created = new Date();
+
+  const worksheet = workbook.addWorksheet('RFI Log', {
+    views: [{ state: 'frozen', ySplit: 9 }] // Freeze header rows
+  });
+
   const generatedDate = new Date().toLocaleString();
 
-  // Create header section
-  const headerRows = createWorksheetWithHeader(
-    projectInfo,
-    'RFI LOG',
-    generatedDate
-  );
+  // Add project header
+  addProjectHeader(worksheet, projectInfo, 'RFI LOG', generatedDate);
 
   // Column headers
   const columnHeaders = [
-    'RFI #',
-    'Subject',
-    'Question',
-    'Status',
-    'Priority',
-    'Date Sent',
-    'Due Date',
-    'Days Open',
-    'Sent To',
-    'Email',
-    'Spec Section',
-    'Drawing Ref',
-    'Answer',
-    'Date Answered',
-    'Internal Owner',
-    'Overdue'
+    'RFI #', 'Subject', 'Question', 'Status', 'Priority',
+    'Date Sent', 'Due Date', 'Days Open', 'Sent To', 'Email',
+    'Spec Section', 'Drawing Ref', 'Answer', 'Date Answered',
+    'Internal Owner', 'Overdue'
   ];
+
+  const headerRow = worksheet.addRow(columnHeaders);
+  styleHeaderRow(headerRow);
+  const headerRowNum = headerRow.number;
 
   // Sort RFIs by number
   const sortedRFIs = [...rfis].sort((a, b) => (a.number || 0) - (b.number || 0));
 
-  // Map RFI data to rows
-  const dataRows = sortedRFIs.map(rfi => {
+  // Add data rows
+  sortedRFIs.forEach((rfi, index) => {
     const closedStatuses = ['Answered', 'Closed'];
     const daysOpen = daysBetween(
       rfi.date_sent || rfi.created_at,
       closedStatuses.includes(rfi.status) ? rfi.date_answered : null
     );
-    const overdue = isOverdue(rfi.due_date, rfi.status, closedStatuses);
+    const overdueFlag = isOverdue(rfi.due_date, rfi.status, closedStatuses);
 
-    return [
+    const rowData = [
       rfi.rfi_number || '',
       rfi.subject || '',
       rfi.question || '',
@@ -164,9 +323,23 @@ export const exportRFILog = (rfis, projectInfo) => {
       rfi.answer || '',
       formatDate(rfi.date_answered),
       rfi.internal_owner?.name || '',
-      overdue ? 'YES' : ''
+      overdueFlag ? 'YES' : ''
     ];
+
+    const row = worksheet.addRow(rowData);
+    const statusColor = getStatusColor(rfi.status, 'rfi');
+    styleDataRow(row, overdueFlag, statusColor, index % 2 === 1);
   });
+
+  // Auto-fit columns
+  const dataForWidth = sortedRFIs.map(rfi => [
+    rfi.rfi_number || '', rfi.subject || '', rfi.question || '',
+    rfi.status || '', rfi.priority || '', formatDate(rfi.date_sent),
+    formatDate(rfi.due_date), '', rfi.sent_to || '', rfi.sent_to_email || '',
+    rfi.spec_section || '', rfi.drawing_reference || '', rfi.answer || '',
+    formatDate(rfi.date_answered), rfi.internal_owner?.name || '', ''
+  ]);
+  autoFitColumns(worksheet, columnHeaders, dataForWidth);
 
   // Summary section
   const totalRFIs = rfis.length;
@@ -177,46 +350,17 @@ export const exportRFILog = (rfis, projectInfo) => {
     isOverdue(r.due_date, r.status, ['Answered', 'Closed'])
   ).length;
 
-  const summaryRows = [
-    [],
-    ['SUMMARY'],
+  addSummarySection(worksheet, [
     ['Total RFIs:', totalRFIs],
     ['Open/Pending:', openRFIs],
     ['Answered:', answeredRFIs],
     ['Closed:', closedRFIs],
     ['Overdue:', overdueRFIs]
-  ];
+  ]);
 
-  // Combine all rows
-  const allRows = [
-    ...headerRows,
-    columnHeaders,
-    ...dataRows,
-    ...summaryRows
-  ];
-
-  // Create worksheet
-  const worksheet = XLSX.utils.aoa_to_sheet(allRows);
-
-  // Set column widths
-  setColumnWidths(worksheet, dataRows, columnHeaders);
-
-  // Merge title cell
-  worksheet['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } } // Merge title row
-  ];
-
-  // Create workbook and add worksheet
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'RFI Log');
-
-  // Generate filename
+  // Generate filename and download
   const filename = `${projectInfo.projectNumber}_RFI_Log_${new Date().toISOString().split('T')[0]}.xlsx`;
-
-  // Download file
-  XLSX.writeFile(workbook, filename);
-
-  return filename;
+  return await downloadWorkbook(workbook, filename);
 };
 
 // ============================================================================
@@ -228,52 +372,44 @@ export const exportRFILog = (rfis, projectInfo) => {
  * @param {Array} submittals - Array of Submittal objects
  * @param {Object} projectInfo - Project information { name, projectNumber, client, factory }
  */
-export const exportSubmittalLog = (submittals, projectInfo) => {
+export const exportSubmittalLog = async (submittals, projectInfo) => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Sunbelt PM System';
+  workbook.created = new Date();
+
+  const worksheet = workbook.addWorksheet('Submittal Log', {
+    views: [{ state: 'frozen', ySplit: 9 }]
+  });
+
   const generatedDate = new Date().toLocaleString();
 
-  // Create header section
-  const headerRows = createWorksheetWithHeader(
-    projectInfo,
-    'SUBMITTAL LOG',
-    generatedDate
-  );
+  // Add project header
+  addProjectHeader(worksheet, projectInfo, 'SUBMITTAL LOG', generatedDate);
 
   // Column headers
   const columnHeaders = [
-    'Sub #',
-    'Title',
-    'Description',
-    'Type',
-    'Status',
-    'Priority',
-    'Rev #',
-    'Date Submitted',
-    'Due Date',
-    'Days in Review',
-    'Sent To',
-    'Email',
-    'Spec Section',
-    'Manufacturer',
-    'Model #',
-    'Reviewer Comments',
-    'Date Approved',
-    'Internal Owner',
-    'Overdue'
+    'Sub #', 'Title', 'Description', 'Type', 'Status', 'Priority',
+    'Rev #', 'Date Submitted', 'Due Date', 'Days in Review',
+    'Sent To', 'Email', 'Spec Section', 'Manufacturer', 'Model #',
+    'Reviewer Comments', 'Date Approved', 'Internal Owner', 'Overdue'
   ];
+
+  const headerRow = worksheet.addRow(columnHeaders);
+  styleHeaderRow(headerRow);
 
   // Sort submittals by number
   const sortedSubmittals = [...submittals].sort((a, b) => (a.number || 0) - (b.number || 0));
 
-  // Map submittal data to rows
-  const dataRows = sortedSubmittals.map(sub => {
+  // Add data rows
+  sortedSubmittals.forEach((sub, index) => {
     const closedStatuses = ['Approved', 'Approved as Noted', 'Rejected'];
     const daysInReview = daysBetween(
       sub.date_submitted,
       closedStatuses.includes(sub.status) ? sub.date_approved : null
     );
-    const overdue = isOverdue(sub.due_date, sub.status, closedStatuses);
+    const overdueFlag = isOverdue(sub.due_date, sub.status, closedStatuses);
 
-    return [
+    const rowData = [
       sub.submittal_number || '',
       sub.title || '',
       sub.description || '',
@@ -292,79 +428,77 @@ export const exportSubmittalLog = (submittals, projectInfo) => {
       sub.reviewer_comments || '',
       formatDate(sub.date_approved),
       sub.internal_owner?.name || '',
-      overdue ? 'YES' : ''
+      overdueFlag ? 'YES' : ''
     ];
+
+    const row = worksheet.addRow(rowData);
+    const statusColor = getStatusColor(sub.status, 'submittal');
+    styleDataRow(row, overdueFlag, statusColor, index % 2 === 1);
   });
 
-  // Summary section by status
+  // Auto-fit columns
+  const dataForWidth = sortedSubmittals.map(sub => [
+    sub.submittal_number || '', sub.title || '', sub.description || '',
+    sub.submittal_type || '', sub.status || '', sub.priority || '',
+    String(sub.revision_number || 0), formatDate(sub.date_submitted),
+    formatDate(sub.due_date), '', sub.sent_to || '', sub.sent_to_email || '',
+    sub.spec_section || '', sub.manufacturer || '', sub.model_number || '',
+    sub.reviewer_comments || '', formatDate(sub.date_approved),
+    sub.internal_owner?.name || '', ''
+  ]);
+  autoFitColumns(worksheet, columnHeaders, dataForWidth);
+
+  // Summary section
   const totalSubmittals = submittals.length;
-  const statusCounts = SUBMITTAL_STATUSES.reduce((acc, status) => {
-    acc[status] = submittals.filter(s => s.status === status).length;
-    return acc;
-  }, {});
+  const statusCounts = {
+    'Pending': submittals.filter(s => s.status === 'Pending').length,
+    'Submitted': submittals.filter(s => s.status === 'Submitted').length,
+    'Under Review': submittals.filter(s => s.status === 'Under Review').length,
+    'Approved': submittals.filter(s => s.status === 'Approved').length,
+    'Approved as Noted': submittals.filter(s => s.status === 'Approved as Noted').length,
+    'Revise and Resubmit': submittals.filter(s => s.status === 'Revise and Resubmit').length,
+    'Rejected': submittals.filter(s => s.status === 'Rejected').length,
+  };
   const overdueSubmittals = submittals.filter(s =>
     isOverdue(s.due_date, s.status, ['Approved', 'Approved as Noted', 'Rejected'])
   ).length;
 
-  const summaryRows = [
-    [],
-    ['SUMMARY'],
+  addSummarySection(worksheet, [
     ['Total Submittals:', totalSubmittals],
-    ['Pending:', statusCounts['Pending'] || 0],
-    ['Submitted:', statusCounts['Submitted'] || 0],
-    ['Under Review:', statusCounts['Under Review'] || 0],
-    ['Approved:', statusCounts['Approved'] || 0],
-    ['Approved as Noted:', statusCounts['Approved as Noted'] || 0],
-    ['Revise & Resubmit:', statusCounts['Revise and Resubmit'] || 0],
-    ['Rejected:', statusCounts['Rejected'] || 0],
+    ['Pending:', statusCounts['Pending']],
+    ['Submitted:', statusCounts['Submitted']],
+    ['Under Review:', statusCounts['Under Review']],
+    ['Approved:', statusCounts['Approved']],
+    ['Approved as Noted:', statusCounts['Approved as Noted']],
+    ['Revise & Resubmit:', statusCounts['Revise and Resubmit']],
+    ['Rejected:', statusCounts['Rejected']],
     ['Overdue:', overdueSubmittals]
-  ];
+  ]);
 
   // Type breakdown
-  const typeRows = [
-    [],
-    ['BY TYPE']
-  ];
+  worksheet.addRow([]);
+  const typeHeaderRow = worksheet.addRow(['BY TYPE']);
+  typeHeaderRow.font = FONTS.sectionHeader;
+  typeHeaderRow.getCell(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: COLORS.sectionHeader }
+  };
+
   const typeCounts = submittals.reduce((acc, s) => {
     const type = s.submittal_type || 'Other';
     acc[type] = (acc[type] || 0) + 1;
     return acc;
   }, {});
+
   Object.entries(typeCounts).forEach(([type, count]) => {
-    typeRows.push([`${type}:`, count]);
+    const row = worksheet.addRow([`${type}:`, count]);
+    row.getCell(1).font = FONTS.bold;
   });
 
-  // Combine all rows
-  const allRows = [
-    ...headerRows,
-    columnHeaders,
-    ...dataRows,
-    ...summaryRows,
-    ...typeRows
-  ];
-
-  // Create worksheet
-  const worksheet = XLSX.utils.aoa_to_sheet(allRows);
-
-  // Set column widths
-  setColumnWidths(worksheet, dataRows, columnHeaders);
-
-  // Merge title cell
-  worksheet['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }
-  ];
-
-  // Create workbook and add worksheet
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Submittal Log');
-
-  // Generate filename
+  // Generate filename and download
   const filename = `${projectInfo.projectNumber}_Submittal_Log_${new Date().toISOString().split('T')[0]}.xlsx`;
-
-  // Download file
-  XLSX.writeFile(workbook, filename);
-
-  return filename;
+  return await downloadWorkbook(workbook, filename);
 };
 
 // ============================================================================
@@ -376,32 +510,29 @@ export const exportSubmittalLog = (submittals, projectInfo) => {
  * @param {Array} tasks - Array of Task objects
  * @param {Object} projectInfo - Project information { name, projectNumber, client, factory }
  */
-export const exportTaskLog = (tasks, projectInfo) => {
+export const exportTaskLog = async (tasks, projectInfo) => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Sunbelt PM System';
+  workbook.created = new Date();
+
+  const worksheet = workbook.addWorksheet('Task Log', {
+    views: [{ state: 'frozen', ySplit: 9 }]
+  });
+
   const generatedDate = new Date().toLocaleString();
 
-  // Create header section
-  const headerRows = createWorksheetWithHeader(
-    projectInfo,
-    'TASK LOG',
-    generatedDate
-  );
+  // Add project header
+  addProjectHeader(worksheet, projectInfo, 'TASK LOG', generatedDate);
 
   // Column headers
   const columnHeaders = [
-    'Task',
-    'Description',
-    'Status',
-    'Priority',
-    'Assigned To',
-    'Start Date',
-    'Due Date',
-    'Days Open',
-    'Milestone',
-    'Workflow Station',
-    'Court',
-    'Completed Date',
-    'Overdue'
+    'Task', 'Description', 'Status', 'Priority', 'Assigned To',
+    'Start Date', 'Due Date', 'Days Open', 'Milestone',
+    'Workflow Station', 'Court', 'Completed Date', 'Overdue'
   ];
+
+  const headerRow = worksheet.addRow(columnHeaders);
+  styleHeaderRow(headerRow);
 
   // Sort tasks by due date
   const sortedTasks = [...tasks].sort((a, b) => {
@@ -411,21 +542,20 @@ export const exportTaskLog = (tasks, projectInfo) => {
     return new Date(a.due_date) - new Date(b.due_date);
   });
 
-  // Map task data to rows
-  const dataRows = sortedTasks.map(task => {
+  // Add data rows
+  sortedTasks.forEach((task, index) => {
     const closedStatuses = ['Completed', 'Cancelled'];
     const daysOpen = daysBetween(
       task.start_date || task.created_at,
       closedStatuses.includes(task.status) ? task.completed_date : null
     );
-    const overdue = isOverdue(task.due_date, task.status, closedStatuses);
+    const overdueFlag = isOverdue(task.due_date, task.status, closedStatuses);
 
-    // Get assignee name
     const assignee = task.is_external
       ? `${task.external_assignee_name || 'External'} (External)`
       : task.assignee?.name || task.assigned_to_name || '';
 
-    return [
+    const rowData = [
       task.title || '',
       task.description || '',
       task.status || '',
@@ -438,9 +568,23 @@ export const exportTaskLog = (tasks, projectInfo) => {
       task.workflow_station_key || '',
       task.assigned_court || '',
       formatDate(task.completed_date),
-      overdue ? 'YES' : ''
+      overdueFlag ? 'YES' : ''
     ];
+
+    const row = worksheet.addRow(rowData);
+    const statusColor = getStatusColor(task.status, 'task');
+    styleDataRow(row, overdueFlag, statusColor, index % 2 === 1);
   });
+
+  // Auto-fit columns
+  const dataForWidth = sortedTasks.map(task => [
+    task.title || '', task.description || '', task.status || '',
+    task.priority || '', task.assignee?.name || '', formatDate(task.start_date),
+    formatDate(task.due_date), '', task.milestone?.name || '',
+    task.workflow_station_key || '', task.assigned_court || '',
+    formatDate(task.completed_date), ''
+  ]);
+  autoFitColumns(worksheet, columnHeaders, dataForWidth);
 
   // Summary section
   const totalTasks = tasks.length;
@@ -453,9 +597,7 @@ export const exportTaskLog = (tasks, projectInfo) => {
     isOverdue(t.due_date, t.status, ['Completed', 'Cancelled'])
   ).length;
 
-  const summaryRows = [
-    [],
-    ['SUMMARY'],
+  addSummarySection(worksheet, [
     ['Total Tasks:', totalTasks],
     ['Not Started:', notStarted],
     ['In Progress:', inProgress],
@@ -463,53 +605,32 @@ export const exportTaskLog = (tasks, projectInfo) => {
     ['Completed:', completed],
     ['Cancelled:', cancelled],
     ['Overdue:', overdueTasks]
-  ];
+  ]);
 
   // Priority breakdown
-  const priorityRows = [
-    [],
-    ['BY PRIORITY']
-  ];
+  worksheet.addRow([]);
+  const priorityHeaderRow = worksheet.addRow(['BY PRIORITY']);
+  priorityHeaderRow.font = FONTS.sectionHeader;
+  priorityHeaderRow.getCell(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: COLORS.sectionHeader }
+  };
+
   const priorityCounts = tasks.reduce((acc, t) => {
     const priority = t.priority || 'Medium';
     acc[priority] = (acc[priority] || 0) + 1;
     return acc;
   }, {});
+
   Object.entries(priorityCounts).forEach(([priority, count]) => {
-    priorityRows.push([`${priority}:`, count]);
+    const row = worksheet.addRow([`${priority}:`, count]);
+    row.getCell(1).font = FONTS.bold;
   });
 
-  // Combine all rows
-  const allRows = [
-    ...headerRows,
-    columnHeaders,
-    ...dataRows,
-    ...summaryRows,
-    ...priorityRows
-  ];
-
-  // Create worksheet
-  const worksheet = XLSX.utils.aoa_to_sheet(allRows);
-
-  // Set column widths
-  setColumnWidths(worksheet, dataRows, columnHeaders);
-
-  // Merge title cell
-  worksheet['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }
-  ];
-
-  // Create workbook and add worksheet
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Task Log');
-
-  // Generate filename
+  // Generate filename and download
   const filename = `${projectInfo.projectNumber}_Task_Log_${new Date().toISOString().split('T')[0]}.xlsx`;
-
-  // Download file
-  XLSX.writeFile(workbook, filename);
-
-  return filename;
+  return await downloadWorkbook(workbook, filename);
 };
 
 // ============================================================================
@@ -520,30 +641,49 @@ export const exportTaskLog = (tasks, projectInfo) => {
  * Export all RFIs across projects to Excel
  * @param {Array} rfis - Array of RFI objects with project relation
  */
-export const exportAllRFIs = (rfis) => {
+export const exportAllRFIs = async (rfis) => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Sunbelt PM System';
+  workbook.created = new Date();
+
+  const worksheet = workbook.addWorksheet('All RFIs', {
+    views: [{ state: 'frozen', ySplit: 6 }]
+  });
+
   const generatedDate = new Date().toLocaleString();
 
-  const headerRows = [
-    ['ALL RFIs REPORT'],
-    [],
-    ['Generated:', generatedDate],
-    ['Total RFIs:', rfis.length],
-    []
-  ];
+  // Title
+  const titleRow = worksheet.addRow(['ALL RFIs REPORT']);
+  titleRow.font = FONTS.title;
+  titleRow.height = 30;
+  worksheet.mergeCells(1, 1, 1, 6);
+  titleRow.getCell(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: COLORS.titleBg }
+  };
+  titleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
 
+  worksheet.addRow([]);
+
+  const genRow = worksheet.addRow(['Generated:', generatedDate]);
+  genRow.getCell(1).font = FONTS.bold;
+
+  const totalRow = worksheet.addRow(['Total RFIs:', rfis.length]);
+  totalRow.getCell(1).font = FONTS.bold;
+
+  worksheet.addRow([]);
+
+  // Column headers
   const columnHeaders = [
-    'RFI #',
-    'Project',
-    'Subject',
-    'Status',
-    'Priority',
-    'Sent To',
-    'Due Date',
-    'Days Open',
-    'Answered',
-    'Overdue'
+    'RFI #', 'Project', 'Subject', 'Status', 'Priority',
+    'Sent To', 'Due Date', 'Days Open', 'Answered', 'Overdue'
   ];
 
+  const headerRow = worksheet.addRow(columnHeaders);
+  styleHeaderRow(headerRow);
+
+  // Sort by due date
   const sortedRFIs = [...rfis].sort((a, b) => {
     if (!a.due_date && !b.due_date) return 0;
     if (!a.due_date) return 1;
@@ -551,15 +691,16 @@ export const exportAllRFIs = (rfis) => {
     return new Date(a.due_date) - new Date(b.due_date);
   });
 
-  const dataRows = sortedRFIs.map(rfi => {
+  // Add data rows
+  sortedRFIs.forEach((rfi, index) => {
     const closedStatuses = ['Answered', 'Closed'];
     const daysOpen = daysBetween(
       rfi.date_sent || rfi.created_at,
       closedStatuses.includes(rfi.status) ? rfi.date_answered : null
     );
-    const overdue = isOverdue(rfi.due_date, rfi.status, closedStatuses);
+    const overdueFlag = isOverdue(rfi.due_date, rfi.status, closedStatuses);
 
-    return [
+    const rowData = [
       rfi.rfi_number || '',
       rfi.project?.project_number || '',
       rfi.subject || '',
@@ -569,51 +710,73 @@ export const exportAllRFIs = (rfis) => {
       formatDate(rfi.due_date),
       daysOpen,
       formatDate(rfi.date_answered),
-      overdue ? 'YES' : ''
+      overdueFlag ? 'YES' : ''
     ];
+
+    const row = worksheet.addRow(rowData);
+    const statusColor = getStatusColor(rfi.status, 'rfi');
+    styleDataRow(row, overdueFlag, statusColor, index % 2 === 1);
   });
 
-  const allRows = [...headerRows, columnHeaders, ...dataRows];
-  const worksheet = XLSX.utils.aoa_to_sheet(allRows);
-  setColumnWidths(worksheet, dataRows, columnHeaders);
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'All RFIs');
+  // Auto-fit columns
+  const dataForWidth = sortedRFIs.map(rfi => [
+    rfi.rfi_number || '', rfi.project?.project_number || '', rfi.subject || '',
+    rfi.status || '', rfi.priority || '', rfi.sent_to || '',
+    formatDate(rfi.due_date), '', formatDate(rfi.date_answered), ''
+  ]);
+  autoFitColumns(worksheet, columnHeaders, dataForWidth);
 
   const filename = `All_RFIs_${new Date().toISOString().split('T')[0]}.xlsx`;
-  XLSX.writeFile(workbook, filename);
-  return filename;
+  return await downloadWorkbook(workbook, filename);
 };
 
 /**
  * Export all Submittals across projects to Excel
  * @param {Array} submittals - Array of Submittal objects with project relation
  */
-export const exportAllSubmittals = (submittals) => {
+export const exportAllSubmittals = async (submittals) => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Sunbelt PM System';
+  workbook.created = new Date();
+
+  const worksheet = workbook.addWorksheet('All Submittals', {
+    views: [{ state: 'frozen', ySplit: 6 }]
+  });
+
   const generatedDate = new Date().toLocaleString();
 
-  const headerRows = [
-    ['ALL SUBMITTALS REPORT'],
-    [],
-    ['Generated:', generatedDate],
-    ['Total Submittals:', submittals.length],
-    []
-  ];
+  // Title
+  const titleRow = worksheet.addRow(['ALL SUBMITTALS REPORT']);
+  titleRow.font = FONTS.title;
+  titleRow.height = 30;
+  worksheet.mergeCells(1, 1, 1, 6);
+  titleRow.getCell(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: COLORS.titleBg }
+  };
+  titleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
 
+  worksheet.addRow([]);
+
+  const genRow = worksheet.addRow(['Generated:', generatedDate]);
+  genRow.getCell(1).font = FONTS.bold;
+
+  const totalRow = worksheet.addRow(['Total Submittals:', submittals.length]);
+  totalRow.getCell(1).font = FONTS.bold;
+
+  worksheet.addRow([]);
+
+  // Column headers
   const columnHeaders = [
-    'Sub #',
-    'Project',
-    'Title',
-    'Type',
-    'Status',
-    'Priority',
-    'Sent To',
-    'Due Date',
-    'Days in Review',
-    'Approved Date',
-    'Overdue'
+    'Sub #', 'Project', 'Title', 'Type', 'Status', 'Priority',
+    'Sent To', 'Due Date', 'Days in Review', 'Approved Date', 'Overdue'
   ];
 
+  const headerRow = worksheet.addRow(columnHeaders);
+  styleHeaderRow(headerRow);
+
+  // Sort by due date
   const sortedSubmittals = [...submittals].sort((a, b) => {
     if (!a.due_date && !b.due_date) return 0;
     if (!a.due_date) return 1;
@@ -621,15 +784,16 @@ export const exportAllSubmittals = (submittals) => {
     return new Date(a.due_date) - new Date(b.due_date);
   });
 
-  const dataRows = sortedSubmittals.map(sub => {
+  // Add data rows
+  sortedSubmittals.forEach((sub, index) => {
     const closedStatuses = ['Approved', 'Approved as Noted', 'Rejected'];
     const daysInReview = daysBetween(
       sub.date_submitted,
       closedStatuses.includes(sub.status) ? sub.date_approved : null
     );
-    const overdue = isOverdue(sub.due_date, sub.status, closedStatuses);
+    const overdueFlag = isOverdue(sub.due_date, sub.status, closedStatuses);
 
-    return [
+    const rowData = [
       sub.submittal_number || '',
       sub.project?.project_number || '',
       sub.title || '',
@@ -640,49 +804,74 @@ export const exportAllSubmittals = (submittals) => {
       formatDate(sub.due_date),
       daysInReview,
       formatDate(sub.date_approved),
-      overdue ? 'YES' : ''
+      overdueFlag ? 'YES' : ''
     ];
+
+    const row = worksheet.addRow(rowData);
+    const statusColor = getStatusColor(sub.status, 'submittal');
+    styleDataRow(row, overdueFlag, statusColor, index % 2 === 1);
   });
 
-  const allRows = [...headerRows, columnHeaders, ...dataRows];
-  const worksheet = XLSX.utils.aoa_to_sheet(allRows);
-  setColumnWidths(worksheet, dataRows, columnHeaders);
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'All Submittals');
+  // Auto-fit columns
+  const dataForWidth = sortedSubmittals.map(sub => [
+    sub.submittal_number || '', sub.project?.project_number || '', sub.title || '',
+    sub.submittal_type || '', sub.status || '', sub.priority || '',
+    sub.sent_to || '', formatDate(sub.due_date), '',
+    formatDate(sub.date_approved), ''
+  ]);
+  autoFitColumns(worksheet, columnHeaders, dataForWidth);
 
   const filename = `All_Submittals_${new Date().toISOString().split('T')[0]}.xlsx`;
-  XLSX.writeFile(workbook, filename);
-  return filename;
+  return await downloadWorkbook(workbook, filename);
 };
 
 /**
  * Export all Tasks across projects to Excel
  * @param {Array} tasks - Array of Task objects with project relation
  */
-export const exportAllTasks = (tasks) => {
+export const exportAllTasks = async (tasks) => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Sunbelt PM System';
+  workbook.created = new Date();
+
+  const worksheet = workbook.addWorksheet('All Tasks', {
+    views: [{ state: 'frozen', ySplit: 6 }]
+  });
+
   const generatedDate = new Date().toLocaleString();
 
-  const headerRows = [
-    ['ALL TASKS REPORT'],
-    [],
-    ['Generated:', generatedDate],
-    ['Total Tasks:', tasks.length],
-    []
-  ];
+  // Title
+  const titleRow = worksheet.addRow(['ALL TASKS REPORT']);
+  titleRow.font = FONTS.title;
+  titleRow.height = 30;
+  worksheet.mergeCells(1, 1, 1, 6);
+  titleRow.getCell(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: COLORS.titleBg }
+  };
+  titleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
 
+  worksheet.addRow([]);
+
+  const genRow = worksheet.addRow(['Generated:', generatedDate]);
+  genRow.getCell(1).font = FONTS.bold;
+
+  const totalRow = worksheet.addRow(['Total Tasks:', tasks.length]);
+  totalRow.getCell(1).font = FONTS.bold;
+
+  worksheet.addRow([]);
+
+  // Column headers
   const columnHeaders = [
-    'Task',
-    'Project',
-    'Status',
-    'Priority',
-    'Assigned To',
-    'Due Date',
-    'Days Open',
-    'Completed',
-    'Overdue'
+    'Task', 'Project', 'Status', 'Priority', 'Assigned To',
+    'Due Date', 'Days Open', 'Completed', 'Overdue'
   ];
 
+  const headerRow = worksheet.addRow(columnHeaders);
+  styleHeaderRow(headerRow);
+
+  // Sort by due date
   const sortedTasks = [...tasks].sort((a, b) => {
     if (!a.due_date && !b.due_date) return 0;
     if (!a.due_date) return 1;
@@ -690,19 +879,20 @@ export const exportAllTasks = (tasks) => {
     return new Date(a.due_date) - new Date(b.due_date);
   });
 
-  const dataRows = sortedTasks.map(task => {
+  // Add data rows
+  sortedTasks.forEach((task, index) => {
     const closedStatuses = ['Completed', 'Cancelled'];
     const daysOpen = daysBetween(
       task.start_date || task.created_at,
       closedStatuses.includes(task.status) ? task.completed_date : null
     );
-    const overdue = isOverdue(task.due_date, task.status, closedStatuses);
+    const overdueFlag = isOverdue(task.due_date, task.status, closedStatuses);
 
     const assignee = task.is_external
       ? `${task.external_assignee_name || 'External'}`
       : task.assignee?.name || task.assigned_to_name || '';
 
-    return [
+    const rowData = [
       task.title || '',
       task.project?.project_number || '',
       task.status || '',
@@ -711,20 +901,24 @@ export const exportAllTasks = (tasks) => {
       formatDate(task.due_date),
       daysOpen,
       formatDate(task.completed_date),
-      overdue ? 'YES' : ''
+      overdueFlag ? 'YES' : ''
     ];
+
+    const row = worksheet.addRow(rowData);
+    const statusColor = getStatusColor(task.status, 'task');
+    styleDataRow(row, overdueFlag, statusColor, index % 2 === 1);
   });
 
-  const allRows = [...headerRows, columnHeaders, ...dataRows];
-  const worksheet = XLSX.utils.aoa_to_sheet(allRows);
-  setColumnWidths(worksheet, dataRows, columnHeaders);
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'All Tasks');
+  // Auto-fit columns
+  const dataForWidth = sortedTasks.map(task => [
+    task.title || '', task.project?.project_number || '', task.status || '',
+    task.priority || '', task.assignee?.name || '', formatDate(task.due_date),
+    '', formatDate(task.completed_date), ''
+  ]);
+  autoFitColumns(worksheet, columnHeaders, dataForWidth);
 
   const filename = `All_Tasks_${new Date().toISOString().split('T')[0]}.xlsx`;
-  XLSX.writeFile(workbook, filename);
-  return filename;
+  return await downloadWorkbook(workbook, filename);
 };
 
 // ============================================================================
@@ -737,90 +931,129 @@ export const exportAllTasks = (tasks) => {
  * @param {Array} submittals - Array of Submittal objects
  * @param {Object} projectInfo - Project information
  */
-export const exportProjectLogs = (rfis, submittals, projectInfo) => {
+export const exportProjectLogs = async (rfis, submittals, projectInfo) => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Sunbelt PM System';
+  workbook.created = new Date();
+
   const generatedDate = new Date().toLocaleString();
-  const workbook = XLSX.utils.book_new();
 
   // ===== RFI SHEET =====
-  const rfiHeaderRows = createWorksheetWithHeader(projectInfo, 'RFI LOG', generatedDate);
-  const rfiColumnHeaders = [
+  const rfiSheet = workbook.addWorksheet('RFI Log', {
+    views: [{ state: 'frozen', ySplit: 9 }]
+  });
+
+  addProjectHeader(rfiSheet, projectInfo, 'RFI LOG', generatedDate);
+
+  const rfiHeaders = [
     'RFI #', 'Subject', 'Question', 'Status', 'Priority',
     'Date Sent', 'Due Date', 'Days Open', 'Sent To', 'Email',
     'Spec Section', 'Drawing Ref', 'Answer', 'Date Answered', 'Overdue'
   ];
 
-  const sortedRFIs = [...rfis].sort((a, b) => (a.number || 0) - (b.number || 0));
-  const rfiDataRows = sortedRFIs.map(rfi => {
-    const closedStatuses = ['Answered', 'Closed'];
-    const daysOpen = daysBetween(rfi.date_sent || rfi.created_at,
-      closedStatuses.includes(rfi.status) ? rfi.date_answered : null);
-    const overdue = isOverdue(rfi.due_date, rfi.status, closedStatuses);
+  const rfiHeaderRow = rfiSheet.addRow(rfiHeaders);
+  styleHeaderRow(rfiHeaderRow);
 
-    return [
+  const sortedRFIs = [...rfis].sort((a, b) => (a.number || 0) - (b.number || 0));
+
+  sortedRFIs.forEach((rfi, index) => {
+    const closedStatuses = ['Answered', 'Closed'];
+    const daysOpen = daysBetween(
+      rfi.date_sent || rfi.created_at,
+      closedStatuses.includes(rfi.status) ? rfi.date_answered : null
+    );
+    const overdueFlag = isOverdue(rfi.due_date, rfi.status, closedStatuses);
+
+    const row = rfiSheet.addRow([
       rfi.rfi_number || '', rfi.subject || '', rfi.question || '',
       rfi.status || '', rfi.priority || '', formatDate(rfi.date_sent),
       formatDate(rfi.due_date), daysOpen, rfi.sent_to || '',
       rfi.sent_to_email || '', rfi.spec_section || '', rfi.drawing_reference || '',
-      rfi.answer || '', formatDate(rfi.date_answered), overdue ? 'YES' : ''
-    ];
+      rfi.answer || '', formatDate(rfi.date_answered), overdueFlag ? 'YES' : ''
+    ]);
+
+    const statusColor = getStatusColor(rfi.status, 'rfi');
+    styleDataRow(row, overdueFlag, statusColor, index % 2 === 1);
   });
 
-  const rfiSummary = [
-    [], ['SUMMARY'],
+  // RFI Summary
+  addSummarySection(rfiSheet, [
     ['Total RFIs:', rfis.length],
     ['Open/Pending:', rfis.filter(r => ['Open', 'Pending', 'Draft'].includes(r.status)).length],
     ['Answered:', rfis.filter(r => r.status === 'Answered').length],
     ['Closed:', rfis.filter(r => r.status === 'Closed').length]
-  ];
+  ]);
 
-  const rfiAllRows = [...rfiHeaderRows, rfiColumnHeaders, ...rfiDataRows, ...rfiSummary];
-  const rfiWorksheet = XLSX.utils.aoa_to_sheet(rfiAllRows);
-  setColumnWidths(rfiWorksheet, rfiDataRows, rfiColumnHeaders);
-  XLSX.utils.book_append_sheet(workbook, rfiWorksheet, 'RFI Log');
+  // Auto-fit RFI columns
+  const rfiDataForWidth = sortedRFIs.map(rfi => [
+    rfi.rfi_number || '', rfi.subject || '', rfi.question || '',
+    rfi.status || '', rfi.priority || '', formatDate(rfi.date_sent),
+    formatDate(rfi.due_date), '', rfi.sent_to || '', rfi.sent_to_email || '',
+    rfi.spec_section || '', rfi.drawing_reference || '', rfi.answer || '',
+    formatDate(rfi.date_answered), ''
+  ]);
+  autoFitColumns(rfiSheet, rfiHeaders, rfiDataForWidth);
 
   // ===== SUBMITTAL SHEET =====
-  const subHeaderRows = createWorksheetWithHeader(projectInfo, 'SUBMITTAL LOG', generatedDate);
-  const subColumnHeaders = [
+  const subSheet = workbook.addWorksheet('Submittal Log', {
+    views: [{ state: 'frozen', ySplit: 9 }]
+  });
+
+  addProjectHeader(subSheet, projectInfo, 'SUBMITTAL LOG', generatedDate);
+
+  const subHeaders = [
     'Sub #', 'Title', 'Type', 'Status', 'Priority', 'Rev #',
     'Date Submitted', 'Due Date', 'Days in Review', 'Sent To',
     'Spec Section', 'Manufacturer', 'Model #', 'Reviewer Comments', 'Overdue'
   ];
 
-  const sortedSubmittals = [...submittals].sort((a, b) => (a.number || 0) - (b.number || 0));
-  const subDataRows = sortedSubmittals.map(sub => {
-    const closedStatuses = ['Approved', 'Approved as Noted', 'Rejected'];
-    const daysInReview = daysBetween(sub.date_submitted,
-      closedStatuses.includes(sub.status) ? sub.date_approved : null);
-    const overdue = isOverdue(sub.due_date, sub.status, closedStatuses);
+  const subHeaderRow = subSheet.addRow(subHeaders);
+  styleHeaderRow(subHeaderRow);
 
-    return [
+  const sortedSubmittals = [...submittals].sort((a, b) => (a.number || 0) - (b.number || 0));
+
+  sortedSubmittals.forEach((sub, index) => {
+    const closedStatuses = ['Approved', 'Approved as Noted', 'Rejected'];
+    const daysInReview = daysBetween(
+      sub.date_submitted,
+      closedStatuses.includes(sub.status) ? sub.date_approved : null
+    );
+    const overdueFlag = isOverdue(sub.due_date, sub.status, closedStatuses);
+
+    const row = subSheet.addRow([
       sub.submittal_number || '', sub.title || '', sub.submittal_type || '',
       sub.status || '', sub.priority || '', sub.revision_number || 0,
       formatDate(sub.date_submitted), formatDate(sub.due_date), daysInReview,
       sub.sent_to || '', sub.spec_section || '', sub.manufacturer || '',
-      sub.model_number || '', sub.reviewer_comments || '', overdue ? 'YES' : ''
-    ];
+      sub.model_number || '', sub.reviewer_comments || '', overdueFlag ? 'YES' : ''
+    ]);
+
+    const statusColor = getStatusColor(sub.status, 'submittal');
+    styleDataRow(row, overdueFlag, statusColor, index % 2 === 1);
   });
 
-  const subSummary = [
-    [], ['SUMMARY'],
+  // Submittal Summary
+  addSummarySection(subSheet, [
     ['Total Submittals:', submittals.length],
     ['Approved:', submittals.filter(s => ['Approved', 'Approved as Noted'].includes(s.status)).length],
     ['Under Review:', submittals.filter(s => s.status === 'Under Review').length],
     ['Pending:', submittals.filter(s => ['Pending', 'Submitted'].includes(s.status)).length],
     ['Action Required:', submittals.filter(s => s.status === 'Revise and Resubmit').length]
-  ];
+  ]);
 
-  const subAllRows = [...subHeaderRows, subColumnHeaders, ...subDataRows, ...subSummary];
-  const subWorksheet = XLSX.utils.aoa_to_sheet(subAllRows);
-  setColumnWidths(subWorksheet, subDataRows, subColumnHeaders);
-  XLSX.utils.book_append_sheet(workbook, subWorksheet, 'Submittal Log');
+  // Auto-fit Submittal columns
+  const subDataForWidth = sortedSubmittals.map(sub => [
+    sub.submittal_number || '', sub.title || '', sub.submittal_type || '',
+    sub.status || '', sub.priority || '', String(sub.revision_number || 0),
+    formatDate(sub.date_submitted), formatDate(sub.due_date), '',
+    sub.sent_to || '', sub.spec_section || '', sub.manufacturer || '',
+    sub.model_number || '', sub.reviewer_comments || '', ''
+  ]);
+  autoFitColumns(subSheet, subHeaders, subDataForWidth);
 
   // Generate filename and download
   const filename = `${projectInfo.projectNumber}_Project_Logs_${new Date().toISOString().split('T')[0]}.xlsx`;
-  XLSX.writeFile(workbook, filename);
-
-  return filename;
+  return await downloadWorkbook(workbook, filename);
 };
 
 export default {

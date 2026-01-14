@@ -51,10 +51,11 @@ function TeamWorkloadView({
 
     // Roles: 'PM', 'Director' (not 'Project Manager')
     return users
-      .filter(u => u.role === 'PM' || u.role === 'Director')
+      .filter(u => u.role === 'PM' || u.role === 'Director' || u.role === 'Project Manager' || u.role === 'Project_Manager')
       .map(user => {
         // ===== PROJECTS =====
-        const userProjects = projects.filter(p => p.pm_id === user.id);
+        // Use owner_id or primary_pm_id to find PM's projects
+        const userProjects = projects.filter(p => p.owner_id === user.id || p.primary_pm_id === user.id);
         const activeProjects = userProjects.filter(p => 
           ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'].includes(p.status)
         );

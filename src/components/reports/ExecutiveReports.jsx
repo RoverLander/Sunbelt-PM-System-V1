@@ -642,11 +642,6 @@ function ExecutiveReports() {
     return startDate;
   }, [dateRange]);
 
-  // Handle PDF export
-  const handleExportPDF = useCallback(() => {
-    generateReportPDF(metrics, activeSection, dateRangeLabel, projects, tasks);
-  }, [metrics, activeSection, dateRangeLabel, projects, tasks]);
-
   // Calculate all metrics
   const metrics = useMemo(() => {
     if (loading) return null;
@@ -677,6 +672,11 @@ function ExecutiveReports() {
     if (loading) return null;
     return calculateMonthlyTrends(projects, tasks, changeOrders, 6);
   }, [loading, projects, tasks, changeOrders]);
+
+  // Handle PDF export
+  const handleExportPDF = useCallback(() => {
+    generateReportPDF(metrics, activeSection, dateRangeLabel, projects, tasks);
+  }, [metrics, activeSection, dateRangeLabel, projects, tasks]);
 
   // Format helpers
   const formatCurrency = (amount) => {
@@ -1479,20 +1479,26 @@ function ExecutiveReports() {
     const next60 = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
     const next90 = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
 
+    // Helper to get delivery date (fallback to target_online_date)
+    const getDeliveryDate = (p) => {
+      const dateStr = p.delivery_date || p.target_online_date;
+      return dateStr ? new Date(dateStr) : null;
+    };
+
     const deliveriesNext30 = activeProjects.filter(p => {
-      const delivery = p.delivery_date ? new Date(p.delivery_date) : null;
+      const delivery = getDeliveryDate(p);
       return delivery && delivery <= next30;
     });
     const deliveriesNext60 = activeProjects.filter(p => {
-      const delivery = p.delivery_date ? new Date(p.delivery_date) : null;
+      const delivery = getDeliveryDate(p);
       return delivery && delivery > next30 && delivery <= next60;
     });
     const deliveriesNext90 = activeProjects.filter(p => {
-      const delivery = p.delivery_date ? new Date(p.delivery_date) : null;
+      const delivery = getDeliveryDate(p);
       return delivery && delivery > next60 && delivery <= next90;
     });
     const deliveriesBeyond = activeProjects.filter(p => {
-      const delivery = p.delivery_date ? new Date(p.delivery_date) : null;
+      const delivery = getDeliveryDate(p);
       return delivery && delivery > next90;
     });
 
@@ -1562,9 +1568,12 @@ function ExecutiveReports() {
               { key: 'project_number', header: 'Project #' },
               { key: 'name', header: 'Project Name' },
               { key: 'factory', header: 'Factory' },
-              { key: 'delivery_date', header: 'Delivery Date', render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+              { key: 'delivery_date', header: 'Delivery Date', render: (_, row) => {
+                const d = row.delivery_date || row.target_online_date;
+                return d ? new Date(d).toLocaleDateString() : '—';
+              }},
               { key: 'daysUntil', header: 'Days Until', align: 'center', render: (_, row) => {
-                const delivery = row.delivery_date ? new Date(row.delivery_date) : null;
+                const delivery = getDeliveryDate(row);
                 if (!delivery) return '—';
                 const days = Math.ceil((delivery - now) / (1000 * 60 * 60 * 24));
                 return (
@@ -1576,7 +1585,7 @@ function ExecutiveReports() {
               { key: 'contract_value', header: 'Value', align: 'right', render: (v) => formatCurrency(v) }
             ]}
             data={[...deliveriesNext30, ...deliveriesNext60, ...deliveriesNext90].sort((a, b) =>
-              new Date(a.delivery_date) - new Date(b.delivery_date)
+              getDeliveryDate(a) - getDeliveryDate(b)
             ).slice(0, 15)}
             emptyMessage="No upcoming deliveries"
           />
@@ -1587,12 +1596,16 @@ function ExecutiveReports() {
 
   const renderWorkload = () => {
     // Calculate PM workload
-    const pms = users.filter(u => u.role === 'PM' || u.role === 'Project_Manager');
+    const pms = users.filter(u => u.role === 'PM' || u.role === 'Project_Manager' || u.role === 'Project Manager');
     const pmWorkload = pms.map(pm => {
-      const pmProjects = projects.filter(p => p.pm_id === pm.id && (p.status === 'Active' || p.status === 'In Progress'));
-      const pmTasks = tasks.filter(t => t.assigned_to === pm.id && t.status !== 'Completed');
+      // Projects where PM is owner or primary PM
+      const pmProjects = projects.filter(p =>
+        (p.owner_id === pm.id || p.primary_pm_id === pm.id) &&
+        (p.status === 'Active' || p.status === 'In Progress')
+      );
+      const pmTasks = tasks.filter(t => t.assignee_id === pm.id && t.status !== 'Completed');
       const pmOverdueTasks = pmTasks.filter(t => t.due_date && new Date(t.due_date) < new Date());
-      const pmRFIs = rfis.filter(r => r.internal_owner === pm.id && r.status !== 'Answered');
+      const pmRFIs = rfis.filter(r => r.internal_owner_id === pm.id && r.status !== 'Answered');
       const totalValue = pmProjects.reduce((sum, p) => sum + (p.contract_value || 0), 0);
 
       return {
@@ -1852,7 +1865,8 @@ function ExecutiveReports() {
       const pTasks = tasks.filter(t => t.project_id === p.id && t.status !== 'Completed' && t.due_date && new Date(t.due_date) < now);
       const pRFIs = rfis.filter(r => r.project_id === p.id && r.status !== 'Answered' && r.due_date && new Date(r.due_date) < now);
       const pSubmittals = submittals.filter(s => s.project_id === p.id && s.status !== 'Approved' && s.due_date && new Date(s.due_date) < now);
-      const deliveryDays = p.delivery_date ? Math.ceil((new Date(p.delivery_date) - now) / (1000 * 60 * 60 * 24)) : null;
+      const deliveryDate = p.delivery_date || p.target_online_date;
+      const deliveryDays = deliveryDate ? Math.ceil((new Date(deliveryDate) - now) / (1000 * 60 * 60 * 24)) : null;
 
       const riskScore = pTasks.length * 1 + pRFIs.length * 2 + pSubmittals.length * 1.5 +
         (p.health_status === 'Critical' ? 10 : p.health_status === 'Behind' ? 5 : p.health_status === 'At Risk' ? 3 : 0) +
@@ -2009,7 +2023,7 @@ function ExecutiveReports() {
   // ============================================================================
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1600px', margin: '0 auto' }}>
+    <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{
         display: 'flex',
@@ -2071,40 +2085,60 @@ function ExecutiveReports() {
 
       {/* Section Navigation */}
       <div style={{
-        display: 'flex',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(6, 1fr)',
         gap: '8px',
-        marginBottom: '24px',
-        overflowX: 'auto',
-        paddingBottom: '8px'
+        marginBottom: '24px'
       }}>
-        {REPORT_SECTIONS.map(section => {
-          const Icon = section.icon;
-          const isActive = activeSection === section.id;
-          return (
-            <button
-              key={section.id}
-              onClick={() => setActiveSection(section.id)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 16px',
-                background: isActive ? 'var(--sunbelt-orange)' : 'var(--bg-secondary)',
-                border: isActive ? 'none' : '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                color: isActive ? 'white' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                fontWeight: isActive ? '600' : '500',
-                fontSize: '0.875rem',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.15s'
-              }}
-            >
-              <Icon size={16} />
-              {section.label}
-            </button>
-          );
-        })}
+        {/* Executive Overview (spanning 2) in top-left, then remaining 10 tabs */}
+        {(() => {
+          // Order: OVERVIEW(2x), workflow, drawings, changes, supply, delivery, pipeline, workload, capacity, risk, trends
+          const reordered = [
+            REPORT_SECTIONS[0], // overview (will span 2) - TOP LEFT
+            REPORT_SECTIONS[1], // workflow
+            REPORT_SECTIONS[2], // drawings
+            REPORT_SECTIONS[3], // changes
+            REPORT_SECTIONS[4], // supply
+            REPORT_SECTIONS[5], // delivery
+            REPORT_SECTIONS[6], // pipeline
+            REPORT_SECTIONS[7], // workload
+            REPORT_SECTIONS[8], // capacity
+            REPORT_SECTIONS[9], // risk
+            REPORT_SECTIONS[10] // trends
+          ];
+          return reordered.map((section, index) => {
+            const Icon = section.icon;
+            const isActive = activeSection === section.id;
+            // Executive Overview (at index 0) spans 2 columns
+            const isOverview = section.id === 'overview';
+            return (
+              <button
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: isOverview ? '12px 16px' : '10px 12px',
+                  background: isActive ? 'var(--sunbelt-orange)' : 'var(--bg-secondary)',
+                  border: isActive ? 'none' : '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  color: isActive ? 'white' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontWeight: isActive ? '600' : isOverview ? '600' : '500',
+                  fontSize: isOverview ? '0.875rem' : '0.8125rem',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s',
+                  gridColumn: isOverview ? 'span 2' : 'span 1'
+                }}
+              >
+                <Icon size={isOverview ? 18 : 15} />
+                {section.label}
+              </button>
+            );
+          });
+        })()}
       </div>
 
       {/* Content */}
