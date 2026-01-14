@@ -232,66 +232,64 @@ function ITDashboard({ initialTab }) {
   const renderOverview = () => (
     <>
       {/* ================================================================== */}
-      {/* STATS CARDS                                                       */}
+      {/* STATS CARDS - Modern Gradient Style                               */}
       {/* ================================================================== */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: 'var(--space-md)',
-        marginBottom: 'var(--space-xl)'
+        gridTemplateColumns: 'repeat(6, 1fr)',
+        gap: '12px',
+        marginBottom: 'var(--space-lg)'
       }}>
-        {/* Users Card */}
-        <StatCard
+        <StatCardModern
           icon={Users}
           label="Total Users"
           value={stats.totalUsers}
           subValue={`${stats.activeUsers} active`}
           color="#3b82f6"
+          gradient="linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05))"
           onClick={() => setActivePanel('users')}
         />
-
-        {/* Active Projects Card */}
-        <StatCard
+        <StatCardModern
           icon={Database}
           label="Active Projects"
           value={stats.activeProjects}
           subValue={`${stats.totalProjects} total`}
           color="var(--sunbelt-orange)"
+          gradient="linear-gradient(135deg, rgba(249, 115, 22, 0.15), rgba(249, 115, 22, 0.05))"
         />
-
-        {/* Tasks Card */}
-        <StatCard
+        <StatCardModern
           icon={CheckCircle}
           label="Total Tasks"
           value={stats.totalTasks}
           color="#22c55e"
+          gradient="linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05))"
         />
-
-        {/* RFIs Card */}
-        <StatCard
+        <StatCardModern
           icon={FileText}
           label="Total RFIs"
           value={stats.totalRFIs}
           color="#f59e0b"
+          gradient="linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05))"
         />
-
-        {/* System Health Card */}
-        <StatCard
+        <StatCardModern
           icon={Activity}
           label="System Status"
           value="Healthy"
-          subValue="All systems operational"
+          subValue="All operational"
           color="#22c55e"
+          gradient="linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05))"
           onClick={() => setActivePanel('health')}
         />
-
-        {/* Errors Card */}
-        <StatCard
+        <StatCardModern
           icon={AlertTriangle}
           label="Recent Errors"
           value={stats.recentErrors}
-          subValue="Last 24 hours"
-          color={stats.recentErrors > 0 ? 'var(--danger)' : 'var(--text-tertiary)'}
+          subValue="Last 24h"
+          color={stats.recentErrors > 0 ? '#ef4444' : '#64748b'}
+          gradient={stats.recentErrors > 0
+            ? "linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05))"
+            : "linear-gradient(135deg, rgba(100, 116, 139, 0.1), rgba(100, 116, 139, 0.02))"}
+          highlight={stats.recentErrors > 0}
         />
       </div>
 
@@ -623,7 +621,81 @@ function NavTab({ active, onClick, icon: Icon, label }) {
   );
 }
 
-// Stat Card
+// Modern Stat Card with gradient
+function StatCardModern({ icon: Icon, label, value, subValue, color, gradient, onClick, highlight }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        padding: '16px',
+        background: gradient || 'var(--bg-secondary)',
+        borderRadius: '12px',
+        border: highlight ? `1px solid ${color}` : '1px solid var(--border-color)',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'all 0.2s ease',
+        position: 'relative',
+        overflow: 'hidden'
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = 'none';
+      }}
+    >
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '8px'
+      }}>
+        <div style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: '10px',
+          background: `${color}20`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <Icon size={18} style={{ color }} />
+        </div>
+        {onClick && (
+          <ChevronRight size={16} style={{ color: 'var(--text-tertiary)' }} />
+        )}
+      </div>
+      <div style={{
+        fontSize: '1.5rem',
+        fontWeight: '700',
+        color: 'var(--text-primary)',
+        lineHeight: 1.2
+      }}>
+        {value}
+      </div>
+      <div style={{
+        fontSize: '0.75rem',
+        color: 'var(--text-secondary)',
+        marginTop: '4px',
+        fontWeight: '500'
+      }}>
+        {label}
+      </div>
+      {subValue && (
+        <div style={{
+          fontSize: '0.6875rem',
+          color: 'var(--text-tertiary)',
+          marginTop: '2px'
+        }}>
+          {subValue}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Stat Card (legacy)
 function StatCard({ icon: Icon, label, value, subValue, color, onClick }) {
   return (
     <div

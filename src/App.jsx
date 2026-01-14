@@ -22,7 +22,7 @@ import PMDashboard from './components/dashboards/PMDashboard';
 import DirectorDashboard from './components/dashboards/DirectorDashboard';
 import VPDashboard from './components/dashboards/VPDashboard';
 import PCDashboard from './components/dashboards/PCDashboard';
-import { ITDashboard, UserManagement, ErrorTracking, AnnouncementManager, FeatureFlagManager, SessionManager } from './components/it';
+import { ITDashboard, UserManagement, ErrorTracking, AnnouncementManager, FeatureFlagManager, SessionManager, SecurityCenter, DatabaseTools, SystemConfiguration } from './components/it';
 import AnnouncementBanner from './components/common/AnnouncementBanner';
 
 // Pages
@@ -410,6 +410,12 @@ function AppContent() {
           return <UserManagement />;
         case 'error-tracking':
           return <ErrorTracking />;
+        case 'security':
+          return <SecurityCenter />;
+        case 'database':
+          return <DatabaseTools />;
+        case 'settings':
+          return <SystemConfiguration />;
         case 'announcements':
           return <AnnouncementManager />;
         case 'feature-flags':

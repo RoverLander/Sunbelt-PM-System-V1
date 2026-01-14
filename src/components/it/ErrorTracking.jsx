@@ -216,7 +216,45 @@ function ErrorTracking() {
   }, {});
 
   // ============================================================================
-  // RENDER: Stats Header
+  // COMPUTE CHART DATA
+  // ============================================================================
+  const computeChartData = () => {
+    // Get data for last 7 days
+    const days = [];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      days.push({
+        date: date.toISOString().split('T')[0],
+        label: date.toLocaleDateString('en-US', { weekday: 'short' })
+      });
+    }
+
+    // Count tickets created per day
+    const createdByDay = days.map(day => {
+      return tickets.filter(t => {
+        const ticketDate = new Date(t.created_at).toISOString().split('T')[0];
+        return ticketDate === day.date;
+      }).length;
+    });
+
+    // Count tickets resolved per day
+    const resolvedByDay = days.map(day => {
+      return tickets.filter(t => {
+        if (!t.resolved_at) return false;
+        const resolvedDate = new Date(t.resolved_at).toISOString().split('T')[0];
+        return resolvedDate === day.date;
+      }).length;
+    });
+
+    const maxValue = Math.max(...createdByDay, ...resolvedByDay, 1);
+
+    return { days, createdByDay, resolvedByDay, maxValue };
+  };
+
+  // ============================================================================
+  // RENDER: Stats Header with Charts
   // ============================================================================
   const renderStats = () => {
     const stats = {
@@ -224,41 +262,260 @@ function ErrorTracking() {
       new: tickets.filter(t => t.status === 'New').length,
       inProgress: tickets.filter(t => ['Investigating', 'In Progress'].includes(t.status)).length,
       resolved: tickets.filter(t => t.status === 'Resolved').length,
-      critical: tickets.filter(t => t.priority === 'Critical' && t.status !== 'Closed').length
+      critical: tickets.filter(t => t.priority === 'Critical' && t.status !== 'Closed').length,
+      closed: tickets.filter(t => t.status === 'Closed').length
     };
 
+    const chartData = computeChartData();
+
+    // Calculate resolution rate
+    const closedOrResolved = tickets.filter(t => ['Resolved', 'Closed'].includes(t.status)).length;
+    const resolutionRate = tickets.length > 0 ? Math.round((closedOrResolved / tickets.length) * 100) : 0;
+
+    // Calculate avg resolution time (for resolved tickets)
+    const resolvedTickets = tickets.filter(t => t.resolved_at && t.created_at);
+    let avgResolutionHours = 0;
+    if (resolvedTickets.length > 0) {
+      const totalHours = resolvedTickets.reduce((sum, t) => {
+        const created = new Date(t.created_at);
+        const resolved = new Date(t.resolved_at);
+        return sum + (resolved - created) / (1000 * 60 * 60);
+      }, 0);
+      avgResolutionHours = Math.round(totalHours / resolvedTickets.length);
+    }
+
     return (
-      <div style={{
-        display: 'flex',
-        gap: '16px',
-        marginBottom: '24px',
-        flexWrap: 'wrap'
-      }}>
-        {[
-          { label: 'Total Tickets', value: stats.total, color: '#64748b' },
-          { label: 'New', value: stats.new, color: '#ef4444' },
-          { label: 'In Progress', value: stats.inProgress, color: '#3b82f6' },
-          { label: 'Resolved', value: stats.resolved, color: '#22c55e' },
-          { label: 'Critical', value: stats.critical, color: '#ef4444', highlight: stats.critical > 0 }
-        ].map((stat, i) => (
-          <div
-            key={i}
-            style={{
-              padding: '16px 24px',
-              background: stat.highlight ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)',
-              borderRadius: '12px',
-              border: `1px solid ${stat.highlight ? '#ef4444' : 'var(--border-color)'}`,
-              minWidth: '140px'
-            }}
-          >
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
-              {stat.label}
+      <div style={{ marginBottom: '24px' }}>
+        {/* Stats Cards Row */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          gap: '12px',
+          marginBottom: '20px'
+        }}>
+          {[
+            { label: 'Total', value: stats.total, color: '#64748b', icon: '📊' },
+            { label: 'New', value: stats.new, color: '#ef4444', icon: '🆕' },
+            { label: 'In Progress', value: stats.inProgress, color: '#3b82f6', icon: '🔄' },
+            { label: 'Resolved', value: stats.resolved, color: '#22c55e', icon: '✅' },
+            { label: 'Critical', value: stats.critical, color: '#ef4444', icon: '🚨', highlight: stats.critical > 0 }
+          ].map((stat, i) => (
+            <div
+              key={i}
+              style={{
+                padding: '16px',
+                background: stat.highlight ? 'rgba(239, 68, 68, 0.1)' : 'var(--bg-secondary)',
+                borderRadius: '12px',
+                border: `1px solid ${stat.highlight ? '#ef4444' : 'var(--border-color)'}`,
+                textAlign: 'center'
+              }}
+            >
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
+                {stat.label}
+              </div>
+              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: stat.color }}>
+                {stat.value}
+              </div>
             </div>
-            <div style={{ fontSize: '1.5rem', fontWeight: '700', color: stat.color }}>
-              {stat.value}
+          ))}
+        </div>
+
+        {/* Charts Row */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '2fr 1fr 1fr',
+          gap: '16px'
+        }}>
+          {/* 7-Day Trend Chart */}
+          <div style={{
+            background: 'var(--bg-secondary)',
+            borderRadius: '12px',
+            border: '1px solid var(--border-color)',
+            padding: '16px'
+          }}>
+            <div style={{
+              fontSize: '0.8125rem',
+              fontWeight: '600',
+              color: 'var(--text-primary)',
+              marginBottom: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <span>7-Day Trend</span>
+              <div style={{ display: 'flex', gap: '12px', fontSize: '0.6875rem' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: '#ef4444' }}></span>
+                  Created
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: '#22c55e' }}></span>
+                  Resolved
+                </span>
+              </div>
+            </div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-end',
+              justifyContent: 'space-between',
+              height: '80px',
+              gap: '8px'
+            }}>
+              {chartData.days.map((day, i) => {
+                const createdHeight = chartData.maxValue > 0 ? (chartData.createdByDay[i] / chartData.maxValue) * 60 : 0;
+                const resolvedHeight = chartData.maxValue > 0 ? (chartData.resolvedByDay[i] / chartData.maxValue) * 60 : 0;
+                return (
+                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ display: 'flex', gap: '2px', alignItems: 'flex-end', height: '60px' }}>
+                      <div
+                        style={{
+                          width: '10px',
+                          height: `${Math.max(createdHeight, 2)}px`,
+                          background: '#ef4444',
+                          borderRadius: '2px 2px 0 0',
+                          transition: 'height 0.3s'
+                        }}
+                        title={`Created: ${chartData.createdByDay[i]}`}
+                      />
+                      <div
+                        style={{
+                          width: '10px',
+                          height: `${Math.max(resolvedHeight, 2)}px`,
+                          background: '#22c55e',
+                          borderRadius: '2px 2px 0 0',
+                          transition: 'height 0.3s'
+                        }}
+                        title={`Resolved: ${chartData.resolvedByDay[i]}`}
+                      />
+                    </div>
+                    <span style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>{day.label}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        ))}
+
+          {/* Resolution Rate */}
+          <div style={{
+            background: 'var(--bg-secondary)',
+            borderRadius: '12px',
+            border: '1px solid var(--border-color)',
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '8px' }}>
+              Resolution Rate
+            </div>
+            <div style={{ position: 'relative', width: '80px', height: '80px' }}>
+              <svg viewBox="0 0 36 36" style={{ transform: 'rotate(-90deg)' }}>
+                <path
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="var(--border-color)"
+                  strokeWidth="3"
+                />
+                <path
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="#22c55e"
+                  strokeWidth="3"
+                  strokeDasharray={`${resolutionRate}, 100`}
+                />
+              </svg>
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                fontSize: '1.25rem',
+                fontWeight: '700',
+                color: '#22c55e'
+              }}>
+                {resolutionRate}%
+              </div>
+            </div>
+          </div>
+
+          {/* Avg Resolution Time */}
+          <div style={{
+            background: 'var(--bg-secondary)',
+            borderRadius: '12px',
+            border: '1px solid var(--border-color)',
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '8px' }}>
+              Avg Resolution
+            </div>
+            <div style={{ fontSize: '2rem', fontWeight: '700', color: avgResolutionHours <= 24 ? '#22c55e' : avgResolutionHours <= 72 ? '#f59e0b' : '#ef4444' }}>
+              {avgResolutionHours}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+              hours
+            </div>
+          </div>
+        </div>
+
+        {/* Status Distribution Bar */}
+        <div style={{
+          marginTop: '16px',
+          background: 'var(--bg-secondary)',
+          borderRadius: '12px',
+          border: '1px solid var(--border-color)',
+          padding: '16px'
+        }}>
+          <div style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '12px' }}>
+            Status Distribution
+          </div>
+          <div style={{
+            display: 'flex',
+            height: '24px',
+            borderRadius: '6px',
+            overflow: 'hidden',
+            background: 'var(--bg-tertiary)'
+          }}>
+            {stats.total > 0 && (
+              <>
+                <div
+                  style={{ width: `${(stats.new / stats.total) * 100}%`, background: '#ef4444', transition: 'width 0.3s' }}
+                  title={`New: ${stats.new}`}
+                />
+                <div
+                  style={{ width: `${(stats.inProgress / stats.total) * 100}%`, background: '#3b82f6', transition: 'width 0.3s' }}
+                  title={`In Progress: ${stats.inProgress}`}
+                />
+                <div
+                  style={{ width: `${(stats.resolved / stats.total) * 100}%`, background: '#22c55e', transition: 'width 0.3s' }}
+                  title={`Resolved: ${stats.resolved}`}
+                />
+                <div
+                  style={{ width: `${(stats.closed / stats.total) * 100}%`, background: '#64748b', transition: 'width 0.3s' }}
+                  title={`Closed: ${stats.closed}`}
+                />
+              </>
+            )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '10px' }}>
+            {[
+              { label: 'New', color: '#ef4444', count: stats.new },
+              { label: 'In Progress', color: '#3b82f6', count: stats.inProgress },
+              { label: 'Resolved', color: '#22c55e', count: stats.resolved },
+              { label: 'Closed', color: '#64748b', count: stats.closed }
+            ].map((item, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: item.color }}></span>
+                <span style={{ color: 'var(--text-secondary)' }}>{item.label}</span>
+                <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>({item.count})</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   };

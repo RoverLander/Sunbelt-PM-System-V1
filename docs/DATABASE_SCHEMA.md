@@ -1,8 +1,8 @@
 # Database Schema Reference
 
-**Last Updated:** January 14, 2026
+**Last Updated:** January 14, 2026 (Late Night)
 **Database:** Supabase (PostgreSQL)
-**Version:** 1.1.0
+**Version:** 1.2.0
 
 ---
 

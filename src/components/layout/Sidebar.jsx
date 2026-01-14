@@ -63,7 +63,8 @@ import {
   UserCheck,
   Contact,
   PanelLeftClose,
-  PanelLeft
+  PanelLeft,
+  Settings
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -1100,12 +1101,15 @@ function Sidebar({
         ];
 
       case 'it':
-        // IT: Dashboard → User Management → Error Tracking → Announcements → Feature Flags → Sessions → Factory Map
+        // IT: Dashboard → User Management → Error Tracking → Security → Database → Settings → Announcements → Feature Flags → Sessions → Factory Map
         // Note: IT users don't need Projects, Tasks, RFIs, Submittals - they manage the system, not projects
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'users', label: 'User Management', icon: Users },
           { id: 'error-tracking', label: 'Error Tracking', icon: AlertTriangle },
+          { id: 'security', label: 'Security Center', icon: Shield },
+          { id: 'database', label: 'Database Tools', icon: Server },
+          { id: 'settings', label: 'Settings', icon: Settings },
           { id: 'announcements', label: 'Announcements', icon: Megaphone },
           { id: 'feature-flags', label: 'Feature Flags', icon: Flag },
           { id: 'sessions', label: 'Sessions', icon: Activity },

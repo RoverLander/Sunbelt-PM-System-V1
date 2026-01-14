@@ -1,8 +1,8 @@
 # Frontend Architecture Reference
 
-**Last Updated:** January 14, 2026
+**Last Updated:** January 14, 2026 (Late Night)
 **Framework:** React 18 + Vite
-**Version:** 1.1.0
+**Version:** 1.2.0
 
 ---
 
@@ -114,7 +114,10 @@ Main application component handling:
 | `/reports` | ExecutiveReports | Director, VP |
 | `/directory` | DirectoryPage | All |
 | `/users` | UserManagement | IT, IT_Manager, Admin |
-| `/errors` | ErrorTracking | IT, IT_Manager |
+| `/error-tracking` | ErrorTracking | IT, IT_Manager |
+| `/security` | SecurityCenter | IT, IT_Manager |
+| `/database` | DatabaseTools | IT, IT_Manager |
+| `/settings` | SystemConfiguration | IT, IT_Manager |
 | `/announcements` | AnnouncementManager | IT_Manager |
 | `/feature-flags` | FeatureFlagManager | IT_Manager |
 | `/sessions` | SessionManager | IT_Manager |
@@ -162,18 +165,21 @@ components/
 │   ├── AddMarkerModal.jsx
 │   └── ItemDetailPanel.jsx
 │
-├── it/                      # IT Administration
-│   ├── ITDashboard.jsx      # IT home dashboard
-│   ├── UserManagement.jsx   # User CRUD
-│   ├── CreateUserModal.jsx
-│   ├── EditUserModal.jsx
-│   ├── ErrorTracking.jsx    # Error ticket system
-│   ├── AnnouncementManager.jsx
-│   ├── FeatureFlagManager.jsx
-│   ├── SessionManager.jsx
-│   ├── SecurityCenter.jsx
-│   ├── DatabaseTools.jsx
-│   └── SystemHealth.jsx
+├── it/                      # IT Administration (13 components)
+│   ├── ITDashboard.jsx      # IT home dashboard with modern stat cards
+│   ├── UserManagement.jsx   # User CRUD with search, filter, role assignment
+│   ├── CreateUserModal.jsx  # New user creation modal
+│   ├── EditUserModal.jsx    # Edit user details modal
+│   ├── ErrorTracking.jsx    # Error tickets with charts, trends, Kanban
+│   ├── AnnouncementManager.jsx  # System announcements with targeting
+│   ├── FeatureFlagManager.jsx   # Feature toggle management
+│   ├── SessionManager.jsx       # Active session monitoring
+│   ├── SecurityCenter.jsx       # Security metrics and alerts
+│   ├── DatabaseTools.jsx        # Database diagnostics and stats
+│   ├── SystemHealth.jsx         # System health monitoring
+│   ├── SystemConfiguration.jsx  # Global settings management
+│   ├── AuditLogViewer.jsx       # Activity audit trail
+│   └── index.js             # Barrel exports
 │
 ├── layout/                  # Application Layout
 │   └── Sidebar.jsx          # Navigation sidebar with role-based items
@@ -301,7 +307,7 @@ const renderDashboard = () => {
 | PC | Dashboard, Projects, Calendar, Tasks, Directory |
 | Sales_Manager | Dashboard, Pipeline, Customers, Calendar, Team, Projects (read-only), Directory |
 | Sales_Rep | Dashboard, Pipeline, Customers, Calendar, Projects (read-only), Directory |
-| IT, IT_Manager | Dashboard, User Management, Error Tracking, Announcements, Feature Flags, Sessions, Factory Map |
+| IT, IT_Manager | Dashboard, User Management, Error Tracking, Security Center, Database Tools, Settings, Announcements, Feature Flags, Sessions, Factory Map |
 
 ---
 
