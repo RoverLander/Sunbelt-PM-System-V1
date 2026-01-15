@@ -565,6 +565,7 @@ export default function PlantManagerDashboard({ onNavigateToProject, initialView
   // Data state
   const [factoryId, setFactoryId] = useState(null);
   const [factoryCode, setFactoryCode] = useState(null);
+  const [factoryName, setFactoryName] = useState(null);
   const [stations, setStations] = useState([]);
   const [modules, setModules] = useState([]);
   const [activeShifts, setActiveShifts] = useState([]);
@@ -629,17 +630,27 @@ export default function PlantManagerDashboard({ onNavigateToProject, initialView
       if (userData?.factory_id) {
         setFactoryId(userData.factory_id);
         setFactoryCode(userData.factory);
+        // Get factory name
+        const { data: factoryData } = await supabase
+          .from('factories')
+          .select('short_name, full_name')
+          .eq('id', userData.factory_id)
+          .single();
+        if (factoryData) {
+          setFactoryName(factoryData.short_name || factoryData.full_name);
+        }
       } else if (userData?.factory) {
         // Get factory_id from code
         const { data: factory } = await supabase
           .from('factories')
-          .select('id')
+          .select('id, short_name, full_name')
           .eq('code', userData.factory)
           .single();
 
         if (factory) {
           setFactoryId(factory.id);
           setFactoryCode(userData.factory);
+          setFactoryName(factory.short_name || factory.full_name);
         }
       }
     } catch (error) {
