@@ -1,6 +1,6 @@
 # Project Roadmap
 
-**Last Updated:** January 12, 2026
+**Last Updated:** January 14, 2026
 
 This document outlines planned features, improvements, and technical debt items for the Sunbelt PM System.
 
@@ -12,6 +12,136 @@ This document outlines planned features, improvements, and technical debt items 
 - **P1** - High Priority / Next Sprint
 - **P2** - Medium Priority / Near Term
 - **P3** - Low Priority / Future Consideration
+
+---
+
+## Improvement Opportunities (January 2026 Analysis)
+
+Based on comprehensive codebase analysis identifying underutilized database capabilities and role-specific enhancement opportunities.
+
+### Phase 1: Highest Impact (Recommended Next)
+
+#### Document Tracking Checklist (P0)
+- Leverage existing `project_documents_checklist` table (14 document types)
+- Create "Documents" tab in ProjectDetails with checklist view
+- Show required vs received documents with upload capability
+- PC Dashboard document status widget
+- **Roles:** PC, Operations, Sales
+- **Impact:** Very High - Essential for order processing
+
+#### Workflow Station Enforcement (P0)
+- Enforce required documents before advancing station
+- Create station prerequisites (can't start Production before Design)
+- Show blocker reasons when station marked incomplete
+- Alert when project overdue in a station
+- **Roles:** PM, Director, PC, Operations
+- **Impact:** Very High - Ensures process discipline
+
+#### Incoming Quotes Queue for PM (P1)
+- Add "Incoming Opportunities" widget to PM Dashboard
+- Show PM-flagged quotes at PM's factory
+- Include quote details: customer, building type, complexity rating
+- One-click project creation with pre-filled data
+- **Roles:** PM, Sales Manager, VP
+- **Impact:** Very High - Improves sales-to-ops handoff
+
+#### Project Risk Scoring (P1)
+- Intelligent risk prediction algorithm combining:
+  - Workflow progress vs timeline
+  - Overdue items count
+  - Change order count
+  - Long lead item delays
+- Show risk trend (improving/declining)
+- Create "Early Warning" alerts
+- **Roles:** VP, Director, PM
+- **Impact:** Very High - Proactive risk management
+
+### Phase 2: High Impact
+
+#### Project Specifications Dashboard (P1)
+- Surface existing `color_selections` and `long_lead_items` data
+- Add "Specifications" tab showing selection status
+- PM Dashboard widget (% selections confirmed)
+- Drafting alerts for delayed specs
+- **Roles:** PM, Director, PC, Drafting
+- **Impact:** High - Critical timeline items lack visibility
+
+#### Factory Floor Operations View (P1)
+- PC role "Factory Floor" view grouped by workflow station
+- Show active, bottleneck, completed counts per station
+- Alert PC when projects delayed at key stations
+- QC/Shipping specific metrics
+- **Roles:** PC, Operations Manager
+- **Impact:** High - Critical for operations visibility
+
+#### Team Capacity Heatmap (P2)
+- Visual capacity matrix for Director/VP
+- Per-PM: projects, tasks, overdue items, portfolio value
+- Heat map (red=overloaded, yellow=capacity, green=available)
+- Workload trending and rebalancing suggestions
+- **Roles:** Director, VP
+- **Impact:** Medium - Improves team management
+
+### Phase 3: Quick Wins
+
+#### RFI/Submittal Deadline Escalation (P1)
+- Background job for deadline alerts:
+  - 7 days before: Info-level
+  - 3 days before: Warning-level
+  - On due date: Error-level
+  - After due: Escalate to manager
+- "Urgent RFIs" widget on PM Dashboard
+- **Complexity:** Low | **Impact:** Medium
+
+#### Notification Preferences (P2)
+- User profile notification settings
+- Alert preferences (daily, immediate, none)
+- Daily digest vs real-time option
+- **Complexity:** Low | **Impact:** Medium
+
+#### Project Templates (P2)
+- Templates by building type (CUSTOM, GOVERNMENT, FLEET)
+- Pre-fill specs, documents, standard milestones
+- Save custom template from existing project
+- **Complexity:** Low | **Impact:** Medium
+
+#### Calendar Sync Integration (P2)
+- Persistent iCalendar feed URL
+- Subscription for Google/Outlook/Apple
+- Role-based filtering
+- **Complexity:** Low | **Impact:** Medium
+
+#### Promised Delivery Tracking (P2)
+- Surface `promised_delivery_date` on dashboards
+- Calculate delta (on time, N days early/late)
+- Alert VP on multiple at-risk deliveries
+- **Complexity:** Low | **Impact:** Medium
+
+### Phase 4: Future Enhancements
+
+#### External Portal Prep (P2)
+- Read-only external contact portal (foundation)
+- External contacts view assigned items
+- RFI response capability for externals
+- **Complexity:** Medium | **Impact:** High
+
+#### Engineering Approval Workflow (P2)
+- Require engineering sign-off at specific stations
+- Auto-generate warning emails on deadline approach
+- Engineering review dashboard
+- **Complexity:** Medium | **Impact:** Medium
+
+#### Dealer Performance Dashboard (P3)
+- Active quotes by dealer
+- Quote conversion rate per dealer
+- Projects in delivery by dealer
+- **Complexity:** Low | **Impact:** Medium
+
+#### Sales Rep Activity Tracking (P3)
+- Quote activity timeline
+- Quote age and health indicators
+- Activity log in QuoteDetail
+- **Complexity:** Low | **Impact:** Medium
 
 ---
 

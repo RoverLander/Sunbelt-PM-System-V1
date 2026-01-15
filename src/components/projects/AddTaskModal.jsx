@@ -20,7 +20,7 @@
 // - Proper date validation (due date after start date)
 // ============================================================================
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   X,
   Plus,
@@ -32,13 +32,15 @@ import {
   Paperclip,
   Mail,
   AlertCircle,
-  Loader
+  Loader,
+  Sparkles
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { useContacts } from '../../hooks/useContacts';
 import { draftTaskEmail } from '../../utils/emailUtils';
 import { COURT_OPTIONS } from '../../utils/workflowUtils';
+import { getSuggestedPriority, getSuggestedInternalOwners } from '../../utils/smartDefaults';
 
 // ============================================================================
 // CONSTANTS
@@ -419,6 +421,21 @@ function AddTaskModal({
       otherFactories: otherFactoriesGrouped
     };
   }, [factoryContacts, users, projectFactoryCode]);
+
+  // ==========================================================================
+  // SMART DEFAULTS - Sort internal owners by relevance to task content
+  // ==========================================================================
+  const sortedInternalOwners = useMemo(() => {
+    if (!groupedContacts.sunbeltCorporate.length) return [];
+    const searchText = `${formData.title} ${formData.description}`;
+    return getSuggestedInternalOwners(groupedContacts.sunbeltCorporate, 'task', searchText, projectFactoryCode);
+  }, [groupedContacts.sunbeltCorporate, formData.title, formData.description, projectFactoryCode]);
+
+  // Suggested priority based on title/description text
+  const suggestedPriority = useMemo(() => {
+    const searchText = `${formData.title} ${formData.description}`;
+    return getSuggestedPriority(searchText);
+  }, [formData.title, formData.description]);
 
   // Cleanup file object URLs on unmount
   useEffect(() => {
@@ -815,7 +832,22 @@ function AddTaskModal({
                 </select>
               </div>
               <div style={styles.formGroup}>
-                <label style={styles.label}>Internal Owner</label>
+                <label style={styles.label}>
+                  Internal Owner
+                  {sortedInternalOwners.length > 0 && sortedInternalOwners[0]._suggestionScore > 0 && (
+                    <span style={{
+                      marginLeft: '8px',
+                      fontSize: '0.7rem',
+                      color: 'var(--sunbelt-orange)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px'
+                    }}>
+                      <Sparkles size={12} />
+                      Smart sorted
+                    </span>
+                  )}
+                </label>
                 <select
                   name="internal_owner_id"
                   value={formData.internal_owner_id}
@@ -823,8 +855,10 @@ function AddTaskModal({
                   style={styles.select}
                 >
                   <option value="">Select owner</option>
-                  {groupedContacts.sunbeltCorporate.map(u => (
-                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                  {sortedInternalOwners.map((u, idx) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.role}){u._suggestionScore > 5 && idx < 3 ? ' ★' : ''}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -875,7 +909,22 @@ function AddTaskModal({
                 </div>
               </div>
               <div style={styles.formGroup}>
-                <label style={styles.label}>Internal Owner</label>
+                <label style={styles.label}>
+                  Internal Owner
+                  {sortedInternalOwners.length > 0 && sortedInternalOwners[0]._suggestionScore > 0 && (
+                    <span style={{
+                      marginLeft: '8px',
+                      fontSize: '0.7rem',
+                      color: 'var(--sunbelt-orange)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px'
+                    }}>
+                      <Sparkles size={12} />
+                      Smart sorted
+                    </span>
+                  )}
+                </label>
                 <select
                   name="internal_owner_id"
                   value={formData.internal_owner_id}
@@ -883,8 +932,10 @@ function AddTaskModal({
                   style={styles.select}
                 >
                   <option value="">Select owner</option>
-                  {groupedContacts.sunbeltCorporate.map(u => (
-                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                  {sortedInternalOwners.map((u, idx) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.role}){u._suggestionScore > 5 && idx < 3 ? ' ★' : ''}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -907,7 +958,31 @@ function AddTaskModal({
               </select>
             </div>
             <div style={styles.formGroup}>
-              <label style={styles.label}>Priority</label>
+              <label style={styles.label}>
+                Priority
+                {suggestedPriority !== 'Medium' && suggestedPriority !== formData.priority && (
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, priority: suggestedPriority }))}
+                    style={{
+                      marginLeft: '8px',
+                      fontSize: '0.7rem',
+                      color: 'var(--sunbelt-orange)',
+                      background: 'rgba(255, 107, 53, 0.1)',
+                      border: '1px solid var(--sunbelt-orange)',
+                      borderRadius: '4px',
+                      padding: '2px 6px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px'
+                    }}
+                  >
+                    <Sparkles size={10} />
+                    Suggest: {suggestedPriority}
+                  </button>
+                )}
+              </label>
               <select
                 name="priority"
                 value={formData.priority}

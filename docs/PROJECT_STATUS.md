@@ -155,6 +155,27 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ## Recent Updates (January 2026)
 
+### January 14, 2026 (Smart Defaults Feature)
+
+- **Department-Based Smart Defaults - Complete**
+  - Created `src/utils/smartDefaults.js` with keyword-to-department mappings
+  - **Smart Internal Owner Sorting:**
+    - Analyzes RFI subject/question, Submittal title/description, Task title/description
+    - Maps content keywords to suggested departments
+    - Sorts user dropdown with best matches first (★ indicator)
+    - "Smart sorted" sparkle icon shows when suggestions active
+  - **Priority Auto-Suggestion:**
+    - Detects urgent/critical keywords → suggests "Critical"
+    - Detects important/deadline keywords → suggests "High"
+    - Detects fyi/not urgent keywords → suggests "Low"
+    - One-click button to accept suggestion
+  - **Files Modified:**
+    - `src/components/projects/AddRFIModal.jsx` - Added smart defaults
+    - `src/components/projects/AddSubmittalModal.jsx` - Added smart defaults
+    - `src/components/projects/AddTaskModal.jsx` - Added smart defaults
+  - **Files Created:**
+    - `src/utils/smartDefaults.js` - Core suggestion functions
+
 ### January 14, 2026 (Team Builder & Excel Export Enhancement)
 
 - **Team Builder Feature - Complete**
@@ -1117,21 +1138,56 @@ notify_contacts JSONB               -- Array of {id, name, email} snapshots
 
 ---
 
-### Department-Based Smart Defaults (Future)
+### Department-Based Smart Defaults (Complete)
 
-**Status:** Planning
+**Status:** Complete (January 14, 2026)
 
-**Overview:** Auto-suggest contacts based on item type and department.
+**Overview:** Auto-suggest contacts and priority based on item type, content keywords, and department mappings.
 
-**Smart Suggestions:**
-| Item Type | Suggested Departments |
-|-----------|----------------------|
-| RFI (Technical) | Engineering, Drafting |
-| RFI (Drawing) | Drafting |
-| RFI (Material) | Purchasing |
-| Submittal | Engineering, QA |
-| Task (Production) | Production, Operations |
-| Task (QC) | Quality, Safety |
+**Implementation:**
+- Created `src/utils/smartDefaults.js` - Core utility with all suggestion logic
+- Integrated into AddRFIModal, AddSubmittalModal, and AddTaskModal
+
+**Features:**
+- **Smart Internal Owner Sorting** - Users sorted by relevance to item content
+  - Analyzes title/subject/description text for keywords
+  - Maps keywords to suggested departments (14 departments supported)
+  - Users in suggested departments appear first with ★ indicator
+  - "Smart sorted" indicator shows when suggestions are active
+- **Priority Auto-Suggestion** - Button appears when keywords suggest different priority
+  - Detects urgent/critical keywords → suggests "Critical" priority
+  - Detects important/deadline keywords → suggests "High" priority
+  - Detects fyi/not urgent keywords → suggests "Low" priority
+  - One-click to accept suggestion
+
+**Department Suggestion Mappings:**
+| Item Type | Keywords | Suggested Departments |
+|-----------|----------|----------------------|
+| RFI | technical, structural, electrical | Engineering |
+| RFI | drawing, blueprint, layout | Drafting, Engineering |
+| RFI | material, procurement, vendor | Purchasing |
+| RFI | quality, inspection, spec | Quality, Engineering |
+| Submittal | engineering, structural | Engineering |
+| Submittal | drawing, shop drawing | Drafting |
+| Submittal | material, product data | Purchasing, Quality |
+| Task | production, manufacturing | Production, Operations |
+| Task | qc, quality, inspection | Quality |
+| Task | drafting, cad | Drafting |
+
+**Priority Suggestion Keywords:**
+| Priority | Keywords |
+|----------|----------|
+| Critical | urgent, asap, emergency, critical, immediately, blocking |
+| High | important, priority, deadline, time-sensitive, expedite |
+| Low | fyi, when possible, not urgent, low priority, informational |
+
+**Files Created:**
+- `src/utils/smartDefaults.js` - Core suggestion functions
+
+**Files Modified:**
+- `src/components/projects/AddRFIModal.jsx` - Smart sorting + priority suggestion
+- `src/components/projects/AddSubmittalModal.jsx` - Smart sorting + priority suggestion
+- `src/components/projects/AddTaskModal.jsx` - Smart sorting + priority suggestion
 
 ---
 

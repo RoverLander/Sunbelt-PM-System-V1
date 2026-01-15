@@ -11,7 +11,7 @@
 // Created: January 10, 2026
 // ============================================================================
 
-import { differenceInDays, differenceInHours, parseISO, format, subDays, subMonths, startOfDay, endOfDay } from 'date-fns';
+import { differenceInDays, parseISO, format, subDays } from 'date-fns';
 
 // ============================================================================
 // CONSTANTS
@@ -333,7 +333,7 @@ export function calculateActivityTrends(projects, tasks, rfis, submittals, days 
     items.forEach(item => {
       if (!item[dateField]) return;
       const date = format(parseISO(item[dateField]), 'yyyy-MM-dd');
-      if (counts.hasOwnProperty(date)) {
+      if (Object.prototype.hasOwnProperty.call(counts, date)) {
         counts[date]++;
       }
     });

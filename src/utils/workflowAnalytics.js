@@ -212,7 +212,7 @@ export function calculateDrawingMetrics(drawingVersions) {
     }
 
     // Count response types
-    if (dv.dealer_response && responseTypes.hasOwnProperty(dv.dealer_response)) {
+    if (dv.dealer_response && Object.prototype.hasOwnProperty.call(responseTypes, dv.dealer_response)) {
       responseTypes[dv.dealer_response]++;
     }
 
@@ -305,7 +305,7 @@ export function calculateChangeOrderMetrics(changeOrders, projects) {
     }
 
     // Count by status
-    if (byStatus.hasOwnProperty(co.status)) {
+    if (Object.prototype.hasOwnProperty.call(byStatus, co.status)) {
       byStatus[co.status]++;
     }
 
@@ -389,7 +389,7 @@ export function calculateLongLeadMetrics(longLeadItems) {
 
   longLeadItems.forEach(item => {
     // Count by status
-    if (byStatus.hasOwnProperty(item.status)) {
+    if (Object.prototype.hasOwnProperty.call(byStatus, item.status)) {
       byStatus[item.status]++;
     }
 

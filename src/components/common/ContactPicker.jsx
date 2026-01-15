@@ -21,7 +21,7 @@
 // Created: January 14, 2026
 // ============================================================================
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Search,
   ChevronDown,
@@ -287,7 +287,7 @@ function ContactPicker({
         e.preventDefault();
         setHighlightedIndex(prev => Math.max(prev - 1, 0));
         break;
-      case 'Enter':
+      case 'Enter': {
         e.preventDefault();
         const item = flatList[highlightedIndex];
         if (item?.type === 'contact') {
@@ -296,6 +296,7 @@ function ContactPicker({
           handleExternalSelect();
         }
         break;
+      }
       case 'Escape':
         e.preventDefault();
         setIsOpen(false);

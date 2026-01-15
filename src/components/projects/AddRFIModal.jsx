@@ -11,18 +11,20 @@
 // - Better button styling overall
 // ============================================================================
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   X,
   Plus,
   Mail,
   AlertCircle,
   Loader,
-  MessageSquare
+  MessageSquare,
+  Sparkles
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { draftRFIEmail } from '../../utils/emailUtils';
+import { getSuggestedPriority, getSuggestedInternalOwners } from '../../utils/smartDefaults';
 
 // ============================================================================
 // CONSTANTS
@@ -298,6 +300,24 @@ function AddRFIModal({
     spec_section: '',
     drawing_reference: ''
   });
+
+  // Track if priority was auto-suggested (user can override)
+  const [priorityAutoSet, setPriorityAutoSet] = useState(false);
+
+  // ==========================================================================
+  // SMART DEFAULTS - Sort users by relevance to RFI content
+  // ==========================================================================
+  const sortedUsers = useMemo(() => {
+    if (!users.length) return [];
+    const searchText = `${formData.subject} ${formData.question}`;
+    return getSuggestedInternalOwners(users, 'rfi', searchText);
+  }, [users, formData.subject, formData.question]);
+
+  // Suggested priority based on subject/question text
+  const suggestedPriority = useMemo(() => {
+    const searchText = `${formData.subject} ${formData.question}`;
+    return getSuggestedPriority(searchText);
+  }, [formData.subject, formData.question]);
 
   // ==========================================================================
   // EFFECTS
@@ -640,9 +660,24 @@ function AddRFIModal({
             </div>
           )}
 
-          {/* Internal Owner */}
+          {/* Internal Owner - Smart Sorted */}
           <div style={styles.formGroup}>
-            <label style={styles.label}>Internal Owner</label>
+            <label style={styles.label}>
+              Internal Owner
+              {sortedUsers.length > 0 && sortedUsers[0]._suggestionScore > 0 && (
+                <span style={{
+                  marginLeft: '8px',
+                  fontSize: '0.7rem',
+                  color: 'var(--sunbelt-orange)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px'
+                }}>
+                  <Sparkles size={12} />
+                  Smart sorted
+                </span>
+              )}
+            </label>
             <select
               name="internal_owner_id"
               value={formData.internal_owner_id}
@@ -650,8 +685,10 @@ function AddRFIModal({
               style={styles.select}
             >
               <option value="">Select owner</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>{u.name}</option>
+              {sortedUsers.map((u, idx) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}{u._suggestionScore > 5 && idx < 3 ? ' ★' : ''}
+                </option>
               ))}
             </select>
           </div>
@@ -672,11 +709,42 @@ function AddRFIModal({
               </select>
             </div>
             <div style={styles.formGroup}>
-              <label style={styles.label}>Priority</label>
+              <label style={styles.label}>
+                Priority
+                {suggestedPriority !== 'Medium' && suggestedPriority !== formData.priority && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData(prev => ({ ...prev, priority: suggestedPriority }));
+                      setPriorityAutoSet(true);
+                    }}
+                    style={{
+                      marginLeft: '8px',
+                      fontSize: '0.65rem',
+                      color: 'var(--sunbelt-orange)',
+                      background: 'rgba(245, 158, 11, 0.1)',
+                      border: '1px solid var(--sunbelt-orange)',
+                      borderRadius: '4px',
+                      padding: '2px 6px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px'
+                    }}
+                    title={`Based on keywords in your text`}
+                  >
+                    <Sparkles size={10} />
+                    Suggest: {suggestedPriority}
+                  </button>
+                )}
+              </label>
               <select
                 name="priority"
                 value={formData.priority}
-                onChange={handleChange}
+                onChange={(e) => {
+                  handleChange(e);
+                  setPriorityAutoSet(false);
+                }}
                 style={styles.select}
               >
                 {PRIORITY_OPTIONS.map(opt => (

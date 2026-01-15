@@ -19,18 +19,20 @@
 // - Email validation for external recipients
 // ============================================================================
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   X,
   Plus,
   Mail,
   AlertCircle,
   Loader,
-  ClipboardList
+  ClipboardList,
+  Sparkles
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { draftSubmittalEmail } from '../../utils/emailUtils';
+import { getSuggestedPriority, getSuggestedInternalOwners } from '../../utils/smartDefaults';
 
 // ============================================================================
 // CONSTANTS
@@ -297,6 +299,21 @@ function AddSubmittalModal({
     manufacturer: '',
     model_number: ''
   });
+
+  // ==========================================================================
+  // SMART DEFAULTS - Sort users by relevance to submittal content
+  // ==========================================================================
+  const sortedUsers = useMemo(() => {
+    if (!users.length) return [];
+    const searchText = `${formData.title} ${formData.description} ${formData.submittal_type}`;
+    return getSuggestedInternalOwners(users, 'submittal', searchText);
+  }, [users, formData.title, formData.description, formData.submittal_type]);
+
+  // Suggested priority based on title/description text
+  const suggestedPriority = useMemo(() => {
+    const searchText = `${formData.title} ${formData.description}`;
+    return getSuggestedPriority(searchText);
+  }, [formData.title, formData.description]);
 
   // ==========================================================================
   // EFFECTS
@@ -637,9 +654,24 @@ function AddSubmittalModal({
             </div>
           )}
 
-          {/* Internal Owner */}
+          {/* Internal Owner - Smart Sorted */}
           <div style={styles.formGroup}>
-            <label style={styles.label}>Internal Owner</label>
+            <label style={styles.label}>
+              Internal Owner
+              {sortedUsers.length > 0 && sortedUsers[0]._suggestionScore > 0 && (
+                <span style={{
+                  marginLeft: '8px',
+                  fontSize: '0.7rem',
+                  color: 'var(--sunbelt-orange)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px'
+                }}>
+                  <Sparkles size={12} />
+                  Smart sorted
+                </span>
+              )}
+            </label>
             <select
               name="internal_owner_id"
               value={formData.internal_owner_id}
@@ -647,8 +679,10 @@ function AddSubmittalModal({
               style={styles.select}
             >
               <option value="">Select owner</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>{u.name}</option>
+              {sortedUsers.map((u, idx) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}{u._suggestionScore > 5 && idx < 3 ? ' ★' : ''}
+                </option>
               ))}
             </select>
           </div>
@@ -669,7 +703,31 @@ function AddSubmittalModal({
               </select>
             </div>
             <div style={styles.formGroup}>
-              <label style={styles.label}>Priority</label>
+              <label style={styles.label}>
+                Priority
+                {suggestedPriority !== 'Medium' && suggestedPriority !== formData.priority && (
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, priority: suggestedPriority }))}
+                    style={{
+                      marginLeft: '8px',
+                      fontSize: '0.7rem',
+                      color: 'var(--sunbelt-orange)',
+                      background: 'rgba(255, 107, 53, 0.1)',
+                      border: '1px solid var(--sunbelt-orange)',
+                      borderRadius: '4px',
+                      padding: '2px 6px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px'
+                    }}
+                  >
+                    <Sparkles size={10} />
+                    Suggest: {suggestedPriority}
+                  </button>
+                )}
+              </label>
               <select
                 name="priority"
                 value={formData.priority}

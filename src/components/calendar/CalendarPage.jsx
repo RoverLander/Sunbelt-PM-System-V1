@@ -42,13 +42,13 @@ function CalendarPage() {
   const salesRepRoles = ['sales_rep', 'sales rep'];
   const canEdit = !readOnlyRoles.includes(currentUserRole.toLowerCase());
   // Note: These role checks are used inside fetchCalendarData, not directly in component render
-  // eslint-disable-next-line no-unused-vars
+   
   const _isFactoryRestricted = factoryRestrictedRoles.includes(currentUserRole.toLowerCase());
-  // eslint-disable-next-line no-unused-vars
+   
   const _isPM = pmRoles.includes(currentUserRole.toLowerCase());
-  // eslint-disable-next-line no-unused-vars
+   
   const _isSalesManager = salesManagerRoles.includes(currentUserRole.toLowerCase());
-  // eslint-disable-next-line no-unused-vars
+   
   const _isSalesRep = salesRepRoles.includes(currentUserRole.toLowerCase());
 
   useEffect(() => {
