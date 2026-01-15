@@ -20,7 +20,7 @@ This document breaks down the PGM Dashboard feature into implementable tickets o
 | 1 | Schemas + RLS + Basic Calendar + Sim Mode | 8 | **DONE** | COMPLETE |
 | 2 | QC Flow + Takt/Queue + Material Trace + Metrics | 7 | **DONE** | COMPLETE |
 | 3 | Efficiency Tools + OEE + Boards | 6 | **DONE** | COMPLETE |
-| 4 | VP Views + Config Panels + Pipeline | 5 | Next | Pending |
+| 4 | VP Views + Config Panels + Pipeline | 5 | **DONE** | COMPLETE |
 | 5 | Mobile App + Safety + Training | 4 | Future | Future |
 
 ---
@@ -476,35 +476,88 @@ getStationLeads(factoryId)
 
 ---
 
-## Batch 4: VP Views + Config
+## Batch 4: VP Views + Config - COMPLETE
 
 ### PGM-022: VP Multi-Plant Dashboard
-**Status:** Future
+**Status:** COMPLETE
 **Effort:** Large
+
+**Scope:**
+- Executive view for VP/Director level showing all factories
+- Grid, table, and comparison view modes
+- Aggregate metrics with weighted calculations
+- Factory cards with OEE, modules, workers, QC rate
+- Drill-down navigation to factory details
+
+**Files Created:**
+- `src/components/dashboards/VPProductionDashboard.jsx`
+- `src/services/vpService.js` (shared service layer)
 
 ---
 
 ### PGM-023: Plant Config Panel
-**Status:** Future
+**Status:** COMPLETE
 **Effort:** Medium
+
+**Scope:**
+- Plant GM configuration interface
+- Collapsible sections: Time & Pay, Efficiency Modules, Line Sim, Calendar
+- Toggle switches for 12 efficiency modules
+- Work day selection
+- Auto-schedule enable/disable
+- Takt time defaults configuration
+
+**Files Created:**
+- `src/components/production/PlantConfigPanel.jsx`
 
 ---
 
 ### PGM-024: VP Config Panel (Weights/Baselines)
-**Status:** Future
+**Status:** COMPLETE
 **Effort:** Medium
+
+**Scope:**
+- VP-level weights and baseline configuration
+- Per-factory weight sliders for aggregate calculations
+- Target OEE and on-time delivery settings
+- Presets: Conservative, Standard, Aggressive, World Class
+- Bulk save with recalculation
+
+**Files Created:**
+- `src/components/production/VPConfigPanel.jsx`
 
 ---
 
 ### PGM-025: Pipeline Auto-Schedule
-**Status:** Future
+**Status:** COMPLETE
 **Effort:** Large
+
+**Scope:**
+- Auto-scheduling tool for unscheduled modules
+- Suggestions view with checkbox selection
+- Pipeline view showing all projects in queue
+- Capacity-based date suggestions
+- Bulk apply with confirmation
+- Priority indicators based on deadlines
+
+**Files Created:**
+- `src/components/production/PipelineAutoSchedule.jsx`
 
 ---
 
 ### PGM-026: Daily Report Auto-Generation
-**Status:** Future
+**Status:** COMPLETE
 **Effort:** Medium
+
+**Scope:**
+- Daily production report generator
+- Date navigation (prev/next/today)
+- Summary cards: workers, hours, modules, QC rate, labor cost
+- Detailed tables: Labor, Station activity, QC records
+- Export to CSV and print/PDF functionality
+
+**Files Created:**
+- `src/components/production/DailyReportGenerator.jsx`
 
 ---
 

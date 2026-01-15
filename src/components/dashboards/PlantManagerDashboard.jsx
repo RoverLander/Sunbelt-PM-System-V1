@@ -74,6 +74,11 @@ import OEECalculator from '../production/OEECalculator';
 import CrossTrainingMatrix from '../production/CrossTrainingMatrix';
 import VisualLoadBoard from '../production/VisualLoadBoard';
 
+// Batch 4 Components
+import PlantConfigPanel from '../production/PlantConfigPanel';
+import PipelineAutoSchedule from '../production/PipelineAutoSchedule';
+import DailyReportGenerator from '../production/DailyReportGenerator';
+
 // ============================================================================
 // STYLES
 // ============================================================================
@@ -1048,7 +1053,10 @@ export default function PlantManagerDashboard({ onNavigateToProject, initialView
           { id: 'calendar', label: 'Calendar', icon: Calendar },
           { id: 'crew', label: 'Crew', icon: Users },
           { id: 'quality', label: 'Quality', icon: ClipboardCheck },
-          { id: 'analytics', label: 'Analytics', icon: BarChart3 }
+          { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+          { id: 'pipeline', label: 'Pipeline', icon: Zap },
+          { id: 'reports', label: 'Reports', icon: ClipboardCheck },
+          { id: 'config', label: 'Config', icon: Settings }
         ].map(tab => (
           <button
             key={tab.id}
@@ -1728,6 +1736,60 @@ export default function PlantManagerDashboard({ onNavigateToProject, initialView
               showMetrics={true}
             />
           </div>
+        </div>
+      )}
+
+      {/* Pipeline Tab - Batch 4 NEW */}
+      {activeTab === 'pipeline' && (
+        <div style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>
+              <Zap size={20} />
+              Pipeline & Auto-Schedule
+            </h2>
+          </div>
+          <PipelineAutoSchedule
+            factoryId={factoryId}
+            factoryName={factoryName}
+            onScheduleApplied={() => {
+              fetchAllData();
+            }}
+          />
+        </div>
+      )}
+
+      {/* Reports Tab - Batch 4 NEW */}
+      {activeTab === 'reports' && (
+        <div style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>
+              <ClipboardCheck size={20} />
+              Daily Production Reports
+            </h2>
+          </div>
+          <DailyReportGenerator
+            factoryId={factoryId}
+            factoryName={factoryName}
+          />
+        </div>
+      )}
+
+      {/* Config Tab - Batch 4 NEW */}
+      {activeTab === 'config' && (
+        <div style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>
+              <Settings size={20} />
+              Plant Configuration
+            </h2>
+          </div>
+          <PlantConfigPanel
+            factoryId={factoryId}
+            factoryName={factoryName}
+            onSave={() => {
+              fetchAllData();
+            }}
+          />
         </div>
       )}
 
