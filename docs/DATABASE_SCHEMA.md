@@ -1039,6 +1039,219 @@ CREATE TRIGGER trigger_log_task_change
 
 ---
 
+## Plant Manager System Tables
+
+### modules
+
+Individual modules within a project that the factory builds.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| project_id | UUID | NO | | FK to projects.id |
+| factory_id | UUID | YES | | FK to factories.id |
+| serial_number | VARCHAR(50) | NO | | Module serial (e.g., 'NWBS-25250-M1') |
+| name | VARCHAR(100) | YES | | Optional friendly name |
+| sequence_number | INTEGER | NO | 1 | Module 1 of 4, etc. |
+| status | VARCHAR(30) | NO | 'Not Started' | Not Started, In Queue, In Progress, QC Hold, Rework, Completed, Staged, Shipped |
+| current_station_id | UUID | YES | | FK to station_templates.id |
+| scheduled_start | DATE | YES | | Calendar scheduling |
+| scheduled_end | DATE | YES | | Calendar scheduling |
+| actual_start | TIMESTAMPTZ | YES | | |
+| actual_end | TIMESTAMPTZ | YES | | |
+| module_width | INTEGER | YES | | |
+| module_length | INTEGER | YES | | |
+| module_height | INTEGER | YES | | |
+| square_footage | INTEGER | - | GENERATED | Auto-calculated |
+| is_rush | BOOLEAN | NO | false | |
+| special_requirements | JSONB | NO | '[]' | Array of requirement tags |
+| building_category | VARCHAR(30) | YES | | stock, fleet, government, custom |
+| long_leads | JSONB | NO | '[]' | Array of long-lead items |
+| notes | TEXT | YES | | |
+| created_at | TIMESTAMPTZ | NO | NOW() | |
+| updated_at | TIMESTAMPTZ | NO | NOW() | |
+| created_by | UUID | YES | | FK to users.id |
+
+**Indexes:** `idx_modules_project`, `idx_modules_factory`, `idx_modules_status`, `idx_modules_scheduled_start`, `idx_modules_current_station`
+
+---
+
+### station_templates
+
+The 12 production line stages (configurable per factory).
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| factory_id | UUID | YES | | FK to factories.id (null = global template) |
+| name | VARCHAR(100) | NO | | Station name |
+| code | VARCHAR(30) | NO | | e.g., 'FRAME_WELD', 'ROUGH_CARP' |
+| description | TEXT | YES | | |
+| order_num | INTEGER | NO | | Sequence in production line (1-12+) |
+| is_active | BOOLEAN | NO | true | |
+| requires_inspection | BOOLEAN | NO | false | |
+| is_inspection_station | BOOLEAN | NO | false | True for inspection-only stations |
+| duration_defaults | JSONB | NO | {...} | Hours by building category |
+| checklist | JSONB | NO | '[]' | QC checklist items |
+| min_crew_size | INTEGER | NO | 1 | |
+| max_crew_size | INTEGER | NO | 10 | |
+| recommended_crew_size | INTEGER | NO | 3 | |
+| color | VARCHAR(7) | NO | '#6366f1' | Hex color for UI |
+| icon | VARCHAR(50) | YES | | Icon name |
+| created_at | TIMESTAMPTZ | NO | NOW() | |
+| updated_at | TIMESTAMPTZ | NO | NOW() | |
+
+**Default Stations:** FRAME_WELD, ROUGH_CARP, EXT_SIDING, INT_ROUGH, ELEC_ROUGH, PLUMB_ROUGH, HVAC, INWALL_INSP, INT_FINISH, FINAL_INSP, STAGING, PICKUP
+
+---
+
+### station_assignments
+
+Tracks modules at stations with crew assignments.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| module_id | UUID | NO | | FK to modules.id |
+| station_id | UUID | NO | | FK to station_templates.id |
+| factory_id | UUID | YES | | FK to factories.id |
+| lead_id | UUID | YES | | FK to users.id |
+| crew_ids | UUID[] | NO | '{}' | Array of user IDs |
+| start_time | TIMESTAMPTZ | YES | | |
+| end_time | TIMESTAMPTZ | YES | | |
+| estimated_hours | NUMERIC(5,2) | YES | | |
+| actual_hours | NUMERIC(5,2) | YES | | |
+| status | VARCHAR(30) | NO | 'Pending' | Pending, In Progress, QC Pending, Passed, Failed, Rework, Completed |
+| qc_passed | BOOLEAN | YES | | |
+| qc_notes | TEXT | YES | | |
+| qc_checked_by | UUID | YES | | FK to users.id |
+| qc_checked_at | TIMESTAMPTZ | YES | | |
+| created_at | TIMESTAMPTZ | NO | NOW() | |
+| updated_at | TIMESTAMPTZ | NO | NOW() | |
+
+---
+
+### workers
+
+Factory floor workers (workforce tracking, not system users).
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| factory_id | UUID | NO | | FK to factories.id |
+| employee_id | VARCHAR(30) | NO | | Badge/employee ID |
+| first_name | VARCHAR(50) | NO | | |
+| last_name | VARCHAR(50) | NO | | |
+| full_name | VARCHAR(100) | - | GENERATED | Auto-calculated |
+| phone | VARCHAR(20) | YES | | |
+| email | VARCHAR(255) | YES | | |
+| title | VARCHAR(50) | YES | | e.g., 'Welder', 'Carpenter' |
+| primary_station_id | UUID | YES | | FK to station_templates.id |
+| is_lead | BOOLEAN | NO | false | |
+| reports_to | UUID | YES | | FK to workers.id |
+| hourly_rate | NUMERIC(8,2) | YES | | |
+| ot_multiplier | NUMERIC(4,2) | NO | 1.5 | |
+| double_time_multiplier | NUMERIC(4,2) | NO | 2.0 | |
+| is_active | BOOLEAN | NO | true | |
+| hire_date | DATE | YES | | |
+| termination_date | DATE | YES | | |
+| certifications | JSONB | NO | '[]' | Cross-training certifications |
+| created_at | TIMESTAMPTZ | NO | NOW() | |
+| updated_at | TIMESTAMPTZ | NO | NOW() | |
+
+---
+
+### worker_shifts
+
+Clock in/out tracking for factory workers.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| worker_id | UUID | NO | | FK to workers.id |
+| factory_id | UUID | NO | | FK to factories.id |
+| clock_in | TIMESTAMPTZ | NO | | |
+| clock_out | TIMESTAMPTZ | YES | | |
+| source | VARCHAR(20) | NO | 'kiosk' | kiosk, app, manual, import |
+| hours_regular | NUMERIC(5,2) | YES | | |
+| hours_ot | NUMERIC(5,2) | YES | | |
+| hours_double | NUMERIC(5,2) | YES | | |
+| total_hours | NUMERIC(5,2) | YES | | |
+| rate_applied | NUMERIC(8,2) | YES | | |
+| total_pay | NUMERIC(10,2) | YES | | |
+| station_id | UUID | YES | | FK to station_templates.id |
+| module_id | UUID | YES | | FK to modules.id |
+| status | VARCHAR(20) | NO | 'active' | active, completed, adjusted, voided |
+| flags | JSONB | NO | '[]' | [{type, time, note}] |
+| notes | TEXT | YES | | |
+| adjusted_by | UUID | YES | | FK to users.id |
+| adjusted_at | TIMESTAMPTZ | YES | | |
+| created_at | TIMESTAMPTZ | NO | NOW() | |
+| updated_at | TIMESTAMPTZ | NO | NOW() | |
+
+---
+
+### qc_records
+
+Quality control inspection records.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| module_id | UUID | NO | | FK to modules.id |
+| station_id | UUID | NO | | FK to station_templates.id |
+| factory_id | UUID | YES | | FK to factories.id |
+| inspector_id | UUID | YES | | FK to workers.id |
+| inspector_user_id | UUID | YES | | FK to users.id |
+| status | VARCHAR(20) | NO | 'Pending' | Pending, Passed, Failed, Rework Required, Re-inspected |
+| passed | BOOLEAN | YES | | |
+| score | INTEGER | YES | | 0-100 score |
+| checklist_results | JSONB | NO | '[]' | [{q, passed, note}] |
+| photo_urls | TEXT[] | NO | '{}' | Storage URLs |
+| notes | TEXT | YES | | |
+| defects_found | JSONB | NO | '[]' | [{type, location, severity}] |
+| rework_required | BOOLEAN | NO | false | |
+| rework_task_id | UUID | YES | | FK to tasks.id |
+| re_inspection_date | DATE | YES | | |
+| inspected_at | TIMESTAMPTZ | NO | NOW() | |
+| created_at | TIMESTAMPTZ | NO | NOW() | |
+| updated_at | TIMESTAMPTZ | NO | NOW() | |
+
+---
+
+### plant_config
+
+Per-plant configuration settings.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| factory_id | UUID | NO | | FK to factories.id (UNIQUE) |
+| time_settings | JSONB | NO | {...} | Shift times, OT thresholds |
+| efficiency_modules | JSONB | NO | {...} | Toggle flags for all 12 efficiency tools |
+| line_sim_defaults | JSONB | NO | {...} | Simulation parameters |
+| vp_settings | JSONB | NO | {...} | Weighting for aggregate reports |
+| calendar_settings | JSONB | NO | {...} | Work days, holidays |
+| created_at | TIMESTAMPTZ | NO | NOW() | |
+| updated_at | TIMESTAMPTZ | NO | NOW() | |
+
+---
+
+### Additional PGM Tables
+
+| Table | Description |
+|-------|-------------|
+| `inspection_rules` | Configurable inspection requirements per project/station |
+| `long_lead_items` | Long-lead material tracking with approval workflow |
+| `calendar_audit` | Audit trail for schedule changes |
+| `takt_events` | Actual vs expected takt time tracking |
+| `kaizen_suggestions` | Employee improvement suggestions |
+| `cross_training` | Worker certification matrix |
+| `safety_checks` | Daily safety micro-checks |
+| `five_s_audits` | 5S workplace audits |
+
+---
+
 ## Migration Files
 
 | File | Description |
@@ -1047,6 +1260,8 @@ CREATE TRIGGER trigger_log_task_change
 | `20260113_praxis_integration.sql` | Praxis fields for projects, dealers table |
 | `20260113_sales_quotes_praxis_fields.sql` | Praxis fields for sales_quotes |
 | `20260114_directory_system.sql` | Directory system with departments, contacts |
+| `20260114_team_builder.sql` | Teams for Director/VP management |
+| `20260115_plant_manager_system.sql` | Complete PGM dashboard schema (15 tables) |
 
 ---
 

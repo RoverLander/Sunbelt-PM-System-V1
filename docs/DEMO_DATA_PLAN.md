@@ -1,523 +1,715 @@
-# Demo Data Reset Plan
+# Demo Data Plan V2
+
+**Created:** January 15, 2026
+**Status:** Active
+**Master File:** `supabase/demo/MASTER_DEMO_DATA_V2.sql`
+**Previous Version:** Archived to `docs/archive/DEMO_DATA_PLAN_V1_ARCHIVED_20260115.md`
+
+---
 
 ## Overview
 
-This document outlines the comprehensive plan to reset and populate demo data for the Sunbelt PM System, showcasing all features including:
-- 4-Phase Workflow Canvas (React Flow visualization)
-- Sales Team Dashboard & Pipeline
-- Praxis Integration fields
-- Calendar with role-based filtering
-- Factory Map visualization
-- All dashboard types (VP, Director, PM, PC, Sales Manager)
+This document defines the comprehensive demo data strategy that ties together all system features:
+- PM Dashboard & Project Management
+- PC Dashboard & Stock/Fleet Projects
+- Plant GM Dashboard & Production Line
+- Sales Pipeline & Quote Management
+- Calendar with Role-Based Filtering
+
+**Key Principle:** All dates are **dynamic** (relative to `CURRENT_DATE`) making the demo data evergreen.
 
 ---
 
-## Phase 1: Clear Existing Data
+## Table of Contents
 
-### Script: `01_CLEAR_DATA.sql`
-
-**Purpose:** Remove all project-related data while preserving system configuration.
-
-**Order of deletion (respecting foreign keys):**
-```
-1.  floor_plan_items
-2.  floor_plan_pages
-3.  floor_plans
-4.  change_order_items
-5.  change_orders
-6.  color_selections
-7.  long_lead_items
-8.  cutsheet_submittals
-9.  drawing_versions
-10. engineering_reviews
-11. state_approvals
-12. third_party_reviews
-13. warning_emails_log
-14. project_workflow_status
-15. project_logs
-16. project_documents_checklist
-17. praxis_import_log
-18. milestones
-19. submittals
-20. rfis
-21. tasks
-22. attachments / file_attachments
-23. projects
-
-For Sales:
-24. sales_quote_revisions
-25. sales_activities
-26. sales_quotes
-27. sales_customers
-```
-
-**What to KEEP:**
-- `users` (authenticated users)
-- `factories` (master data)
-- `factory_contacts` (can regenerate)
-- `dealers` (Praxis master data)
-- `workflow_stations` (21 stations - DO NOT DELETE)
-- `feature_flags` (system config)
-- `announcements` (system config)
+1. [User Accounts](#1-user-accounts)
+2. [Factories & Configuration](#2-factories--configuration)
+3. [PM Projects](#3-pm-projects)
+4. [PC Projects](#4-pc-projects)
+5. [Production Line Data](#5-production-line-data)
+6. [Workers & Crew](#6-workers--crew)
+7. [Sales Quotes](#7-sales-quotes)
+8. [Tasks, RFIs, Submittals](#8-tasks-rfis-submittals)
+9. [Workflow Status](#9-workflow-status)
+10. [Date Strategy](#10-date-strategy)
+11. [Execution Order](#11-execution-order)
+12. [Verification Queries](#12-verification-queries)
+13. [Known Compatibility Requirements](#13-known-compatibility-requirements)
 
 ---
 
-## Phase 2: Verify/Seed Workflow Stations
+## 1. User Accounts
 
-### Script: `02_WORKFLOW_STATIONS.sql`
+**Principle:** Do NOT delete existing users. Use UPSERT pattern to update existing and add new users.
 
-**Critical:** The Workflow Canvas requires 21 workflow stations to exist.
+### Required Users (12 total)
 
-**21 Stations Across 4 Phases:**
+| User | Email | Role | Factory | UID | Purpose |
+|------|-------|------|---------|-----|---------|
+| Matt Jordan | matt.jordan@nwbsinc.com | PM | NWBS | (existing) | Primary PM demo - 4 complex projects |
+| Candy Echols | candy.echols@sunbeltmodular.com | Director | All | (existing) | Director demo - oversight + 2 personal |
+| Crystal Trevino | crystal.trevino@sunbeltmodular.com | PM | SSI/SMM | (existing) | PM demo - factory-clustered projects |
+| **Ross Parks** | ross.parks@nwbsinc.com | **Plant_GM** | NWBS | `fcd8501a-fdbb-43d1-83c2-fcf049bb0c90` | **NEW** - Plant GM demo |
+| **Dawn Hinkle** | dawn.hinkle@nwbsinc.com | **PC** | NWBS | `679a1d92-7ea6-4797-a4c9-d13d156c215f` | **NEW** - PC demo - 10-12 projects |
+| **Justin Downing** | justin.downing@nwbsinc.com | **Production_Manager** | NWBS | `bbed0851-f894-401a-9312-0ada815c7785` | **NEW** - Factory floor manager |
+| Devin Duvak | devin.duvak@sunbeltmodular.com | VP | All | (existing) | Executive demo |
+| Mitch Quintana | mitch.quintana@nwbsinc.com | Sales_Manager | NWBS | (existing) | Sales Manager demo - 10 quotes |
+| Robert Thaler | robert.thaler@nwbsinc.com | Sales_Rep | NWBS | (existing) | Sales Rep demo - 10 quotes |
+| Juanita Earnest | juanita.earnest@palomar.com | PC | PMI | (existing) | PMI PC demo |
+| IT Admin | admin@sunbeltmodular.com | IT | All | (existing) | System admin |
+| Support | support@sunbeltmodular.com | IT_Manager | All | (existing) | IT manager |
 
-| Phase | # | station_key | Name | Default Owner |
-|-------|---|-------------|------|---------------|
-| **1 - Initiation** | 1 | `sales_handoff` | Sales Handoff | pm |
-| | 2 | `kickoff_meeting` | Kickoff Meeting | pm |
-| | 3 | `site_survey` | Site Survey | pm |
-| **2 - Dealer Sign-Offs** | 4 | `drawings_20` | 20% Drawings | drafting |
-| | 5 | `drawings_65` | 65% Drawings | drafting |
-| | 6 | `drawings_95` | 95% Drawings | drafting |
-| | 7 | `drawings_100` | 100% Drawings | drafting |
-| | 8 | `color_selections` | Color Selections | dealer |
-| | 9 | `long_lead_items` | Long Lead Items | procurement |
-| | 10 | `cutsheets` | Cutsheet Submittals | dealer |
-| **3 - Internal Approvals** | 11 | `engineering_review` | Engineering Review | engineering |
-| | 12 | `third_party_review` | Third Party Review | third_party |
-| | 13 | `state_approval` | State Approval | state |
-| | 14 | `permit_submission` | Permit Submission | pm |
-| | 15 | `change_orders` | Change Orders | pm |
-| **4 - Delivery** | 16 | `production_start` | Production Start | factory |
-| | 17 | `qc_inspection` | QC Inspection | factory |
-| | 18 | `delivery_scheduled` | Delivery Scheduled | pm |
-| | 19 | `delivery_complete` | Delivery Complete | pm |
-| | 20 | `set_complete` | Set Complete | pm |
-| | 21 | `project_closeout` | Project Closeout | pm |
+### User Creation SQL Pattern
 
----
-
-## Phase 3: Create Demo Users
-
-### Script: `03_USERS.sql`
-
-**Demo Users Required (10 users across roles):**
-
-| Role | Name | Email | Factory | Notes |
-|------|------|-------|---------|-------|
-| VP | Executive User | vp@demo.sunbelt.com | All | Executive dashboard |
-| Director | Regional Director | director@demo.sunbelt.com | Phoenix, Southeast | Multi-factory view |
-| PM | Candy Juhnke | candy.juhnke@sunbeltmodular.com | Phoenix | Primary PM |
-| PM | Crystal Meyers | crystal.meyers@sunbeltmodular.com | Southeast | Primary PM |
-| PM | Matthew McDaniel | matthew.mcdaniel@sunbeltmodular.com | SSI | Primary PM |
-| PC | Juanita Earnest | juanita.earnest@phoenixmodular.com | Phoenix | Plant Controller |
-| Sales_Manager | Sales Manager | sales.manager@demo.sunbelt.com | All | Sales Team view |
-| Sales_Rep | Sales Rep 1 | sales.rep1@demo.sunbelt.com | Phoenix | Quote entry |
-| Sales_Rep | Sales Rep 2 | sales.rep2@demo.sunbelt.com | Southeast | Quote entry |
-| IT | Admin User | admin@demo.sunbelt.com | All | System admin |
-
-**Note:** Users must exist in Supabase Auth first, then sync to users table.
-
----
-
-## Phase 4: Import Demo Projects
-
-### Script: `04_PROJECTS.sql`
-
-**5 Demo Projects (one per workflow phase + variety):**
-
-### Project 1: Phase 1 - Just Started
-```
-Project Number: DEMO-2026-001
-Name: Phoenix Medical Office - Phase 1
-Factory: Phoenix
-Client: SPECIALIZED TESTING & CONSTRUCTION
-Contract Value: $450,000
-Status: In Progress
-Health: On Track
-Workflow Phase: 1 (Initiation - kickoff_meeting in progress)
-Primary PM: Candy Juhnke
-```
-
-### Project 2: Phase 2 - Dealer Sign-Offs (Mid-workflow)
-```
-Project Number: DEMO-2026-002
-Name: Southeast Distribution Center
-Factory: Southeast
-Client: MOBILE MODULAR GROUP (MMG)
-Contract Value: $1,200,000
-Status: In Progress
-Health: On Track
-Workflow Phase: 2 (drawings_65 in progress)
-Primary PM: Crystal Meyers
-Backup PM: Candy Juhnke
-Features: Long lead items, color selections pending
-```
-
-### Project 3: Phase 3 - Internal Approvals
-```
-Project Number: DEMO-2026-003
-Name: VA Modular Kitchen Complex
-Factory: Southeast
-Client: KITCHENS TO GO
-Contract Value: $2,500,000
-Status: In Progress
-Health: At Risk (engineering delay)
-Workflow Phase: 3 (engineering_review in progress)
-Primary PM: Crystal Meyers
-Features: 2 change orders, drawing versions complete
-```
-
-### Project 4: Phase 4 - Near Completion
-```
-Project Number: DEMO-2025-098
-Name: SSI Warehouse Expansion
-Factory: SSI
-Client: UNITED RENTALS
-Contract Value: $875,000
-Status: In Progress
-Health: On Track
-Workflow Phase: 4 (qc_inspection complete, delivery_scheduled in progress)
-Primary PM: Matthew McDaniel
-Features: Most tasks complete, floor plans with markers
-```
-
-### Project 5: Critical/Overdue Project
-```
-Project Number: DEMO-2024-050
-Name: Disney Conference Building (CRITICAL)
-Factory: Southeast
-Client: MOBILE MODULAR - AUBURNDALE
-Contract Value: $680,000
-Status: In Progress
-Health: Critical (past due)
-Workflow Phase: 2 (stuck at drawings_95)
-Primary PM: Crystal Meyers
-Features: Overdue tasks, blocked RFIs, urgent items
+```sql
+-- UPSERT pattern for users
+INSERT INTO users (id, email, name, role, factory, factory_id, created_at, updated_at)
+VALUES (
+  'fcd8501a-fdbb-43d1-83c2-fcf049bb0c90',
+  'ross.parks@nwbsinc.com',
+  'Ross Parks',
+  'Plant_GM',
+  'NWBS',
+  (SELECT id FROM factories WHERE code = 'NWBS'),
+  NOW(),
+  NOW()
+)
+ON CONFLICT (id) DO UPDATE SET
+  role = EXCLUDED.role,
+  factory = EXCLUDED.factory,
+  factory_id = EXCLUDED.factory_id,
+  updated_at = NOW();
 ```
 
 ---
 
-## Phase 5: Generate Project Data
+## 2. Factories & Configuration
 
-### Script: `05_PROJECT_DATA.sql`
+### Primary Demo Factory: NWBS
 
-**Per-Project Data Generation:**
+All new demo data focuses on **NWBS (Northwest Building Systems)** for consistency:
+- Ross Parks (Plant_GM) assigned to NWBS
+- Dawn Hinkle (PC) assigned to NWBS
+- Matthew (PM) has NWBS projects
+- Sales quotes from Mitch/Robert at NWBS
+- 60 workers at NWBS factory
 
-### 5.1 Project Workflow Status
-Initialize `project_workflow_status` for each project based on current phase:
-- Completed stations → status: 'completed', completed_date set
-- Current station → status: 'in_progress', started_date set
-- Future stations → status: 'not_started'
+### Factory Configuration
 
-### 5.2 Tasks (60-80 total)
-Per project based on phase:
-- Phase 1 project: 5-6 tasks (1-2 completed, 3-4 not started)
-- Phase 2 project: 8-10 tasks (4-5 completed, 2-3 in progress, 2 not started)
-- Phase 3 project: 12-15 tasks (8-10 completed, 3-4 in progress, 1-2 awaiting response)
-- Phase 4 project: 18-20 tasks (16-18 completed, 2 in progress)
-- Critical project: 10 tasks (4 completed, 2 blocked, 4 overdue)
+The `plant_config` table uses JSONB columns for configuration. Entry for NWBS:
 
-**Task Fields:**
 ```sql
-- project_id (FK)
-- title
-- description
-- status: 'Not Started' | 'In Progress' | 'Awaiting Response' | 'Blocked' | 'Completed' | 'Cancelled'
-- priority: 'Low' | 'Medium' | 'High' | 'Urgent'
-- due_date
-- assigned_to (user_id)
-- assigned_court: 'dealer' | 'factory' | 'pm' | 'engineering' | 'drafting' | 'procurement'
-- workflow_station_key (FK)
-- is_external (boolean)
-```
-
-### 5.3 RFIs (25-30 total)
-Per project:
-- Phase 1: 1-2 RFIs (drafts)
-- Phase 2: 4-5 RFIs (mix of open, pending, answered)
-- Phase 3: 6-8 RFIs (mostly answered)
-- Phase 4: 10-12 RFIs (all closed)
-- Critical: 5-6 RFIs (2 urgent/overdue)
-
-**RFI Fields:**
-```sql
-- project_id
-- rfi_number (e.g., 'DEMO-2026-001-RFI-001')
-- number (sequence)
-- subject
-- question
-- answer (for answered RFIs)
-- status: 'Draft' | 'Open' | 'Pending' | 'Answered' | 'Closed'
-- priority: 'Low' | 'Medium' | 'High' | 'Urgent'
-- due_date
-- date_sent
-- is_external
-- sent_to
-- workflow_station_key (optional)
-```
-
-### 5.4 Submittals (20-25 total)
-```sql
-- project_id
-- submittal_number
-- title
-- submittal_type: 'Shop Drawings' | 'Product Data' | 'Samples' | 'Manufacturer Data'
-- status: 'Draft' | 'Submitted' | 'Under Review' | 'Approved' | 'Approved with Comments' | 'Rejected' | 'Revise and Resubmit'
-- manufacturer
-- model_number
-- submitted_date
-- response_date
-```
-
-### 5.5 Milestones (4-6 per project)
-Standard milestones:
-1. Sales Handoff
-2. 65% Drawings Approved
-3. Production Start
-4. Delivery
-5. Set Complete
-6. Project Closeout
-
-### 5.6 Drawing Versions (for Phase 2+ projects)
-```sql
-- project_id
-- drawing_percentage: 20 | 65 | 95 | 100
-- version_number
-- status: 'Pending' | 'Submitted' | 'Under Review' | 'Approved' | 'Approved with Redlines' | 'Rejected'
-- submitted_date
-- response_date
-- dealer_response
-- document_url (placeholder)
-```
-
-### 5.7 Long Lead Items (for Phase 2+ projects)
-```sql
-- project_id
-- item_name: 'HVAC Unit' | 'Electrical Panel' | 'Generator' | 'Custom Windows'
-- manufacturer
-- supplier
-- lead_time_weeks
-- order_date
-- expected_delivery
-- status: 'Pending' | 'Ordered' | 'In Transit' | 'Delivered'
-- has_cutsheet
-```
-
-### 5.8 Color Selections (for Phase 2+ projects)
-```sql
-- project_id
-- category: 'Roof' | 'Siding' | 'Trim' | 'Flooring' | 'Interior Walls' | 'Doors' | 'Countertops'
-- item_name
-- color_name
-- color_code
-- manufacturer
-- is_non_stock
-- status: 'Pending' | 'Confirmed'
-```
-
-### 5.9 Change Orders (for Phase 3+ projects)
-```sql
-- project_id
-- co_number / change_order_number
-- status: 'Draft' | 'Sent' | 'Signed' | 'Implemented'
-- total_amount
-- date
-- sent_date, signed_date, implemented_date
-+ change_order_items (line items)
-```
-
-### 5.10 Engineering Reviews (for Phase 3+ projects)
-```sql
-- project_id
-- review_type: 'Internal' | 'External' | 'Third Party'
-- status: 'Pending' | 'In Review' | 'Approved' | 'Revisions Required'
-- reviewer_name
-- stamp_number (for approved)
+INSERT INTO plant_config (factory_id, time_settings, efficiency_modules)
+SELECT
+  id,
+  '{"shift_start": "06:00", "shift_end": "14:30", "break_minutes": 30, "lunch_minutes": 30, "ot_threshold_daily": 8, "ot_threshold_weekly": 40, "double_time_threshold": 12}'::jsonb,
+  '{"takt_time_tracker": true, "queue_time_monitor": true, "kaizen_board": false}'::jsonb
+FROM factories WHERE code = 'NWBS'
+ON CONFLICT (factory_id) DO UPDATE SET time_settings = EXCLUDED.time_settings;
 ```
 
 ---
 
-## Phase 6: Sales Pipeline Data
+## 3. PM Projects
 
-### Script: `06_SALES_DATA.sql`
+### Project Distribution
 
-**Sales Customers (5-6):**
+| PM | Factory | Count | Types | Modules |
+|----|---------|-------|-------|---------|
+| Matt Jordan | NWBS | 4 | CUSTOM, GOVERNMENT | 25-30 total |
+| Crystal Trevino | SSI, SMM | 4-6 | Mixed | (existing) |
+| Candy Echols | Various | 2 | Mixed (personal) | (existing) |
+
+### Matthew's NWBS PM Projects (4 projects, ~27 modules)
+
+| Project # | Name | Type | Modules | Phase | Health | Notes |
+|-----------|------|------|---------|-------|--------|-------|
+| NWBS-26-001 | Boise School District Admin | GOVERNMENT | 8 | 3 | On Track | Complex, state approvals needed |
+| NWBS-26-002 | Idaho State University Labs | GOVERNMENT | 6 | 2 | At Risk | Engineering delays |
+| NWBS-26-003 | Boeing Everett Support | CUSTOM | 8 | 4 | On Track | Near completion |
+| NWBS-26-004 | Microsoft Redmond Campus | CUSTOM | 5 | 2 | On Track | Recently started |
+
+### PM Project Fields Required
+
 ```sql
-- SPECIALIZED TESTING & CONSTRUCTION
-- MOBILE MODULAR GROUP
-- KITCHENS TO GO
-- UNITED RENTALS
-- PACIFIC MOBILE STRUCTURES
+-- Required fields for PM projects
+- project_number (VARCHAR) - e.g., 'NWBS-26-001'
+- name (VARCHAR)
+- factory (VARCHAR) - 'NWBS'
+- factory_id (UUID) - FK to factories
+- building_type (VARCHAR) - 'GOVERNMENT' | 'CUSTOM' | 'STOCK'
+- status (VARCHAR) - 'In Progress'
+- health_status (VARCHAR) - 'On Track' | 'At Risk' | 'Critical'
+- current_phase (INTEGER) - 1-4
+- contract_value (NUMERIC) - minimum $600,000
+- owner_id (UUID) - Matthew's user ID
+- primary_pm_id (UUID) - Matthew's user ID
+- module_count (INTEGER) - matches modules created
+- target_online_date (DATE) - delivery target
+- start_date (DATE) - project start
 ```
 
-**Sales Quotes (8-10):**
+---
 
-| Quote # | Customer | Status | Value | Outlook % | Praxis # | Factory |
-|---------|----------|--------|-------|-----------|----------|---------|
-| SQ-2026-001 | Specialized Testing | Won | $450,000 | 100% | PX-12345 | Phoenix |
-| SQ-2026-002 | MMG | Negotiating | $1,200,000 | 75% | PX-12346 | Southeast |
-| SQ-2026-003 | Kitchens To Go | Awaiting PO | $2,500,000 | 95% | - | Southeast |
-| SQ-2026-004 | United Rentals | PO Received | $875,000 | 100% | PX-12347 | SSI |
-| SQ-2026-005 | New Client A | Sent | $650,000 | 40% | - | Phoenix |
-| SQ-2026-006 | New Client B | Draft | $380,000 | 20% | - | Phoenix |
-| SQ-2026-007 | PMSI | Negotiating | $920,000 | 60% | PX-12348 | NWBS |
-| SQ-2026-008 | New Client C | Lost | $550,000 | 0% | - | Southeast |
+## 4. PC Projects
 
-**Fields for Praxis Integration:**
-- praxis_quote_number
-- praxis_source_factory
-- dealer_id (FK to dealers)
-- building_type
-- building_width, building_length
-- square_footage
-- module_count
-- pm_flagged (boolean for "needs PM attention")
+### PC Role Definition
+
+The PC (Project Coordinator) is a "mini project manager" for high-volume stock/fleet projects:
+- Higher project count than PMs (10-12 vs 4-6)
+- Simpler projects (STOCK type, repeat builds)
+- Rarely has RFIs (simple/repeat designs)
+- Tracks: Long lead items, color selections, engineering approvals, third-party approvals
+- Reports to Plant GM on production scheduling
+- Does NOT require PM involvement for day-to-day
+
+### Dawn Hinkle's NWBS PC Projects (12 projects, ~36 modules)
+
+| Project # | Name | Type | Modules | Phase | Notes |
+|-----------|------|------|---------|-------|-------|
+| NWBS-26-S01 | United Rentals Fleet Order 1 | STOCK | 3 | 4 | Standard fleet, near completion |
+| NWBS-26-S02 | United Rentals Fleet Order 2 | STOCK | 3 | 3 | In production |
+| NWBS-26-S03 | ModSpace Standard 24x60 | STOCK | 3 | 3 | Standard build |
+| NWBS-26-S04 | Pacific Mobile Standard | STOCK | 3 | 2 | Drawings phase |
+| NWBS-26-S05 | ATCO Site Office | STOCK | 2 | 2 | Simple office |
+| NWBS-26-S06 | Williams Scotsman Classroom | STOCK | 4 | 3 | School portable |
+| NWBS-26-S07 | Target Distribution Temp | STOCK | 3 | 2 | Temp facility |
+| NWBS-26-S08 | Amazon Warehouse Office | STOCK | 3 | 3 | In production |
+| NWBS-26-S09 | Costco Break Room | STOCK | 2 | 4 | Near completion |
+| NWBS-26-S10 | Starbucks Training | STOCK | 3 | 2 | Training facility |
+| NWBS-26-S11 | Home Depot Site Office | STOCK | 2 | 3 | Construction office |
+| NWBS-26-S12 | Lowes District Office | STOCK | 3 | 2 | District facility |
+
+**Total PC Modules:** 36 modules
+
+### PC Project Fields
+
+Same as PM projects but with:
+- `building_type = 'STOCK'`
+- `owner_id` = Dawn Hinkle's user ID
+- Lower contract values ($150K - $400K typical)
+- Simpler/shorter timelines
 
 ---
 
-## Phase 7: Floor Plans & Markers
+## 5. Production Line Data
 
-### Script: `07_FLOOR_PLANS.sql` (Optional - requires image files)
+### Station Templates (12 stations)
 
-For Project 4 (Phase 4 - near completion):
-- 2 floor plan records
-- 8-10 markers linked to tasks/RFIs
+The production line has 12 stations (already seeded in `20260115_plant_manager_system.sql`):
 
-**Marker Types:**
-- Task markers (linked to specific tasks)
-- RFI markers (linked to RFIs)
-- General markers (notes)
+| Order | Code | Name | Lead Type | Duration (Stock) | Duration (Custom) |
+|-------|------|------|-----------|------------------|-------------------|
+| 1 | FRAME | Frame | Frame Lead | 4h | 8h |
+| 2 | FLOOR_DECK | Floor/Deck | Frame Lead | 4h | 6h |
+| 3 | WALLS | Walls | Framing Lead | 4h | 8h |
+| 4 | INSULATION | Insulation | Insulation Lead | 3h | 4h |
+| 5 | ROOF | Roof | Roof Lead | 4h | 6h |
+| 6 | SHEATHING | Sheathing | Exterior Lead | 3h | 4h |
+| 7 | SIDING | Siding | Exterior Lead | 4h | 6h |
+| 8 | PAINT | Paint | Paint Lead | 4h | 6h |
+| 9 | MEP_ROUGHIN | Rough-in (E/P/HVAC) | MEP Lead | 6h | 10h |
+| 10 | WALL_COVER | Wall Coverings | Finish Lead | 4h | 6h |
+| 11 | FINISH | Finish | Finish Lead | 4h | 8h |
+| 12 | INSPECTION | Inspections/Staging | QC Lead | 2h | 4h |
 
----
+### Modules Distribution (~63 total at NWBS)
 
-## Phase 8: Project Logs
+| Source | Project Count | Module Count | Current Status Distribution |
+|--------|---------------|--------------|------------------------------|
+| PM Projects | 4 | 27 | Various stations |
+| PC Projects | 12 | 36 | Various stations |
+| **Total** | 16 | 63 | Spread across 12 stations |
 
-### Script: `08_PROJECT_LOGS.sql`
+### Module Status Distribution
 
-Generate realistic log entries:
-- Status change logs
-- Task update logs (auto-generated style)
-- PM notes (manual entries)
-- Important/pinned entries
+For a realistic production line view:
 
-**Per Project:**
-- Phase 1: 3-5 logs
-- Phase 2: 8-10 logs
-- Phase 3: 12-15 logs
-- Phase 4: 20-25 logs
-- Critical: 15-20 logs (with urgent flags)
+| Station | PM Modules | PC Modules | Total |
+|---------|------------|------------|-------|
+| Frame (1) | 2 | 3 | 5 |
+| Floor/Deck (2) | 2 | 3 | 5 |
+| Walls (3) | 3 | 4 | 7 |
+| Insulation (4) | 2 | 3 | 5 |
+| Roof (5) | 2 | 3 | 5 |
+| Sheathing (6) | 2 | 3 | 5 |
+| Siding (7) | 2 | 3 | 5 |
+| Paint (8) | 3 | 3 | 6 |
+| Rough-in (9) | 3 | 4 | 7 |
+| Wall Covers (10) | 2 | 3 | 5 |
+| Finish (11) | 2 | 2 | 4 |
+| Staging (12) | 2 | 2 | 4 |
 
----
-
-## Execution Order
-
-1. **Run `01_CLEAR_DATA.sql`** - Wipe existing data
-2. **Run `02_WORKFLOW_STATIONS.sql`** - Ensure 21 stations exist
-3. **Run `03_USERS.sql`** - Create demo users (after Auth setup)
-4. **Run `04_PROJECTS.sql`** - Create 5 demo projects
-5. **Run `05_PROJECT_DATA.sql`** - Generate tasks, RFIs, submittals, etc.
-6. **Run `06_SALES_DATA.sql`** - Create sales pipeline data
-7. **Run `07_FLOOR_PLANS.sql`** - (Optional) Add floor plan markers
-8. **Run `08_PROJECT_LOGS.sql`** - Generate project logs
-
----
-
-## Verification Queries
-
-After running all scripts:
+### Module Creation SQL Pattern
 
 ```sql
--- Count verification
-SELECT 'projects' AS table_name, COUNT(*) FROM projects
+-- Create modules for a project
+INSERT INTO modules (
+  project_id, factory_id, serial_number, sequence_number,
+  status, current_station_id, scheduled_start,
+  module_width, module_length, building_category
+)
+VALUES (
+  v_project_id,
+  v_factory_id,
+  'NWBS-26-001-M1',  -- Serial number
+  1,                  -- Sequence
+  'In Progress',      -- Status
+  v_station_id,       -- Current station
+  CURRENT_DATE + INTERVAL '5 days',
+  14,                 -- Width in feet
+  60,                 -- Length in feet
+  'government'        -- Building category
+);
+```
+
+### Station Assignments
+
+Each module at a station needs a `station_assignments` record:
+
+```sql
+INSERT INTO station_assignments (
+  module_id, station_id, factory_id,
+  lead_id, crew_ids, start_time, status
+)
+VALUES (
+  v_module_id,
+  v_station_id,
+  v_factory_id,
+  v_lead_worker_id,     -- From workers table
+  ARRAY[w1_id, w2_id],  -- Crew worker IDs
+  NOW(),
+  'In Progress'
+);
+```
+
+---
+
+## 6. Workers & Crew
+
+### Worker Distribution (60 workers at NWBS)
+
+| Category | Count | Details |
+|----------|-------|---------|
+| Station Leads | 8 | Cover all 12 stations |
+| General Crew | 52 | Distributed across stations |
+| **Total** | 60 | |
+
+### Lead Assignments
+
+| Lead # | Name | Stations Covered | Badge |
+|--------|------|------------------|-------|
+| 1 | Marcus Johnson | Frame, Floor/Deck | Frame Lead |
+| 2 | Tony Martinez | Walls | Framing Lead |
+| 3 | Robert Chen | Insulation | Insulation Lead |
+| 4 | James Wilson | Roof | Roof Lead |
+| 5 | David Thompson | Sheathing, Siding | Exterior Lead |
+| 6 | Carlos Garcia | Paint | Paint Lead |
+| 7 | Michael Brown | Rough-in | MEP Lead |
+| 8 | Kevin Davis | Wall Covers, Finish, Staging | Finish/QC Lead |
+
+### Worker Creation SQL Pattern
+
+```sql
+-- Create a lead worker
+INSERT INTO workers (
+  factory_id, employee_id, first_name, last_name, title,
+  primary_station_id, is_lead, hourly_rate, is_active, hire_date
+)
+VALUES (
+  v_factory_id,
+  'NWBS-L001',
+  'Marcus',
+  'Johnson',
+  'Frame Lead',
+  v_frame_station_id,
+  true,           -- is_lead
+  32.50,          -- hourly rate
+  true,
+  '2020-03-15'
+);
+```
+
+### Worker Shifts (Demo Day)
+
+Create active shifts for most workers to show attendance:
+
+```sql
+-- Clock in 50 of 60 workers (83% attendance)
+INSERT INTO worker_shifts (worker_id, factory_id, clock_in, source, status)
+SELECT
+  id,
+  factory_id,
+  CURRENT_DATE + INTERVAL '6 hours' + (random() * INTERVAL '30 minutes'),
+  'kiosk',
+  'active'
+FROM workers
+WHERE factory_id = v_factory_id AND is_active = true
+LIMIT 50;
+```
+
+---
+
+## 7. Sales Quotes
+
+### Quote Distribution (20 quotes at NWBS)
+
+| Sales Rep | Quote Count | Active | Won | Lost |
+|-----------|-------------|--------|-----|------|
+| Mitch Quintana | 10 | 6 | 2 | 2 |
+| Robert Thaler | 10 | 7 | 2 | 1 |
+| **Total** | 20 | 13 | 4 | 3 |
+
+### Quote Details
+
+**Mitch Quintana's Quotes:**
+
+| Quote # | Customer | Status | Value | Outlook % | PM Flagged |
+|---------|----------|--------|-------|-----------|------------|
+| Q-2026-M01 | Boise School District | Won | $1,850,000 | 100% | No |
+| Q-2026-M02 | Idaho DOT | Negotiating | $920,000 | 75% | Yes |
+| Q-2026-M03 | Portland Metro | Sent | $680,000 | 40% | No |
+| Q-2026-M04 | Oregon Health Sciences | Awaiting PO | $2,100,000 | 95% | Yes |
+| Q-2026-M05 | City of Tacoma | Draft | $750,000 | 20% | No |
+| Q-2026-M06 | King County | Negotiating | $1,200,000 | 60% | No |
+| Q-2026-M07 | Seattle Parks | Sent | $620,000 | 35% | No |
+| Q-2026-M08 | Spokane Schools | Lost | $890,000 | 0% | No |
+| Q-2026-M09 | Tri-Cities | Lost | $650,000 | 0% | No |
+| Q-2026-M10 | Yakima Valley | PO Received | $1,100,000 | 100% | No |
+
+**Robert Thaler's Quotes:**
+
+| Quote # | Customer | Status | Value | Outlook % | PM Flagged |
+|---------|----------|--------|-------|-----------|------------|
+| Q-2026-R01 | AWS Seattle | Negotiating | $3,200,000 | 75% | Yes |
+| Q-2026-R02 | Boeing Everett | Sent | $1,850,000 | 50% | No |
+| Q-2026-R03 | Port of Seattle | PO Received | $980,000 | 100% | No |
+| Q-2026-R04 | Microsoft Redmond | Won | $2,100,000 | 100% | No |
+| Q-2026-R05 | Starbucks HQ | Sent | $620,000 | 30% | No |
+| Q-2026-R06 | Costco Regional | Negotiating | $1,450,000 | 65% | No |
+| Q-2026-R07 | Amazon Fulfillment | Awaiting PO | $2,800,000 | 90% | Yes |
+| Q-2026-R08 | T-Mobile Campus | Draft | $780,000 | 15% | No |
+| Q-2026-R09 | Alaska Airlines | Sent | $920,000 | 40% | No |
+| Q-2026-R10 | Nordstrom | Lost | $1,100,000 | 0% | No |
+
+### Won Quote Linkage
+
+Won quotes should link to projects via `converted_to_project_id`:
+
+| Quote | Links To Project |
+|-------|------------------|
+| Q-2026-M01 (Boise School) | NWBS-26-001 |
+| Q-2026-R04 (Microsoft) | NWBS-26-004 |
+
+---
+
+## 8. Tasks, RFIs, Submittals
+
+### Per-Project Targets
+
+| Item Type | PM Projects | PC Projects | Notes |
+|-----------|-------------|-------------|-------|
+| Tasks | 8-15 per project | 4-8 per project | Phase-appropriate |
+| RFIs | 2-5 per project | 0-2 per project | PC rarely has RFIs |
+| Submittals | 4-8 per project | 2-4 per project | Standard types |
+
+### Task Types by Project Phase
+
+**Phase 1 Tasks:**
+- Complete Sales Handoff
+- Schedule Kickoff Meeting
+- Initial Client Contact
+
+**Phase 2 Tasks:**
+- Review 20% Drawings
+- Review 65% Drawings
+- Confirm Color Selections
+- Order Long Lead Items
+- Review Cutsheet Submittals
+
+**Phase 3 Tasks:**
+- Complete Engineering Review
+- Third Party Plan Review
+- Obtain State Approval
+- Submit Building Permits
+- Process Change Orders
+
+**Phase 4 Tasks:**
+- Begin Production
+- Quality Control Inspection
+- Schedule Delivery
+- Coordinate Site Prep
+- Project Closeout
+
+### RFI Types
+
+Standard RFI subjects:
+- Site Access Clarification
+- Electrical Panel Location
+- Flooring Material Substitution
+- HVAC Equipment Specs
+- Structural Connection Detail
+- Window Schedule Clarification
+- Plumbing Fixture Confirmation
+
+### Submittal Types
+
+Standard submittals:
+- HVAC Package Unit (Product Data)
+- Main Electrical Panel (Shop Drawings)
+- LVT Flooring (Samples)
+- Aluminum Windows (Shop Drawings)
+- Roofing Material (Product Data)
+- Interior Paint (Samples)
+- Plumbing Fixtures (Product Data)
+
+---
+
+## 9. Workflow Status
+
+### Workflow Phases (4 phases, ~20 stations)
+
+| Phase | Name | Stations |
+|-------|------|----------|
+| 1 | Initiation | Sales Handoff, Kickoff Meeting |
+| 2 | Dealer Sign-Offs | 20% Drawings through Cutsheets |
+| 3 | Internal Approvals | Engineering through Permits |
+| 4 | Delivery | Production through Closeout |
+
+**Note:** Site Survey was REMOVED from Phase 1 (dealers handle site work).
+
+### Initialize Workflow Status
+
+Each project needs `project_workflow_status` records for all 20 workflow stations:
+
+```sql
+-- Initialize workflow status for a project
+-- Note: Uses station_key (VARCHAR FK), not workflow_station_id
+-- Date columns are started_date/completed_date (DATE type), not started_at/completed_at
+INSERT INTO project_workflow_status (project_id, station_key, status, started_date, completed_date)
+SELECT
+  v_project_id,
+  ws.station_key,
+  CASE
+    WHEN ws.phase < v_current_phase THEN 'completed'
+    WHEN ws.phase = v_current_phase AND ws.display_order <= v_current_station THEN 'in_progress'
+    ELSE 'not_started'
+  END,
+  CASE WHEN ws.phase < v_current_phase THEN (v_start_date + (ws.display_order * INTERVAL '7 days'))::DATE END,
+  CASE WHEN ws.phase < v_current_phase THEN (v_start_date + ((ws.display_order + 1) * INTERVAL '7 days'))::DATE END
+FROM workflow_stations ws
+WHERE ws.is_active = true
+ORDER BY ws.phase, ws.display_order;
+```
+
+---
+
+## 10. Date Strategy
+
+### Dynamic Date Calculations
+
+All dates relative to `CURRENT_DATE`:
+
+| Date Expression | Usage |
+|-----------------|-------|
+| `CURRENT_DATE - INTERVAL '9 months'` | Oldest project creation |
+| `CURRENT_DATE - INTERVAL '6 months'` | Mid-range project starts |
+| `CURRENT_DATE - INTERVAL '3 months'` | Recent project starts |
+| `CURRENT_DATE - INTERVAL '14 days'` | Overdue items (2 weeks) |
+| `CURRENT_DATE - INTERVAL '7 days'` | Overdue items (1 week) |
+| `CURRENT_DATE - INTERVAL '1 day'` | Yesterday (overdue) |
+| `CURRENT_DATE` | Due today |
+| `CURRENT_DATE + INTERVAL '3 days'` | Due this week |
+| `CURRENT_DATE + INTERVAL '7 days'` | Due next week |
+| `CURRENT_DATE + INTERVAL '14 days'` | Due in 2 weeks |
+| `CURRENT_DATE + INTERVAL '30 days'` | Due next month |
+| `CURRENT_DATE + INTERVAL '60 days'` | Delivery window |
+| `CURRENT_DATE + INTERVAL '90 days'` | Future delivery |
+| `CURRENT_DATE + INTERVAL '180 days'` | Long-term delivery |
+
+### Item Due Date Distribution
+
+For urgency variety in calendars/dashboards:
+
+| Category | Count | Date Range |
+|----------|-------|------------|
+| Overdue | 15% | -14 to -1 days |
+| Due Today | 5% | Today |
+| Due This Week | 20% | +1 to +7 days |
+| Due Next Week | 20% | +8 to +14 days |
+| Due This Month | 25% | +15 to +30 days |
+| Future | 15% | +31 to +90 days |
+
+---
+
+## 11. Execution Order
+
+### SQL Script Execution Sequence
+
+```
+1. 00_UPDATE_USERS.sql          -- UPSERT users (Ross, Dawn, Justin)
+2. 01_CLEAR_DATA.sql            -- Truncate project data (NOT users/factories/directory)
+3. 02_FACTORIES_TABLE.sql       -- Ensure factories exist
+4. 03_DEPARTMENTS.sql           -- Ensure departments exist
+5. 04_WORKFLOW_STATIONS.sql     -- Ensure 20 workflow stations exist
+6. 05_IMPORT_PROJECTS.sql       -- Create PM + PC projects
+7. 06_PROJECT_DATA.sql          -- Tasks, RFIs, Submittals, Milestones
+8. 07_WORKFLOW_STATUS.sql       -- Initialize workflow status
+9. 08_SALES_DATA.sql            -- Customers, Quotes
+10. 09_DIRECTORY_CONTACTS.sql   -- 311 directory contacts
+11. 10_PRODUCTION_LINE.sql      -- NEW: Modules, Workers, Shifts, Station Assignments
+```
+
+### Or Run Single Master Script
+
+```sql
+\i supabase/demo/MASTER_DEMO_DATA_V2.sql
+```
+
+---
+
+## 12. Verification Queries
+
+### Count Verification
+
+```sql
+SELECT 'users' AS table_name, COUNT(*) AS count FROM users WHERE role IS NOT NULL
+UNION ALL SELECT 'projects', COUNT(*) FROM projects
 UNION ALL SELECT 'tasks', COUNT(*) FROM tasks
 UNION ALL SELECT 'rfis', COUNT(*) FROM rfis
 UNION ALL SELECT 'submittals', COUNT(*) FROM submittals
+UNION ALL SELECT 'milestones', COUNT(*) FROM milestones
 UNION ALL SELECT 'workflow_stations', COUNT(*) FROM workflow_stations
-UNION ALL SELECT 'project_workflow_status', COUNT(*) FROM project_workflow_status
 UNION ALL SELECT 'sales_quotes', COUNT(*) FROM sales_quotes
-UNION ALL SELECT 'change_orders', COUNT(*) FROM change_orders
-UNION ALL SELECT 'long_lead_items', COUNT(*) FROM long_lead_items
-UNION ALL SELECT 'color_selections', COUNT(*) FROM color_selections
-UNION ALL SELECT 'drawing_versions', COUNT(*) FROM drawing_versions
-UNION ALL SELECT 'milestones', COUNT(*) FROM milestones;
+UNION ALL SELECT 'modules', COUNT(*) FROM modules
+UNION ALL SELECT 'workers', COUNT(*) FROM workers
+UNION ALL SELECT 'station_templates', COUNT(*) FROM station_templates
+UNION ALL SELECT 'worker_shifts', COUNT(*) FROM worker_shifts
+ORDER BY table_name;
+```
 
--- Expected counts:
--- projects: 5
--- tasks: 60-80
--- rfis: 25-30
--- submittals: 20-25
--- workflow_stations: 21
--- project_workflow_status: ~100 (21 per project)
--- sales_quotes: 8-10
--- change_orders: 3-5
--- long_lead_items: 10-15
--- color_selections: 15-20
--- drawing_versions: 12-16
--- milestones: 20-30
+### Expected Counts
+
+| Table | Expected Count |
+|-------|----------------|
+| users | 12+ |
+| projects | 16+ (4 PM + 12 PC) |
+| tasks | 120-180 |
+| rfis | 30-50 |
+| submittals | 50-80 |
+| milestones | 80-100 |
+| workflow_stations | 20-21 |
+| sales_quotes | 20 |
+| modules | 63 |
+| workers | 60 |
+| station_templates | 12 |
+| worker_shifts | 50 (active) |
+
+### Role Verification
+
+```sql
+-- Verify Plant_GM can see NWBS data
+SELECT u.name, u.role, u.factory, f.name AS factory_name
+FROM users u
+LEFT JOIN factories f ON u.factory_id = f.id
+WHERE u.role IN ('Plant_GM', 'PC', 'Production_Manager');
+
+-- Verify modules exist at factory
+SELECT f.code, COUNT(m.id) AS module_count
+FROM factories f
+LEFT JOIN modules m ON m.factory_id = f.id
+GROUP BY f.code
+ORDER BY module_count DESC;
 ```
 
 ---
 
-## Demo Highlights
+## 13. Known Compatibility Requirements
 
-### Key Scenarios to Show:
+### PGM Dashboard Requirements
 
-1. **Workflow Canvas** (React Flow)
-   - Open Project 2 → Workflow tab → Canvas view
-   - Show stations with different statuses (completed, in progress, not started)
-   - Show animated edges and progress indicator
+For the Plant GM Dashboard to work correctly:
 
-2. **VP Dashboard**
-   - Login as VP user
-   - See all 5 projects across factories
-   - Factory health breakdown
+1. **Station Templates** - Must have 12 stations seeded (already in `20260115_plant_manager_system.sql`)
+2. **Modules** - Must have `factory_id`, `current_station_id`, `scheduled_start` populated
+3. **Workers** - Must have `factory_id`, `is_lead`, `primary_station_id` set
+4. **Worker Shifts** - Must have today's shifts with `status = 'active'`
+5. **Station Assignments** - Link modules to stations with lead/crew
 
-3. **PM Dashboard**
-   - Login as Crystal Meyers
-   - See assigned projects (3-4)
-   - Calendar with upcoming deadlines
+### PC Dashboard Requirements (Future)
 
-4. **Sales Team Page**
-   - Login as Sales Manager
-   - See pipeline distribution
-   - Team member performance cards
+When PC Dashboard is built, it needs:
 
-5. **Critical Project Alert**
-   - Project 5 shows as Critical
-   - Overdue tasks highlighted
-   - Blocked RFIs visible
+1. Projects where `owner_id` = PC user ID
+2. `building_type = 'STOCK'` for most projects
+3. Long lead items table populated
+4. Color selections tracking
+5. Engineering review status per project
 
-6. **Calendar Filtering**
-   - PM sees only their tasks/RFIs
-   - Sales Manager sees quote deadlines
-   - Role-based date filtering
+### Calendar Filtering Requirements
 
----
+The calendar filters by role:
 
-## Questions to Resolve Before Implementation
+| Role | Sees Projects Where |
+|------|---------------------|
+| PM | `owner_id = user.id` OR `primary_pm_id = user.id` OR `backup_pm_id = user.id` |
+| PC | `owner_id = user.id` AND `user.factory` matches project factory |
+| Plant_GM | `factory` matches user's factory |
+| Sales_Manager | Quotes `factory` matches user's factory |
+| Sales_Rep | Quotes `assigned_to` = user.id |
+| Director | All projects |
+| VP | All projects |
 
-1. **User Authentication:**
-   - Should demo users be created in Supabase Auth manually first?
-   - Or use a seed script with predefined UUIDs?
+### Schema Field Requirements
 
-2. **Factory Data:**
-   - What factories should exist? Current list:
-     - Phoenix, Southeast, SSI, NWBS, Promod, Indicom
-   - Confirm factory codes match existing data.
+**Projects table must have:**
+- `owner_id` (UUID) - Project owner
+- `primary_pm_id` (UUID) - Primary PM
+- `backup_pm_id` (UUID) - Backup PM
+- `factory` (VARCHAR) - Factory code
+- `factory_id` (UUID) - FK to factories
+- `building_type` (VARCHAR) - STOCK | CUSTOM | GOVERNMENT
+- `module_count` (INTEGER) - Number of modules
+- `current_phase` (INTEGER) - 1-4
 
-3. **Date Ranges:**
-   - Should all dates be relative to `CURRENT_DATE`?
-   - Or use fixed dates for reproducibility?
-
-4. **Floor Plan Images:**
-   - Do we have placeholder images to upload?
-   - Or skip floor plan demo data?
-
-5. **Praxis Integration:**
-   - Include sample Praxis import log entries?
-   - Demonstrate the import flow?
+**Modules table must have:**
+- `project_id` (UUID) - FK to projects
+- `factory_id` (UUID) - FK to factories
+- `current_station_id` (UUID) - FK to station_templates
+- `scheduled_start` (DATE) - For calendar view
+- `status` (VARCHAR) - Module status
+- `building_category` (VARCHAR) - From project type
 
 ---
 
-*Document created: January 13, 2026*
-*Last updated: January 13, 2026*
+## Potential Issues & Mitigations
+
+### Issue 1: Module serial number uniqueness
+
+**Problem:** Serial numbers must be unique per project.
+**Mitigation:** Use project number prefix: `{PROJECT_NUMBER}-M{SEQUENCE}`
+
+### Issue 2: Station assignment conflicts
+
+**Problem:** A module can only be at one station at a time.
+**Mitigation:** Use UNIQUE constraint `(module_id, station_id)` and clear old assignments.
+
+### Issue 3: Worker shift date boundaries
+
+**Problem:** Shifts span midnight could cause issues.
+**Mitigation:** Create shifts starting at `CURRENT_DATE + INTERVAL '6 hours'` (6 AM).
+
+### Issue 4: FK ordering in inserts
+
+**Problem:** Inserting modules before station_templates causes FK errors.
+**Mitigation:** Station templates are seeded in migration, not demo data.
+
+### Issue 5: Calendar date filtering
+
+**Problem:** PMs seeing projects they're not assigned to.
+**Mitigation:** Ensure `owner_id` OR `primary_pm_id` OR `backup_pm_id` matches user.
+
+---
+
+*Document created: January 15, 2026*
+*Last updated: January 15, 2026*

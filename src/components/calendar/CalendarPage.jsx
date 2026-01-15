@@ -33,8 +33,8 @@ function CalendarPage() {
   const [toast, setToast] = useState(null);
 
   // Roles that cannot edit tasks/items AND should only see their factory's data
-  const factoryRestrictedRoles = ['project coordinator', 'pc', 'plant manager', 'sales_manager', 'sales manager'];
-  const readOnlyRoles = ['project coordinator', 'pc', 'plant manager'];
+  const factoryRestrictedRoles = ['project coordinator', 'pc', 'plant manager', 'plant_manager', 'plant_gm', 'sales_manager', 'sales manager'];
+  const readOnlyRoles = ['project coordinator', 'pc', 'plant manager', 'plant_manager', 'plant_gm'];
   // PM roles that should only see their assigned projects
   const pmRoles = ['project manager', 'pm'];
   // Sales roles
@@ -82,8 +82,8 @@ function CalendarPage() {
         }
       }
 
-      // Check if this user should only see their factory's data (PC/Plant Manager)
-      const isFactoryRestrictedPM = ['project coordinator', 'pc', 'plant manager'].includes(userRole.toLowerCase()) && factoryCode;
+      // Check if this user should only see their factory's data (PC/Plant Manager/Plant GM)
+      const isFactoryRestrictedPM = ['project coordinator', 'pc', 'plant manager', 'plant_manager', 'plant_gm'].includes(userRole.toLowerCase()) && factoryCode;
 
       // Check if this user is a PM (should only see their assigned projects)
       const shouldFilterByPM = pmRoles.includes(userRole.toLowerCase()) && user?.id;

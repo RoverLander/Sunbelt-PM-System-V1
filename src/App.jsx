@@ -22,6 +22,7 @@ import PMDashboard from './components/dashboards/PMDashboard';
 import DirectorDashboard from './components/dashboards/DirectorDashboard';
 import VPDashboard from './components/dashboards/VPDashboard';
 import PCDashboard from './components/dashboards/PCDashboard';
+import PlantManagerDashboard from './components/dashboards/PlantManagerDashboard';
 import { ITDashboard, UserManagement, ErrorTracking, AnnouncementManager, FeatureFlagManager, SessionManager, SecurityCenter, DatabaseTools, SystemConfiguration } from './components/it';
 import AnnouncementBanner from './components/common/AnnouncementBanner';
 
@@ -173,6 +174,11 @@ function AppContent() {
         else if (role === 'sales_rep') {
           setDashboardType('sales_rep');
           localStorage.setItem('dashboardType', 'sales_rep');
+        }
+        // Plant Manager users
+        else if (role === 'plant manager' || role === 'plant_manager') {
+          setDashboardType('plant_manager');
+          localStorage.setItem('dashboardType', 'plant_manager');
         }
       }
     } catch (error) {
@@ -476,6 +482,32 @@ function AppContent() {
           return <CalendarPage onNavigateToProject={handleNavigateToProject} />;
         default:
           return <SalesRepDashboard onNavigateToProject={handleNavigateToProject} />;
+      }
+    }
+
+    // ========================================================================
+    // Plant Manager-specific views
+    // ========================================================================
+    if (dashboardType === 'plant_manager') {
+      switch (currentView) {
+        case 'dashboard':
+          return <PlantManagerDashboard onNavigateToProject={handleNavigateToProject} />;
+        case 'production':
+          return <PlantManagerDashboard onNavigateToProject={handleNavigateToProject} initialView="production" />;
+        case 'calendar':
+          return <PlantManagerDashboard onNavigateToProject={handleNavigateToProject} initialView="calendar" />;
+        case 'crew':
+          return <PlantManagerDashboard onNavigateToProject={handleNavigateToProject} initialView="crew" />;
+        case 'projects':
+          return <ProjectsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
+        case 'tasks':
+          return <TasksPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
+        case 'rfis':
+          return <RFIsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
+        case 'submittals':
+          return <SubmittalsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
+        default:
+          return <PlantManagerDashboard onNavigateToProject={handleNavigateToProject} />;
       }
     }
 

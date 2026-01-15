@@ -64,7 +64,9 @@ import {
   Contact,
   PanelLeftClose,
   PanelLeft,
-  Settings
+  Settings,
+  FileQuestion,
+  FileCheck
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -505,6 +507,9 @@ function Sidebar({
         } else if (userRole === 'project coordinator' || userRole === 'pc') {
           setDashboardType('pc');
           localStorage.setItem('dashboardType', 'pc');
+        } else if (userRole === 'plant manager' || userRole === 'plant_manager' || userRole === 'plant_gm') {
+          setDashboardType('plant_manager');
+          localStorage.setItem('dashboardType', 'plant_manager');
         } else if (userRole === 'sales_manager') {
           setDashboardType('sales_manager');
           localStorage.setItem('dashboardType', 'sales_manager');
@@ -520,6 +525,11 @@ function Sidebar({
         if (userRole === 'director' && savedDashboard === 'vp') {
           setDashboardType('director');
           localStorage.setItem('dashboardType', 'director');
+        }
+        // Force Plant_GM users to plant_manager dashboard
+        if ((userRole === 'plant_gm' || userRole === 'plant_manager' || userRole === 'plant manager') && savedDashboard !== 'plant_manager') {
+          setDashboardType('plant_manager');
+          localStorage.setItem('dashboardType', 'plant_manager');
         }
       }
     }
@@ -583,6 +593,7 @@ function Sidebar({
       vp: ['vp', 'admin'],
       it: ['it', 'it_manager', 'admin'],
       pc: ['project coordinator', 'pc', 'plant manager', 'director', 'vp', 'admin'],
+      plant_manager: ['plant manager', 'plant_manager', 'plant_gm', 'vp', 'admin'],
       sales: ['sales_rep', 'sales_manager', 'vp', 'admin'],
       sales_manager: ['sales_manager', 'vp', 'admin'],
       sales_rep: ['sales_rep', 'vp', 'admin']
@@ -611,6 +622,7 @@ function Sidebar({
       vp: { icon: TrendingUp, label: 'VP Dashboard', color: '#8b5cf6' },
       it: { icon: Shield, label: 'IT Dashboard', color: '#06b6d4' },
       pc: { icon: Factory, label: 'PC Dashboard', color: '#ec4899' },
+      plant_manager: { icon: Factory, label: 'Plant Manager', color: '#f59e0b' },
       sales: { icon: Receipt, label: 'Sales Dashboard', color: '#10b981' },
       sales_manager: { icon: Receipt, label: 'Sales Manager', color: '#10b981' },
       sales_rep: { icon: Receipt, label: 'My Sales', color: '#3b82f6' }
@@ -1123,6 +1135,19 @@ function Sidebar({
           { id: 'projects', label: 'Projects', icon: FolderKanban },
           { id: 'tasks', label: 'Tasks', icon: CheckSquare },
           { id: 'calendar', label: 'Calendar', icon: Calendar },
+        ];
+
+      case 'plant_manager':
+        // Plant Manager: Dashboard → Production Line → Calendar → Crew → Projects/Tasks/RFIs/Submittals
+        return [
+          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { id: 'production', label: 'Production Line', icon: Factory },
+          { id: 'calendar', label: 'Calendar', icon: Calendar },
+          { id: 'crew', label: 'Crew', icon: Users },
+          { id: 'projects', label: 'Projects', icon: FolderKanban },
+          { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+          { id: 'rfis', label: 'RFIs', icon: FileQuestion },
+          { id: 'submittals', label: 'Submittals', icon: FileCheck },
         ];
 
       case 'sales':

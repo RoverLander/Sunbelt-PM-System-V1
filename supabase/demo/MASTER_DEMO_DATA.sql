@@ -791,32 +791,38 @@ BEGIN
     -- ======================================================================
     -- LONG LEAD ITEMS: 4 per project
     -- ======================================================================
-    INSERT INTO long_lead_items (project_id, item_name, description, manufacturer, model_number, supplier, lead_time_weeks, order_date, expected_delivery, actual_delivery, status, notes, created_at)
+    -- Schema matches 20260115_plant_manager_system.sql:
+    -- part_name, part_number, vendor, lead_days, status, ordered, ordered_at, expected_date, received_date, notes
+    INSERT INTO long_lead_items (project_id, part_name, part_number, vendor, lead_days, status, ordered, ordered_at, expected_date, received_date, notes)
     VALUES
-      (v_project.id, 'HVAC Package Unit', 'Rooftop package unit for HVAC system', 'Carrier', '50XC-024', 'Ferguson', 8,
+      (v_project.id, 'HVAC Package Unit (Carrier)', '50XC-024', 'Ferguson', 56,
+       CASE WHEN v_phase >= 4 THEN 'Received' WHEN v_phase >= 3 THEN 'Shipped' WHEN v_phase >= 2 THEN 'Ordered' ELSE 'Identified' END,
+       CASE WHEN v_phase >= 2 THEN true ELSE false END,
        CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '30 days' ELSE NULL END,
        CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '86 days' ELSE NULL END,
        CASE WHEN v_phase >= 4 THEN v_start_date + INTERVAL '82 days' ELSE NULL END,
-       CASE WHEN v_phase >= 4 THEN 'Delivered' WHEN v_phase >= 3 THEN 'In Transit' WHEN v_phase >= 2 THEN 'Ordered' ELSE 'Pending' END,
-       CASE WHEN v_phase >= 2 THEN 'Cutsheet approved' ELSE NULL END, NOW()),
-      (v_project.id, 'Custom Windows', 'Aluminum frame windows per spec (Qty: 12)', 'Milgard', 'Style Line 3000', 'Milgard Direct', 6,
+       CASE WHEN v_phase >= 2 THEN 'Cutsheet approved' ELSE NULL END),
+      (v_project.id, 'Custom Windows (Milgard)', 'Style Line 3000', 'Milgard Direct', 42,
+       CASE WHEN v_phase >= 4 THEN 'Received' WHEN v_phase >= 3 THEN 'Shipped' WHEN v_phase >= 2 THEN 'Ordered' ELSE 'Identified' END,
+       CASE WHEN v_phase >= 2 THEN true ELSE false END,
        CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '35 days' ELSE NULL END,
        CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '77 days' ELSE NULL END,
        CASE WHEN v_phase >= 4 THEN v_start_date + INTERVAL '75 days' ELSE NULL END,
-       CASE WHEN v_phase >= 4 THEN 'Delivered' WHEN v_phase >= 3 THEN 'In Transit' WHEN v_phase >= 2 THEN 'Ordered' ELSE 'Pending' END,
-       NULL, NOW()),
-      (v_project.id, 'Backup Generator', 'Emergency backup power system', 'Generac', 'RG02724ANAX', 'Power Systems Inc', 10,
+       NULL),
+      (v_project.id, 'Backup Generator (Generac)', 'RG02724ANAX', 'Power Systems Inc', 70,
+       CASE WHEN v_project.status = 'Complete' THEN 'Received' WHEN v_phase >= 4 THEN 'Shipped' WHEN v_phase >= 3 THEN 'Ordered' ELSE 'Identified' END,
+       CASE WHEN v_phase >= 3 THEN true ELSE false END,
        CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '45 days' ELSE NULL END,
        CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '115 days' ELSE NULL END,
        CASE WHEN v_phase >= 4 AND v_project.status = 'Complete' THEN v_start_date + INTERVAL '110 days' ELSE NULL END,
-       CASE WHEN v_project.status = 'Complete' THEN 'Delivered' WHEN v_phase >= 4 THEN 'In Transit' WHEN v_phase >= 3 THEN 'Ordered' ELSE 'Pending' END,
-       CASE WHEN v_phase >= 3 THEN 'AHJ requires specific model' ELSE NULL END, NOW()),
-      (v_project.id, 'Fire Suppression System', 'Pre-engineered fire suppression', 'Victaulic', 'Vortex 500', 'Fire Safety Supply', 4,
+       CASE WHEN v_phase >= 3 THEN 'AHJ requires specific model' ELSE NULL END),
+      (v_project.id, 'Fire Suppression System (Victaulic)', 'Vortex 500', 'Fire Safety Supply', 28,
+       CASE WHEN v_phase >= 3 THEN 'Received' WHEN v_phase >= 2 THEN 'Ordered' ELSE 'Identified' END,
+       CASE WHEN v_phase >= 2 THEN true ELSE false END,
        CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '40 days' ELSE NULL END,
        CASE WHEN v_phase >= 2 THEN v_start_date + INTERVAL '68 days' ELSE NULL END,
        CASE WHEN v_phase >= 3 THEN v_start_date + INTERVAL '65 days' ELSE NULL END,
-       CASE WHEN v_phase >= 3 THEN 'Delivered' WHEN v_phase >= 2 THEN 'Ordered' ELSE 'Pending' END,
-       NULL, NOW());
+       NULL);
 
     -- ======================================================================
     -- COLOR SELECTIONS: 12 per project

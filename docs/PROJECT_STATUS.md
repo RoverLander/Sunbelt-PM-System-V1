@@ -1,8 +1,8 @@
 # Project Status
 
-**Last Updated:** January 14, 2026
-**Version:** 1.3.0
-**Status:** Production Ready (Beta) + Praxis Integration In Progress
+**Last Updated:** January 15, 2026 (Evening)
+**Version:** 1.4.1
+**Status:** Production Ready (Beta) + PGM Dashboard Batch 1 Complete
 
 ---
 
@@ -10,8 +10,10 @@
 
 - **[ARCHITECTURE_ANALYSIS.md](./ARCHITECTURE_ANALYSIS.md)** - Full system topology, security analysis, dependency graph, and improvement recommendations (Jan 14, 2026)
 - **[PRAXIS_INTEGRATION_ANALYSIS.md](./PRAXIS_INTEGRATION_ANALYSIS.md)** - Praxis field mappings and integration details
-- **[DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)** - Complete database schema reference (Jan 14, 2026)
+- **[DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)** - Complete database schema reference (Jan 15, 2026)
 - **[FRONTEND_ARCHITECTURE.md](./FRONTEND_ARCHITECTURE.md)** - React component organization and data flow (Jan 14, 2026)
+- **[PGM_IMPLEMENTATION_PLAN.md](./PGM_IMPLEMENTATION_PLAN.md)** - Plant GM Dashboard implementation tickets (Jan 15, 2026)
+- **[Demo Data Strategy](#demo-data-strategy-january-15-2026)** - Comprehensive demo data plan (see below)
 
 ---
 
@@ -128,6 +130,12 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 - [x] **PC Dashboard** - Plant controller view
   - Factory-specific projects
   - Financial metrics
+- [x] **Plant Manager Dashboard** - Factory GM view (NEW Jan 15, 2026)
+  - Production Line Canvas with 12 stations
+  - Module tracking at each station
+  - Crew status and attendance
+  - Drag-and-drop GM override (with audit logging)
+  - Station and Module detail modals
 
 ### User Management
 - [x] Supabase authentication
@@ -154,6 +162,100 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 ---
 
 ## Recent Updates (January 2026)
+
+### January 15, 2026 (Plant Manager Dashboard - Batch 1)
+
+- **Plant General Manager (PGM) Dashboard - Complete**
+  - Implemented full Plant Manager Dashboard for factory-level operations management
+  - **Database Migration:** `20260115_plant_manager_system.sql` with 15 new tables
+  - **Implementation Plan:** `docs/PGM_IMPLEMENTATION_PLAN.md` with 30 tickets across 5 batches
+
+  - **New Database Tables:**
+    | Table | Purpose |
+    |-------|---------|
+    | `modules` | Individual building modules within projects (flow through 12 stations) |
+    | `station_templates` | 12 production line stages with QC checklists |
+    | `station_assignments` | Module-to-station tracking with crew assignments |
+    | `workers` | Factory floor workforce (separate from system users) |
+    | `worker_shifts` | Clock in/out tracking with pay calculations |
+    | `qc_records` | Quality control inspection records |
+    | `inspection_rules` | Configurable inspection requirements |
+    | `long_lead_items` | Long-lead material tracking |
+    | `plant_config` | Per-plant settings |
+    | `calendar_audit` | Schedule change audit trail |
+    | `takt_events` | Takt time tracking |
+    | `kaizen_suggestions` | Improvement ideas |
+    | `cross_training` | Worker certifications |
+    | `safety_checks` | Daily safety checks |
+    | `five_s_audits` | 5S audit records |
+
+  - **12 Default Production Stations Seeded:**
+    1. Metal Frame Welding
+    2. Rough Electrical
+    3. Rough Plumbing
+    4. Rough Mechanical
+    5. Insulation
+    6. Drywall
+    7. Interior Finishes
+    8. Exterior Finishes
+    9. Final Electrical
+    10. Final Plumbing
+    11. Final QC
+    12. Dealer Pickup
+
+  - **Service Layers Created:**
+    - `src/services/stationService.js` - Station templates CRUD, checklist management
+    - `src/services/modulesService.js` - Module tracking, scheduling, station movement
+    - `src/services/workersService.js` - Workforce management, shifts, attendance
+    - `src/services/qcService.js` - QC records, inspections, defect tracking
+
+  - **Plant Manager Dashboard Features:**
+    - **Overview Tab:** Key metrics (active modules, in progress, staged, completed, crew)
+    - **Production Line Tab:** 12-station visualization with module counts
+    - **Calendar Tab:** Placeholder for future production calendar
+    - **Crew Tab:** Attendance summary, active shifts display
+
+  - **Station Detail Modal:** (`src/components/production/StationDetailModal.jsx`)
+    - Modules at station with time tracking
+    - Assigned crew display with lead badges
+    - QC checklist preview
+    - "Start Next Module" action for Plant Managers
+
+  - **Module Detail Modal:** (`src/components/production/ModuleDetailModal.jsx`)
+    - Module specs (serial, dimensions, building type)
+    - Station history timeline
+    - Project link with navigation
+    - GM Actions menu (Fast-track, QC Hold, Rework, Scrap)
+
+  - **GM Override Features (Plant Manager only):**
+    - Drag-and-drop module movement between stations
+    - Visual indicators during drag operations
+    - Automatic audit logging to `calendar_audit` table
+    - "GM Mode" badge in production line view
+
+  - **Routing & Navigation:**
+    - Added `plant_manager` dashboard type detection in `App.jsx`
+    - Added Plant Manager navigation items to `Sidebar.jsx`
+    - Supports both "Plant Manager" and "plant_manager" role formats
+
+- **Files Created:**
+  - `supabase/migrations/20260115_plant_manager_system.sql` - PGM database schema
+  - `src/services/stationService.js` - Station service layer
+  - `src/services/modulesService.js` - Modules service layer
+  - `src/services/workersService.js` - Workers service layer
+  - `src/services/qcService.js` - QC service layer
+  - `src/components/dashboards/PlantManagerDashboard.jsx` - Main dashboard component
+  - `src/components/production/StationDetailModal.jsx` - Station detail view
+  - `src/components/production/ModuleDetailModal.jsx` - Module detail view
+  - `docs/PGM_IMPLEMENTATION_PLAN.md` - Implementation tickets
+
+- **Files Modified:**
+  - `src/App.jsx` - Added Plant Manager routing
+  - `src/components/layout/Sidebar.jsx` - Added Plant Manager navigation
+  - `docs/DATABASE_SCHEMA.md` - Added PGM tables documentation
+  - `docs/PROJECT_STATUS.md` - This file
+
+---
 
 ### January 14, 2026 (Smart Defaults Feature)
 
@@ -947,6 +1049,25 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 | `feature_flag_audit` | Audit log of feature flag changes |
 | `user_sessions` | Tracks user login sessions for security monitoring |
 
+### Plant Manager (PGM) Tables
+| Table | Purpose |
+|-------|---------|
+| `modules` | Individual building modules within projects |
+| `station_templates` | 12 production line stages with QC checklists |
+| `station_assignments` | Module-to-station tracking with crew |
+| `workers` | Factory floor workforce (separate from users) |
+| `worker_shifts` | Clock in/out with pay calculations |
+| `qc_records` | Quality control inspection records |
+| `inspection_rules` | Configurable inspection requirements |
+| `long_lead_items` | Long-lead material tracking |
+| `plant_config` | Per-plant settings |
+| `calendar_audit` | Schedule change audit trail |
+| `takt_events` | Takt time tracking |
+| `kaizen_suggestions` | Improvement suggestions |
+| `cross_training` | Worker station certifications |
+| `safety_checks` | Daily safety checks |
+| `five_s_audits` | 5S audit records |
+
 ---
 
 ## Supported Factories
@@ -1260,6 +1381,267 @@ notify_contacts JSONB               -- Array of {id, name, email} snapshots
 - [ ] Preview before export
 - [ ] Scheduled report generation (email)
 - [ ] Report templates (save configurations)
+
+---
+
+---
+
+## Demo Data Strategy (January 15, 2026)
+
+### Overview
+
+This section documents the comprehensive demo data plan that ties together all system features: PM workflows, PC workflows, Plant GM production, and Sales pipelines. All dates are **dynamic** (relative to `CURRENT_DATE`), making the demo data evergreen.
+
+**Master Demo File:** `supabase/demo/MASTER_DEMO_DATA_V2.sql`
+
+---
+
+### User Accounts
+
+**Principle:** Do NOT delete existing users. Add new users and update existing ones as needed.
+
+| User | Email | Role | Factory | UID | Notes |
+|------|-------|------|---------|-----|-------|
+| Matt Jordan | matt.jordan@nwbsinc.com | PM | NWBS | (existing) | 4 complex PM projects |
+| Candy Echols | candy.echols@sunbeltmodular.com | Director | All | (existing) | 2 personal + oversight |
+| Crystal Trevino | crystal.trevino@sunbeltmodular.com | PM | SSI/SMM | (existing) | Factory-clustered projects |
+| Ross Parks | ross.parks@nwbsinc.com | Plant_GM | NWBS | fcd8501a-fdbb-43d1-83c2-fcf049bb0c90 | Production line oversight |
+| Dawn Hinkle | dawn.hinkle@nwbsinc.com | PC | NWBS | 679a1d92-7ea6-4797-a4c9-d13d156c215f | 10-12 stock/fleet projects |
+| Justin Downing | justin.downing@nwbsinc.com | Production_Manager | NWBS | bbed0851-f894-401a-9312-0ada815c7785 | Factory floor manager |
+| Devin Duvak | devin.duvak@sunbeltmodular.com | VP | All | (existing) | Executive oversight |
+| Mitch Quintana | mitch.quintana@nwbsinc.com | Sales_Manager | NWBS | (existing) | 10 quotes |
+| Robert Thaler | robert.thaler@nwbsinc.com | Sales_Rep | NWBS | (existing) | 10 quotes |
+| Juanita Earnest | juanita.earnest@palomar.com | PC | PMI | (existing) | PMI plant controller |
+| IT Admin | admin@sunbeltmodular.com | IT | All | (existing) | System admin |
+| Support | support@sunbeltmodular.com | IT_Manager | All | (existing) | IT manager |
+
+---
+
+### Project Assignments Strategy
+
+**Factory Clustering:** PMs have projects clustered by factories for realistic workload distribution.
+
+| PM | Primary Factories | Project Count | Project Types |
+|----|-------------------|---------------|---------------|
+| Matt Jordan | NWBS, Whitley | 4-6 | CUSTOM, GOVERNMENT (complex) |
+| Crystal Trevino | SSI, SMM | 4-6 | Mixed |
+| Candy Echols (Director) | All | 2 personal | Oversight + personal projects |
+
+**PC Projects (NEW - Dawn Hinkle at NWBS):**
+
+| PC | Factory | Project Count | Project Types | Notes |
+|----|---------|---------------|---------------|-------|
+| Dawn Hinkle | NWBS | 10-12 | STOCK, CUSTOM (simple) | High volume, minimal PM attention |
+
+**PC Role Definition:**
+- "Mini project manager" for high-volume stock/fleet projects
+- Tracks: Long lead items, color selections, engineering approvals (if new design), third-party/state approvals
+- Rarely has RFIs (simple/repeat builds)
+- Does NOT require PM involvement
+- Reports to Plant GM on production scheduling
+- Higher project count than PMs, simpler projects
+
+---
+
+### Project Types (Standardized)
+
+| Type | Description | Typical PM Involvement | RFI Frequency |
+|------|-------------|------------------------|---------------|
+| STOCK | Fleet/stock builds, repeat designs | PC handles (minimal PM) | Rare |
+| CUSTOM | Custom designed buildings | PM required | Moderate |
+| GOVERNMENT | State/federal contracts, compliance heavy | PM required | High |
+
+**Note:** "FLEET" is merged into "STOCK" for simplification.
+
+---
+
+### Workflow System
+
+**Workflow Phases (4 phases, ~20 stations):**
+
+| Phase | Name | Description |
+|-------|------|-------------|
+| 1 | Initiation | Contract setup, initial coordination |
+| 2 | Dealer Sign-Offs | Customer/dealer approvals |
+| 3 | Internal Approvals | Engineering, production prep |
+| 4 | Delivery | Transportation, site work, installation |
+
+**Site Survey Station:** REMOVED from Phase 1 (dealers handle site work, not Sunbelt)
+
+---
+
+### Production Line Workflow (Plant GM View)
+
+**12 Production Stations (realistic flow):**
+
+| Order | Station Name | Lead Type | Notes |
+|-------|--------------|-----------|-------|
+| 1 | Frame | Frame Lead | Metal frame welding |
+| 2 | Floor/Deck | Frame Lead | Floor deck assembly |
+| 3 | Walls | Framing Lead | Wall framing |
+| 4 | Insulation | Insulation Lead | Thermal insulation |
+| 5 | Roof | Roof Lead | Roof assembly |
+| 6 | Sheathing | Exterior Lead | Exterior sheathing |
+| 7 | Siding | Exterior Lead | Siding installation |
+| 8 | Paint | Paint Lead | Interior/exterior paint |
+| 9 | Rough-in (E/P/HVAC) | MEP Lead | Electrical, plumbing, HVAC |
+| 10 | Wall Coverings | Finish Lead | Drywall, panels |
+| 11 | Finish | Finish Lead | Trim, fixtures, final touches |
+| 12 | Inspections/Staging | QC Lead | Final QC, dealer pickup |
+
+**Lead Coverage:** One lead can manage multiple stations (e.g., Frame Lead covers Frame + Floor/Deck)
+
+---
+
+### Production Prerequisites
+
+**Before a module enters production line, the following must be complete:**
+
+| Prerequisite | Description | Responsible |
+|--------------|-------------|-------------|
+| 100% Drawings | All drawings approved and released | Engineering/Drafting |
+| Long Lead Items | All long-lead materials ordered/received | Purchasing |
+| Color Selections | Customer color choices confirmed | PC/PM |
+| Cutsheet Submittals | All cutsheet submittals approved | PM |
+| Engineering Review | Engineering sign-off complete | Engineering |
+
+---
+
+### Workers & Crew (NWBS Factory)
+
+**Worker Count:** 50-70 workers per factory
+
+**Worker Distribution:**
+- 8 Station Leads (covering 12 stations)
+- 50-60 Crew members (General workers)
+- Mix of male/female (realistic ratio for manufacturing)
+- Realistic fictional names
+
+**Lead Assignments:**
+
+| Lead Name | Stations Covered | Badge |
+|-----------|------------------|-------|
+| Lead 1 | Frame, Floor/Deck | Frame Lead |
+| Lead 2 | Walls | Framing Lead |
+| Lead 3 | Insulation | Insulation Lead |
+| Lead 4 | Roof | Roof Lead |
+| Lead 5 | Sheathing, Siding | Exterior Lead |
+| Lead 6 | Paint | Paint Lead |
+| Lead 7 | Rough-in | MEP Lead |
+| Lead 8 | Wall Coverings, Finish, Inspections | Finish/QC Lead |
+
+---
+
+### Module Distribution (NWBS Factory)
+
+**Target:** 55-70 modules for Ross Parks (Plant_GM) to see across production line
+
+| Source | Project Count | Module Count | Project Type |
+|--------|---------------|--------------|--------------|
+| Matthew (PM) | 4 | 25-30 | CUSTOM, GOVERNMENT |
+| Dawn (PC) | 10-12 | 30-40 | STOCK, simple CUSTOM |
+| **Total** | 14-16 | 55-70 | Mixed |
+
+**Module Complexity:**
+- PM projects: More modules per project (5-8 modules for complex government/custom)
+- PC projects: Fewer modules per project (2-4 modules for stock/fleet)
+
+---
+
+### Sales Quotes (NWBS Factory)
+
+**Total Quotes:** 20 quotes at NWBS
+
+| Sales Rep | Quote Count | Status Mix |
+|-----------|-------------|------------|
+| Mitch Quintana (Manager) | 10 | 6 active, 2 won, 2 lost |
+| Robert Thaler (Rep) | 10 | 7 active, 2 won, 1 lost |
+
+**Quote Requirements:**
+- Minimum contract value: $600K
+- Realistic Pacific Northwest customers (Boise School District, Idaho State University, etc.)
+- Some quotes flagged for PM attention
+- Won quotes link to Matthew's NWBS projects via `converted_to_project_id`
+
+**Customer Examples:**
+- Boise School District
+- Idaho State University
+- Boeing Everett
+- Amazon Web Services
+- Microsoft Campus
+- Port of Seattle
+- Washington State DOT
+- Oregon Health Sciences
+
+---
+
+### Tasks, RFIs, and Submittals
+
+**Per-Project Targets:**
+
+| Item Type | PM Projects | PC Projects | Notes |
+|-----------|-------------|-------------|-------|
+| Tasks | 5-15 | 3-8 | Match project stage logic |
+| RFIs | 2-5 | 0-2 | PC projects rarely have RFIs |
+| Submittals | 3-8 | 2-4 | Standard types |
+
+**Date Distribution:**
+- Some items overdue (create urgency)
+- Some due today
+- Some due this week
+- Some due in next 2 weeks
+- Some future (30-60 days out)
+
+---
+
+### Date Strategy (Dynamic)
+
+**All dates calculated relative to `CURRENT_DATE`:**
+
+| Date Range | Usage |
+|------------|-------|
+| -9 months | Project creation dates (oldest projects) |
+| -6 months | Mid-range project starts |
+| -3 months | Recent project starts |
+| -2 weeks to -1 day | Overdue items |
+| Today | Items due today |
+| +1 to +7 days | Due this week |
+| +7 to +14 days | Due next week |
+| +14 to +30 days | Due this month |
+| +30 to +90 days | Future deliveries |
+| +90 to +180 days | Long-term deliveries |
+
+---
+
+### PC Dashboard Requirements
+
+**When PC Dashboard is created, it must automatically pull:**
+
+1. Projects where user is `owner_id` with PC role filtering
+2. Long lead items for their projects
+3. Color selection approvals pending
+4. Engineering review status
+5. Third-party/state approval tracking
+6. Production scheduling coordination with Plant GM
+7. Simplified task/RFI views (lower volume than PM)
+
+**Key Difference from PM Dashboard:**
+- Higher project count display (10-15 vs 4-6)
+- Less RFI focus
+- More approval tracking focus
+- Production schedule integration
+
+---
+
+### Implementation Order
+
+1. **Create users** - Ross Parks (Plant_GM), Dawn Hinkle (PC), Justin Downing (Production_Manager)
+2. **Create workers** - 60 workers at NWBS with 8 leads
+3. **Create PC projects** - Dawn's 10-12 STOCK projects at NWBS
+4. **Create modules** - 55-70 modules across production line
+5. **Create sales quotes** - 20 quotes for Mitch/Robert
+6. **Create tasks/RFIs/submittals** - Per-project items with realistic dates
+7. **Link data** - Won quotes → projects, modules → stations, workers → stations
 
 ---
 

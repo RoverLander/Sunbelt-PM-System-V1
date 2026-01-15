@@ -4,7 +4,9 @@
       "Bash(npm run build:*)",
       "Bash(npm run dev:*)",
       "Bash(git add:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(npm test:*)",
+      "Bash(echo:*)"
     ]
   }
 }
