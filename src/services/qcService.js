@@ -26,8 +26,8 @@ export async function getQCRecordById(qcId) {
         *,
         module:modules(id, serial_number, name, project_id),
         station:station_templates(id, name, code, color),
-        inspector_worker:workers(id, full_name),
-        inspector_user:users(id, full_name)
+        inspector:workers!inspector_id(id, full_name),
+        inspector_user:users!inspector_user_id(id, full_name)
       `)
       .eq('id', qcId)
       .single();
@@ -53,8 +53,8 @@ export async function getQCRecordsByModule(moduleId) {
       .select(`
         *,
         station:station_templates(id, name, code, color),
-        inspector_worker:workers(id, full_name),
-        inspector_user:users(id, full_name)
+        inspector:workers!inspector_id(id, full_name),
+        inspector_user:users!inspector_user_id(id, full_name)
       `)
       .eq('module_id', moduleId)
       .order('inspected_at', { ascending: false });
@@ -82,8 +82,8 @@ export async function getQCRecordsByFactory(factoryId, filters = {}) {
         *,
         module:modules(id, serial_number, name, project_id, project:projects(name)),
         station:station_templates(id, name, code, color),
-        inspector_worker:workers(id, full_name),
-        inspector_user:users(id, full_name)
+        inspector:workers!inspector_id(id, full_name),
+        inspector_user:users!inspector_user_id(id, full_name)
       `)
       .eq('factory_id', factoryId);
 

@@ -1,8 +1,8 @@
 # Project Status
 
-**Last Updated:** January 15, 2026 (Evening)
-**Version:** 1.4.1
-**Status:** Production Ready (Beta) + PGM Dashboard Batch 1 Complete
+**Last Updated:** January 16, 2026
+**Version:** 1.4.2
+**Status:** Production Ready (Beta) + PGM Dashboard Batch 4 Complete + Performance Optimized
 
 ---
 
@@ -162,6 +162,86 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 ---
 
 ## Recent Updates (January 2026)
+
+### January 16, 2026 (Demo Data System Fixes)
+
+- **COMPLETE_DEMO_SETUP.sql Schema Fixes - Complete**
+  - Fixed multiple table/column schema mismatches preventing demo data generation
+  - **QC Records Column Fix:**
+    - Changed `inspection_date` → `inspected_at` (TIMESTAMPTZ column)
+    - Changed `inspection_type` → `status` (varchar column)
+    - Fixed to match actual migration schema from `20260115_plant_manager_system.sql`
+  - **Project Logs Column Fix:**
+    - Changed `action` → `entry_type` (existing schema uses entry_type)
+    - Changed `description` → `content` (existing schema uses content)
+    - Changed `created_by` → `user_id` (existing schema uses user_id)
+    - Entry types updated: 'status_change', 'document', 'task', 'approval', 'production'
+  - **Sales Tables Fix:**
+    - Added DROP TABLE IF EXISTS before CREATE TABLE for `sales_customers` and `sales_quotes`
+    - Resolves schema conflicts when tables already exist with different schemas
+
+- **qcService.js Supabase Query Fixes - Complete**
+  - Fixed Supabase relationship syntax for foreign key joins
+  - Changed `inspector_worker:workers(...)` → `inspector:workers!inspector_id(...)`
+  - Changed `inspector_user:users(...)` → `inspector_user:users!inspector_user_id(...)`
+  - Applied to: `getQCRecordById`, `getQCRecordsByModule`, `getQCRecordsByFactory`
+
+- **Files Modified:**
+  - `supabase/demo/COMPLETE_DEMO_SETUP.sql` - QC records, project logs, sales tables fixes
+  - `src/services/qcService.js` - Supabase relationship syntax corrections
+
+---
+
+### January 16, 2026 (DEBUG_TEST_GUIDE Execution & Performance Optimization)
+
+- **DEBUG_TEST_GUIDE Execution - Phases 1-3 Complete**
+  - Executed systematic debugging and optimization guide across all phases
+  - Commit: `648ca39` (Phase 1), `5d38ee4` (Phases 2-3)
+
+  - **Phase 1: Foundation Audit (Complete)**
+    - **Phase 1.1 - Status Value Audit:** Verified task statuses (Not Started, In Progress, Awaiting Response, Completed, Cancelled) and project statuses (Draft, Active, On Hold, Completed, Archived)
+    - **Phase 1.2 - RLS Policy Audit:** Confirmed all PGM tables (modules, station_templates, station_assignments, workers, worker_shifts, qc_records) have proper RLS policies
+    - **Phase 1.3 - Memory Leak Check:** Verified cleanup patterns in existing hooks; identified areas for improvement
+    - **Phase 1.4 - Lint Error Fixes:** Reduced ESLint errors from 217 to 191 (12% reduction)
+
+  - **Phase 2: Loading States & Race Conditions (Complete)**
+    - **Skeleton Loading Components Created:** `src/components/common/Skeleton.jsx`
+      - `SkeletonCard` - Loading card placeholder with shimmer animation
+      - `SkeletonTable` - Table loading state with configurable rows/columns
+      - `SkeletonKanban` - Kanban board loading placeholder
+      - `SkeletonStatsGrid` - Stats grid loading with shimmer
+      - `SkeletonList` - List loading placeholder
+      - `SkeletonText` - Text line loading placeholder
+      - `LoadingSpinner` - Centered spinner with message
+      - `FullPageLoader` - Full-page loading overlay
+    - **Utility Hooks Created:** `src/hooks/` directory
+      - `useInterval.js` - Safe setInterval with automatic cleanup on unmount
+      - `useDebounce.js` - Value debouncing with timeout cleanup
+      - `useAsyncEffect.js` - Async effects with cancellation to prevent setState on unmounted components
+      - `useEventListener.js` - Event listeners with automatic cleanup
+      - `index.js` - Central export barrel file
+
+  - **Phase 3: Performance Optimization (Complete)**
+    - **Vite Code Splitting:** Updated `vite.config.js` with `manualChunks` configuration
+      - Split vendor chunks: react, date-fns, supabase, lucide-react, xyflow, exceljs
+      - **Bundle size reduced from 3.8MB to 2.5MB (34% reduction)**
+    - **Build Fixes:**
+      - Removed `html2canvas` from config (not installed)
+      - Removed `pixi.js` from config (empty chunk warning)
+
+- **Files Created:**
+  - `src/components/common/Skeleton.jsx` - Loading placeholder components
+  - `src/hooks/useInterval.js` - Safe interval hook
+  - `src/hooks/useDebounce.js` - Debounce hook
+  - `src/hooks/useAsyncEffect.js` - Async effect with cancellation
+  - `src/hooks/useEventListener.js` - Event listener hook
+  - `src/hooks/index.js` - Hooks barrel export
+
+- **Files Modified:**
+  - `vite.config.js` - Added code splitting configuration
+  - `docs/PGM_IMPLEMENTATION_PLAN.md` - Added execution summary
+
+---
 
 ### January 15, 2026 (Plant Manager Dashboard - Batch 1)
 
@@ -1104,10 +1184,15 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ## Performance Notes
 
-- Build size: ~1.5MB (uncompressed), ~375KB (gzip)
-- Initial load: ~2-3 seconds
+- **Build size (January 16, 2026):**
+  - Total: ~2.5MB (optimized from 3.8MB - 34% reduction)
+  - Vendor chunks split: react (141KB), date-fns (77KB), supabase (68KB), lucide-react (294KB), xyflow (230KB), exceljs (536KB)
+  - Main chunk: ~620KB
+- **Code Splitting:** Vite manualChunks configuration for lazy loading
+- **Initial load:** ~2-3 seconds
 - Supabase queries optimized with proper indexes
 - React state managed locally (no Redux/Zustand needed at current scale)
+- **Memory Leak Prevention:** Custom hooks library (`src/hooks/`) for safe intervals, debounce, async effects, and event listeners
 
 ---
 
