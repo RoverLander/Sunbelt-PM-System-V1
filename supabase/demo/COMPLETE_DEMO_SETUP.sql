@@ -1233,10 +1233,32 @@ DO $$
 DECLARE
   v_nwbs_factory_id UUID;
   v_module RECORD;
-  v_worker RECORD;
+  v_lead_user_id UUID;
   v_assignment_count INTEGER := 0;
 BEGIN
   SELECT id INTO v_nwbs_factory_id FROM factories WHERE code = 'NWBS';
+
+  -- Get a user at NWBS to use as lead (lead_id references users, not workers)
+  SELECT id INTO v_lead_user_id
+  FROM users
+  WHERE factory_id = v_nwbs_factory_id
+    AND is_active = true
+    AND role IN ('Plant_GM', 'Production_Manager', 'PC')
+  ORDER BY random()
+  LIMIT 1;
+
+  -- Fallback to any NWBS user if no production role found
+  IF v_lead_user_id IS NULL THEN
+    SELECT id INTO v_lead_user_id
+    FROM users
+    WHERE factory_id = v_nwbs_factory_id AND is_active = true
+    LIMIT 1;
+  END IF;
+
+  IF v_lead_user_id IS NULL THEN
+    RAISE NOTICE 'No users found at NWBS - skipping station assignments';
+    RETURN;
+  END IF;
 
   -- For each module at NWBS that's In Progress, create station assignments
   FOR v_module IN
@@ -1246,33 +1268,22 @@ BEGIN
       AND m.status = 'In Progress'
       AND m.current_station_id IS NOT NULL
   LOOP
-    -- Get a lead worker for this station
-    SELECT id INTO v_worker
-    FROM workers
-    WHERE factory_id = v_nwbs_factory_id
-      AND is_lead = true
-      AND is_active = true
-    ORDER BY random()
-    LIMIT 1;
-
-    IF v_worker IS NOT NULL THEN
-      INSERT INTO station_assignments (
-        module_id, station_id, factory_id, lead_id, crew_ids,
-        status, start_time, estimated_hours, actual_hours
-      ) VALUES (
-        v_module.id,
-        v_module.current_station_id,
-        v_nwbs_factory_id,
-        v_worker.id,
-        ARRAY[v_worker.id],
-        'In Progress',
-        NOW() - INTERVAL '2 hours',
-        4.0,
-        2.0
-      )
-      ON CONFLICT DO NOTHING;
-      v_assignment_count := v_assignment_count + 1;
-    END IF;
+    INSERT INTO station_assignments (
+      module_id, station_id, factory_id, lead_id, crew_ids,
+      status, start_time, estimated_hours, actual_hours
+    ) VALUES (
+      v_module.id,
+      v_module.current_station_id,
+      v_nwbs_factory_id,
+      v_lead_user_id,
+      ARRAY[v_lead_user_id],
+      'In Progress',
+      NOW() - INTERVAL '2 hours',
+      4.0,
+      2.0
+    )
+    ON CONFLICT DO NOTHING;
+    v_assignment_count := v_assignment_count + 1;
   END LOOP;
 
   RAISE NOTICE 'Created % station assignments for NWBS modules', v_assignment_count;
@@ -1370,8 +1381,7 @@ DECLARE
   v_module RECORD;
   v_day INTEGER;
   v_station_idx INTEGER;
-  v_lead_id UUID;
-  v_crew_ids UUID[];
+  v_lead_user_id UUID;
   v_target_hours NUMERIC;
   v_actual_hours NUMERIC;
   v_variance NUMERIC;
@@ -1386,6 +1396,28 @@ BEGIN
 
   IF v_stations IS NULL THEN RETURN; END IF;
 
+  -- Get a user at NWBS to use as lead (lead_id references users, not workers)
+  SELECT id INTO v_lead_user_id
+  FROM users
+  WHERE factory_id = v_nwbs_factory_id
+    AND is_active = true
+    AND role IN ('Plant_GM', 'Production_Manager', 'PC')
+  ORDER BY random()
+  LIMIT 1;
+
+  -- Fallback to any NWBS user
+  IF v_lead_user_id IS NULL THEN
+    SELECT id INTO v_lead_user_id
+    FROM users
+    WHERE factory_id = v_nwbs_factory_id AND is_active = true
+    LIMIT 1;
+  END IF;
+
+  IF v_lead_user_id IS NULL THEN
+    RAISE NOTICE 'No users found at NWBS - skipping historical assignments';
+    RETURN;
+  END IF;
+
   -- For completed and staged modules, create historical station progression
   FOR v_module IN
     SELECT m.id, m.serial_number, m.sequence_number, m.factory_id
@@ -1396,12 +1428,6 @@ BEGIN
   LOOP
     -- Each module progressed through multiple stations over 2 weeks
     FOR v_station_idx IN 1..8 LOOP  -- First 8 stations completed
-      -- Randomly select a lead for this assignment
-      SELECT id INTO v_lead_id
-      FROM workers
-      WHERE factory_id = v_nwbs_factory_id AND is_lead = true
-      ORDER BY random() LIMIT 1;
-
       -- Calculate timing (target vs actual with realistic variance)
       v_target_hours := 3.5 + (random() * 2.0);  -- 3.5-5.5 hours target
       v_variance := (random() * 0.6) - 0.2;  -- -20% to +40% variance
@@ -1417,8 +1443,8 @@ BEGIN
         v_module.id,
         v_stations[v_station_idx],
         v_nwbs_factory_id,
-        v_lead_id,
-        ARRAY[v_lead_id],
+        v_lead_user_id,
+        ARRAY[v_lead_user_id],
         'Completed',
         (CURRENT_DATE - (v_day || ' days')::INTERVAL) + INTERVAL '6 hours',
         (CURRENT_DATE - (v_day || ' days')::INTERVAL) + INTERVAL '6 hours' + (v_actual_hours || ' hours')::INTERVAL,
