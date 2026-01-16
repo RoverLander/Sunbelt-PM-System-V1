@@ -33,7 +33,7 @@ import { format, subDays, addDays, isToday, parseISO } from 'date-fns';
 // MAIN COMPONENT
 // ============================================================================
 
-export default function DailyReportGenerator({ factoryId, factoryName }) {
+export default function DailyReportGenerator({ factoryId, factoryName: _factoryName }) {
   // State
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -84,7 +84,7 @@ export default function DailyReportGenerator({ factoryId, factoryName }) {
   const exportToCSV = () => {
     const rows = [
       ['Daily Production Report'],
-      ['Factory', factoryName || 'Unknown'],
+      ['Factory', _factoryName || 'Unknown'],
       ['Date', report.date],
       ['Generated', new Date().toISOString()],
       [''],
@@ -386,7 +386,7 @@ export default function DailyReportGenerator({ factoryId, factoryName }) {
         <div style={styles.title}>
           <FileText size={24} color="var(--sunbelt-orange)" />
           Daily Production Report
-          {factoryName && <span style={styles.factoryBadge}>{factoryName}</span>}
+          {_factoryName && <span style={styles.factoryBadge}>{_factoryName}</span>}
         </div>
         <div style={styles.headerActions}>
           <select

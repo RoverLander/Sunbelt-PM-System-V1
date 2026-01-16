@@ -94,9 +94,9 @@ export class TrucksLayer extends PIXI.Container {
   // Get all truck positions (for stats)
   getTruckPositions() {
     const positions = [];
-    this.trucks.forEach((truck, id) => {
+    this.trucks.forEach((truck, _id) => {
       positions.push({
-        id,
+        id: _id,
         x: truck.x,
         y: truck.y,
         progress: truck.progress,
@@ -108,6 +108,7 @@ export class TrucksLayer extends PIXI.Container {
 
   // Pause/resume all trucks
   setPaused(paused) {
+    const _totalLength = this.trucks.size; // Count of trucks
     this.trucks.forEach(truck => {
       // Use truck's original speed when resuming to preserve varying speeds
       // Use nullish coalescing to preserve originalSpeed if it's 0 (a valid value)

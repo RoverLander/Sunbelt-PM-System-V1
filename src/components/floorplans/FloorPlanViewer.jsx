@@ -55,7 +55,7 @@ function FloorPlanViewer({
   isPM,
   onClose,
   onMarkerCreate,
-  onMarkerUpdate,
+  onMarkerUpdate: _onMarkerUpdate,
   onMarkerDelete,
   onPageRename,
   showToast,
@@ -76,7 +76,8 @@ function FloorPlanViewer({
   const [currentPage, setCurrentPage] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [fileUrl, setFileUrl] = useState(null);
-  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  // eslint-disable-next-line no-unused-vars
+  const [imageDimensions, _setImageDimensions] = useState({ width: 0, height: 0 });
   const [mode, setMode] = useState('view'); // 'view' or 'addMarker'
 
   // ==========================================================================

@@ -731,7 +731,7 @@ function ProjectGanttTimeline({
           </div>
 
           {/* Item Labels */}
-          {timelineItems.map((item, index) => {
+          {timelineItems.map((item) => {
             const Icon = item.icon;
             return (
               <div
@@ -896,7 +896,7 @@ function ProjectGanttTimeline({
               />
 
               {/* Items */}
-              {timelineItems.map((item, index) => renderItem(item, index))}
+              {timelineItems.map((item, idx) => renderItem(item, idx))}
             </svg>
           </div>
         </div>

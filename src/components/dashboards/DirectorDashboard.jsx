@@ -63,6 +63,7 @@ const DEFAULT_RISK_SETTINGS = {
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+// eslint-disable-next-line no-unused-vars
 const formatDate = (dateString) => {
   if (!dateString) return 'Not set';
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -89,6 +90,7 @@ const getDaysUntil = (dateString) => {
   return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
 };
 
+// eslint-disable-next-line no-unused-vars
 const getDaysOverdue = (dateString) => {
   const days = getDaysUntil(dateString);
   return days !== null && days < 0 ? Math.abs(days) : 0;
@@ -118,7 +120,7 @@ const BUILDING_TYPE_COLORS = {
 // MAIN COMPONENT
 // ============================================================================
 function DirectorDashboard() {
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
 
   // ==========================================================================
   // STATE
@@ -128,7 +130,7 @@ function DirectorDashboard() {
   const [tasks, setTasks] = useState([]);
   const [rfis, setRFIs] = useState([]);
   const [submittals, setSubmittals] = useState([]);
-  const [milestones, setMilestones] = useState([]);
+  const [_milestones, setMilestones] = useState([]);
   const [users, setUsers] = useState([]);
 
   const [quotes, setQuotes] = useState([]); // Sales quotes for incoming projects

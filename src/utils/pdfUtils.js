@@ -153,7 +153,7 @@ const escapeHTML = (text) => {
  * @param {string} number - Document number
  * @returns {string} Formatted control number
  */
-const generateControlNumber = (prefix, number) => {
+const _generateControlNumber = (prefix, number) => {
   const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
   return `${prefix}-${number}-${date}`;
 };
@@ -165,7 +165,7 @@ const generateControlNumber = (prefix, number) => {
  * @param {string} htmlContent - Complete HTML document
  * @param {string} filename - Download filename
  */
-const generatePDF = (htmlContent, filename) => {
+const generatePDF = (htmlContent, _filename) => {
   const printWindow = window.open('', '_blank', 'width=900,height=700');
   
   if (!printWindow) {

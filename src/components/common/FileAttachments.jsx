@@ -81,7 +81,7 @@ function FileAttachments({ projectId, taskId, rfiId, submittalId, onUpdate }) {
 
         const storagePath = `${projectId}/${folder}/${itemId}/${timestamp}_${safeName}`;
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { data: _uploadData, error: uploadError } = await supabase.storage
           .from('project-files')
           .upload(storagePath, file);
 

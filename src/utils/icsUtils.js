@@ -321,7 +321,7 @@ export const exportTaskToICS = (task, projectName = '', projectNumber = '') => {
  * @param {string} [projectName] - Project name for location
  * @param {string} [projectNumber] - Project number for title prefix
  */
-export const exportRFIToICS = (rfi, projectName = '', projectNumber = '') => {
+export const exportRFIToICS = (rfi, _projectName = '', projectNumber = '') => {
   if (!rfi.due_date) {
     alert('This RFI has no due date set.');
     return;
@@ -355,7 +355,7 @@ export const exportRFIToICS = (rfi, projectName = '', projectNumber = '') => {
  * @param {string} [projectName] - Project name for location
  * @param {string} [projectNumber] - Project number for title prefix
  */
-export const exportSubmittalToICS = (submittal, projectName = '', projectNumber = '') => {
+export const exportSubmittalToICS = (submittal, _projectName = '', projectNumber = '') => {
   if (!submittal.due_date) {
     alert('This submittal has no due date set.');
     return;

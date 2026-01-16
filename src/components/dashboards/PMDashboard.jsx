@@ -84,7 +84,7 @@ const formatDate = (dateString) => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-const formatCurrency = (amount) => {
+const _formatCurrency = (amount) => {
   if (!amount) return '$0';
   if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
   if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
@@ -1471,7 +1471,8 @@ function PMDashboard({ onNavigateToProject }) {
 // ============================================================================
 // STAT CARD COMPONENT
 // ============================================================================
-function StatCard({ label, value, icon: Icon, color, isText = false, highlight = false }) {
+// eslint-disable-next-line no-unused-vars
+function StatCard({ label, value, icon: _Icon, color, isText = false, highlight = false }) {
   return (
     <div style={{
       display: 'flex',
@@ -1491,7 +1492,7 @@ function StatCard({ label, value, icon: Icon, color, isText = false, highlight =
         alignItems: 'center',
         justifyContent: 'center'
       }}>
-        <Icon size={24} style={{ color }} />
+        <_Icon size={24} style={{ color }} />
       </div>
       <div>
         <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>

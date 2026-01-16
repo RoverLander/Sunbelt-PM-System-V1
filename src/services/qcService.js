@@ -286,8 +286,8 @@ export async function submitQCChecklist(moduleId, stationId, inspectorId, checkl
 
     // Find failed items
     const defects = Object.entries(checklistResponses)
-      .filter(([_, v]) => v === false || v === 'fail' || v === 'Fail')
-      .map(([k, _]) => ({ item: k, type: 'checklist_fail' }));
+      .filter(([_k, v]) => v === false || v === 'fail' || v === 'Fail')
+      .map(([k, _v]) => ({ item: k, type: 'checklist_fail' }));
 
     return await createQCRecord({
       factory_id: module.factory_id,

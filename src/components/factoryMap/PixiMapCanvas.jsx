@@ -23,7 +23,7 @@ const PixiMapCanvas = ({
   width,
   height,
   onZoomChange,
-  onViewportChange,
+  onViewportChange: _onViewportChange,
   onFactoryHover,
   onFactoryClick,
   onFactoryHoverEnd,
@@ -36,7 +36,7 @@ const PixiMapCanvas = ({
   onTruckArrived,
   onFactoryJump,
   factoryStats = {},
-  projects = [],
+  projects: _projects = [],
   deliveries = [],
   highlightedFactory = null
 }) => {
@@ -284,7 +284,7 @@ const PixiMapCanvas = ({
       if (!destPos) return;
 
       // Create route with factory code for highlighting
-      const routeData = routes.createRouteWithFactory(
+      const _routeData = routes.createRouteWithFactory(
         delivery.id,
         factoryPos,
         destPos,

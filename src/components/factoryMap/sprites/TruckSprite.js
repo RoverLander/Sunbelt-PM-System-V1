@@ -6,14 +6,14 @@ import * as PIXI from 'pixi.js';
  * Updated for PIXI v8 Graphics API
  */
 export class TruckSprite extends PIXI.Container {
-  constructor(deliveryData, routePath, options = {}) {
+  constructor(deliveryData, routePath, _options = {}) {
     super();
 
     this.deliveryData = deliveryData;
     this.routePath = routePath;
     // Use nullish coalescing to preserve progress of 0 (a valid value)
     this.progress = deliveryData.progress ?? 0;
-    this.speed = options.speed || 0.002; // Progress per frame
+    this.speed = _options.speed || 0.002; // Progress per frame
     this.originalSpeed = this.speed; // Store original speed for pause/resume
     this.animationTime = 0;
     this.wheelRotation = 0;

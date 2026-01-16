@@ -110,7 +110,7 @@ function CalendarDayView({
   };
 
   const today = isToday(currentDate);
-  const dateKey = formatDateKey(currentDate);
+  const _dateKey = formatDateKey(currentDate);
 
   // Group items by type for organized display
   const groupedByType = {

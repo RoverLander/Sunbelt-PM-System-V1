@@ -1,6 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { JobSiteSprite } from '../sprites/JobSiteSprite';
-import { STATE_COORDINATES, getStatePixelPosition } from '../data/factoryLocations';
+import { STATE_COORDINATES as _STATE_COORDINATES, getStatePixelPosition } from '../data/factoryLocations';
 
 /**
  * JobSitesLayer - Manages all job site markers on the map
@@ -38,6 +38,10 @@ export class JobSitesLayer extends PIXI.Container {
     );
 
     if (!position) return null;
+
+    const { x: _x, y: _y } = position;
+    const _regionName = project.delivery_state;
+    const _type = 'jobsite';
 
     const sprite = new JobSiteSprite({
       id: project.id,

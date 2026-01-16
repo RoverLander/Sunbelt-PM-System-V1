@@ -645,7 +645,7 @@ export const processCSVImport = (csvContent, options = {}) => {
   };
 
   // Step 1: Parse CSV
-  const { headers, rows, errors: parseErrors } = parseCSV(csvContent);
+  const { headers: _headers, rows, errors: parseErrors } = parseCSV(csvContent);
   if (parseErrors.length > 0) {
     result.errors.push(...parseErrors);
     return result;

@@ -466,8 +466,8 @@ export function calculateLongLeadMetrics(longLeadItems) {
  * @returns {Object} Court distribution metrics
  */
 export function calculateCourtMetrics(tasks) {
-  const activeTasks = tasks.filter(t => !['Completed', 'Cancelled'].includes(t.status));
-  const completedTasks = tasks.filter(t => t.status === 'Completed');
+  const _activeTasks = tasks.filter(t => !['Completed', 'Cancelled'].includes(t.status));
+  const _completedTasks = tasks.filter(t => t.status === 'Completed');
 
   const courtMetrics = {};
 

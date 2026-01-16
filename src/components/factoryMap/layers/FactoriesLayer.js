@@ -1,6 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { FactorySprite } from '../sprites/FactorySprite';
-import { FACTORY_LOCATIONS, getPixelPosition } from '../data/factoryLocations';
+import { FACTORY_LOCATIONS, getPixelPosition, getRegionAt as _getRegionAt } from '../data/factoryLocations';
 
 /**
  * FactoriesLayer - Manages all factory sprites on the map

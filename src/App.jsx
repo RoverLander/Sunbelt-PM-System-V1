@@ -66,7 +66,7 @@ function AppContent() {
   const [dashboardType, setDashboardType] = useState(() => {
     return localStorage.getItem('dashboardType') || 'pm';
   });
-  const [userRole, setUserRole] = useState(null);
+  const [_userRole, setUserRole] = useState(null);
 
   // Project navigation state
   const [selectedProjectId, setSelectedProjectId] = useState(null);

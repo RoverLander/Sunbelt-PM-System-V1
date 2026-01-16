@@ -68,7 +68,7 @@ const formatCurrency = (amount) => {
   return `$${amount.toLocaleString()}`;
 };
 
-const formatDate = (dateString) => {
+const _formatDate = (dateString) => {
   if (!dateString) return '-';
   return new Date(dateString).toLocaleDateString('en-US', {
     month: 'short',
@@ -76,7 +76,7 @@ const formatDate = (dateString) => {
   });
 };
 
-const formatFullDate = (dateString) => {
+const _formatFullDate = (dateString) => {
   if (!dateString) return '-';
   return new Date(dateString).toLocaleDateString('en-US', {
     month: 'short',
@@ -98,7 +98,7 @@ const getDaysUntil = (dateString) => {
 // MAIN COMPONENT
 // ============================================================================
 function VPDashboard() {
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
 
   // ==========================================================================
   // STATE
@@ -108,10 +108,10 @@ function VPDashboard() {
   const [tasks, setTasks] = useState([]);
   const [rfis, setRFIs] = useState([]);
   const [submittals, setSubmittals] = useState([]);
-  const [milestones, setMilestones] = useState([]);
+  const [_milestones, setMilestones] = useState([]);
   const [users, setUsers] = useState([]);
   const [quotes, setQuotes] = useState([]); // Sales quotes for pipeline visibility
-  const [timeRange, setTimeRange] = useState('quarter'); // month, quarter, year
+  const [_timeRange, _setTimeRange] = useState('quarter'); // month, quarter, year
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [showPraxisImport, setShowPraxisImport] = useState(false);
@@ -369,7 +369,7 @@ function VPDashboard() {
     }).sort((a, b) => new Date(b.converted_at) - new Date(a.converted_at));
 
     // Weighted forecast by expected close (next 30/60/90 days)
-    const now = new Date();
+    const _now = new Date();
     const forecast30 = activeQuotes.filter(q => {
       if (!q.expected_close_timeframe) return false;
       const closeText = q.expected_close_timeframe.toLowerCase();

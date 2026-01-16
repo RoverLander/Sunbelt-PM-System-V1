@@ -57,7 +57,7 @@ const formatMonthYear = (date) => {
   return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 };
 
-const formatMonth = (date) => {
+const _formatMonth = (date) => {
   return date.toLocaleDateString('en-US', { month: 'short' });
 };
 
@@ -95,17 +95,17 @@ const isWeekend = (date) => {
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-function GanttTimeline({ 
-  projects = [], 
+function GanttTimeline({
+  projects = [],
   onProjectClick,
-  showMilestones = false,
-  milestones = []
+  showMilestones: _showMilestones = false,
+  milestones: _milestones = []
 }) {
   // ==========================================================================
   // STATE
   // ==========================================================================
   const [zoomLevel, setZoomLevel] = useState('quarter');
-  const [scrollLeft, setScrollLeft] = useState(0);
+  const [_scrollLeft, _setScrollLeft] = useState(0);
   const [hoveredProject, setHoveredProject] = useState(null);
   const [tooltipData, setTooltipData] = useState(null);
   
@@ -187,7 +187,7 @@ function GanttTimeline({
     const months = [];
     const days = [];
     
-    let currentDate = new Date(timelineBounds.start);
+    let _currentDate = new Date(timelineBounds.start);
     let currentMonth = null;
     let monthStartX = 0;
 
@@ -559,7 +559,7 @@ function GanttTimeline({
           </div>
 
           {/* Project Labels */}
-          {projects.map((project, index) => (
+          {projects.map((project) => (
             <div
               key={project.id}
               onClick={() => onProjectClick?.(project)}
@@ -648,9 +648,9 @@ function GanttTimeline({
             }}>
               {/* Month Headers */}
               <div style={{ height: '30px', position: 'relative', borderBottom: '1px solid var(--border-color)' }}>
-                {timelineHeaders.months.map((month, index) => (
+                {timelineHeaders.months.map((month, idx) => (
                   <div
-                    key={index}
+                    key={idx}
                     style={{
                       position: 'absolute',
                       left: month.x,
@@ -674,9 +674,9 @@ function GanttTimeline({
               {/* Day Headers (Month view only) */}
               {zoomLevel === 'month' && (
                 <div style={{ height: '30px', position: 'relative' }}>
-                  {timelineHeaders.days.map((day, index) => (
+                  {timelineHeaders.days.map((day, idx) => (
                     <div
-                      key={index}
+                      key={idx}
                       style={{
                         position: 'absolute',
                         left: day.x,
@@ -718,25 +718,25 @@ function GanttTimeline({
               ))}
 
               {/* Row Backgrounds */}
-              {projects.map((_, index) => (
+              {projects.map((_, _index) => (
                 <rect
-                  key={index}
+                  key={_index}
                   x={0}
-                  y={index * ROW_HEIGHT}
+                  y={_index * ROW_HEIGHT}
                   width={dimensions.timelineWidth}
                   height={ROW_HEIGHT}
-                  fill={index % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)'}
+                  fill={_index % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)'}
                 />
               ))}
 
               {/* Row Dividers */}
-              {projects.map((_, index) => (
+              {projects.map((_, _index) => (
                 <line
-                  key={index}
+                  key={_index}
                   x1={0}
-                  y1={(index + 1) * ROW_HEIGHT}
+                  y1={(_index + 1) * ROW_HEIGHT}
                   x2={dimensions.timelineWidth}
-                  y2={(index + 1) * ROW_HEIGHT}
+                  y2={(_index + 1) * ROW_HEIGHT}
                   stroke="var(--border-color)"
                   strokeWidth={1}
                 />

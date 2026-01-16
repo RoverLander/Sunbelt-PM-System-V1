@@ -59,7 +59,8 @@ class ErrorBoundary extends Component {
     };
   };
 
-  reportErrorToDatabase = async (error, errorInfo, includeUserDescription = false) => {
+  // eslint-disable-next-line no-unused-vars
+  reportErrorToDatabase = async (error, errorInfo, _includeUserDescription = false) => {
     try {
       // Get current user if logged in
       const { data: { user } } = await supabase.auth.getUser();
@@ -92,7 +93,8 @@ class ErrorBoundary extends Component {
     this.setState({ isReporting: true });
 
     try {
-      const { error, errorInfo, userDescription } = this.state;
+      // eslint-disable-next-line no-unused-vars
+      const { error, errorInfo: _errorInfo, userDescription } = this.state;
       const { data: { user } } = await supabase.auth.getUser();
 
       // Create a ticket directly for user-submitted reports

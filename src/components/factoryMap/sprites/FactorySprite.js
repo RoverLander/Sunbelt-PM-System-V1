@@ -12,12 +12,12 @@ export class FactorySprite extends PIXI.Container {
   static textureLoading = false;
   static textureLoadPromise = null;
 
-  constructor(factoryData, options = {}) {
+  constructor(factoryData, _options = {}) {
     super();
 
     this.factoryData = factoryData;
     this.label = factoryData.code;
-    this.isActive = options.isActive ?? true;
+    this.isActive = _options.isActive ?? true;
     this.activityLevel = 0; // 0-1, controls glow intensity
     this.scale.set(1);
 
@@ -40,7 +40,7 @@ export class FactorySprite extends PIXI.Container {
     this.initializeSprite(options);
   }
 
-  async initializeSprite(options) {
+  async initializeSprite(_options) {
     try {
       // Try to load the AI-generated sprite
       const texture = await this.loadFactoryTexture();
@@ -49,8 +49,8 @@ export class FactorySprite extends PIXI.Container {
       } else {
         this.createBuilding();
       }
-    } catch (err) {
-      console.warn('Failed to load factory sprite, using fallback:', err);
+    } catch (_err) {
+      console.warn('Failed to load factory sprite, using fallback:', _err);
       this.createBuilding();
     }
 
@@ -79,7 +79,7 @@ export class FactorySprite extends PIXI.Container {
         const texture = await PIXI.Assets.load('/assets/sprites/factory_idle.png');
         FactorySprite.textureCache = texture;
         resolve(texture);
-      } catch (err) {
+      } catch (_e) {
         console.warn('Factory sprite not found, will use programmatic fallback');
         resolve(null);
       } finally {
@@ -181,7 +181,7 @@ export class FactorySprite extends PIXI.Container {
       ? [{ x: -15, y: -60 }, { x: 10, y: -55 }]  // Adjust for sprite
       : [{ x: -20, y: -35 }, { x: 15, y: -32 }]; // Original positions
 
-    positions.forEach((pos, index) => {
+    positions.forEach((pos, _i) => {
       // Only create visual smokestacks for programmatic building
       if (!this.usesSpriteImage) {
         const stack = new PIXI.Graphics();
@@ -195,7 +195,7 @@ export class FactorySprite extends PIXI.Container {
       // Create smoke particles for both types
       if (this.isActive && this.activityLevel > 0.3) {
         for (let i = 0; i < 4; i++) {
-          const smoke = this.createSmokeParticle(pos.x, pos.y - 5, index * 25 + i * 25);
+          const smoke = this.createSmokeParticle(pos.x, pos.y - 5, _i * 25 + i * 25);
           this.smokeParticles.push(smoke);
           this.smokestackContainer.addChild(smoke);
         }

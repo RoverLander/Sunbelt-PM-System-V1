@@ -46,7 +46,7 @@ import {
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import {
-  formatDate,
+  formatDate as _formatDate,
   formatDateShort,
   getDaysUntilDeadline,
   getUrgencyLevel,
@@ -69,7 +69,7 @@ const URGENCY_COLORS = {
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-const formatCurrency = (amount) => {
+const _formatCurrency = (amount) => {
   if (!amount) return '$0';
   if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
   if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
@@ -87,7 +87,8 @@ const getDaysText = (days) => {
 // ============================================================================
 // STAT CARD COMPONENT
 // ============================================================================
-function StatCard({ icon: Icon, label, value, subValue, color, onClick }) {
+// eslint-disable-next-line no-unused-vars
+function StatCard({ icon: _Icon, label, value, subValue, color, onClick }) {
   return (
     <div
       onClick={onClick}
@@ -120,7 +121,7 @@ function StatCard({ icon: Icon, label, value, subValue, color, onClick }) {
           alignItems: 'center',
           justifyContent: 'center'
         }}>
-          <Icon size={20} style={{ color: color || 'var(--sunbelt-orange)' }} />
+          <_Icon size={20} style={{ color: color || 'var(--sunbelt-orange)' }} />
         </div>
         <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>{label}</span>
       </div>

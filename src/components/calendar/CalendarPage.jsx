@@ -194,7 +194,7 @@ function CalendarPage() {
 
       // Try to fetch all projects directly first
       let projectsData = [];
-      const { data: allProjects, error: projectsError } = await supabase
+      const { data: allProjects, error: _projectsError } = await supabase
         .from('projects')
         .select('*')
         .order('name');

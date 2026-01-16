@@ -824,10 +824,10 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
 // ============================================================================
 // PLACEHOLDER TAB
 // ============================================================================
-function PlaceholderTab({ icon: Icon, message }) {
+function PlaceholderTab({ icon: _Icon, message }) {
   return (
     <div style={{ padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-      <Icon size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
+      <_Icon size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
       <p>{message}</p>
     </div>
   );
