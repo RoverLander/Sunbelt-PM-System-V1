@@ -1258,7 +1258,7 @@ BEGIN
     IF v_worker IS NOT NULL THEN
       INSERT INTO station_assignments (
         module_id, station_id, factory_id, lead_id, crew_ids,
-        status, started_at, target_hours, actual_hours
+        status, start_time, estimated_hours, actual_hours
       ) VALUES (
         v_module.id,
         v_module.current_station_id,
@@ -1412,7 +1412,7 @@ BEGIN
 
       INSERT INTO station_assignments (
         module_id, station_id, factory_id, lead_id, crew_ids,
-        status, started_at, completed_at, target_hours, actual_hours
+        status, start_time, end_time, estimated_hours, actual_hours
       ) VALUES (
         v_module.id,
         v_stations[v_station_idx],
