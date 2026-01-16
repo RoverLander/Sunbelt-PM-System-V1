@@ -198,6 +198,90 @@ INSERT INTO workflow_stations (station_key, name, description, phase, display_or
 SELECT 'Step 4: Workflow stations created (19 stations - no duplicates)' AS status;
 
 -- ############################################################################
+-- STEP 4B: CREATE STATION TEMPLATES (12 PRODUCTION LINE STAGES)
+-- ############################################################################
+-- These are the FACTORY production line stations (different from PM workflow stations)
+-- Required for Plant Manager Dashboard to show modules at stations
+
+-- Create table if not exists
+CREATE TABLE IF NOT EXISTS station_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  factory_id UUID REFERENCES factories(id) ON DELETE CASCADE,
+  name VARCHAR(100) NOT NULL,
+  code VARCHAR(30) NOT NULL,
+  description TEXT,
+  order_num INTEGER NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  requires_inspection BOOLEAN DEFAULT false,
+  is_inspection_station BOOLEAN DEFAULT false,
+  duration_defaults JSONB DEFAULT '{"stock": 4.0, "fleet": 4.0, "government": 6.0, "custom": 8.0}',
+  checklist JSONB DEFAULT '[]',
+  min_crew_size INTEGER DEFAULT 1,
+  max_crew_size INTEGER DEFAULT 10,
+  recommended_crew_size INTEGER DEFAULT 3,
+  color VARCHAR(7) DEFAULT '#6366f1',
+  icon VARCHAR(50),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Clear existing global templates and recreate
+DELETE FROM station_templates WHERE factory_id IS NULL;
+
+-- Insert the 12 production line stages (global templates, factory_id = NULL)
+INSERT INTO station_templates (name, code, description, order_num, requires_inspection, is_inspection_station, color, duration_defaults, checklist)
+VALUES
+  ('Metal Frame Welding', 'FRAME_WELD', 'Heavy steel frame welding in off-line bay', 1, false, false, '#ef4444',
+   '{"stock": 6.0, "fleet": 6.0, "government": 8.0, "custom": 10.0}',
+   '[{"q": "Welds inspected visually?", "type": "bool"}, {"q": "Frame square within tolerance?", "type": "bool"}]'),
+
+  ('Rough Carpentry', 'ROUGH_CARP', 'Walls, roof framing, studs, joists', 2, false, false, '#f97316',
+   '{"stock": 8.0, "fleet": 8.0, "government": 10.0, "custom": 12.0}',
+   '[{"q": "Studs plumb?", "type": "bool"}, {"q": "Headers properly sized?", "type": "bool"}]'),
+
+  ('Exterior Siding/Sheathing', 'EXT_SIDING', 'Seal outside - sheathing and siding', 3, false, false, '#eab308',
+   '{"stock": 6.0, "fleet": 6.0, "government": 8.0, "custom": 10.0}',
+   '[{"q": "Weather barrier installed?", "type": "bool"}, {"q": "Siding secured properly?", "type": "bool"}]'),
+
+  ('Interior Rough-out', 'INT_ROUGH', 'Insulation, vapor barrier, windows', 4, false, false, '#84cc16',
+   '{"stock": 4.0, "fleet": 4.0, "government": 6.0, "custom": 8.0}',
+   '[{"q": "Insulation R-value correct?", "type": "bool"}, {"q": "Vapor barrier sealed?", "type": "bool"}]'),
+
+  ('Electrical Rough-in', 'ELEC_ROUGH', 'Electrical wiring and boxes', 5, true, false, '#22c55e',
+   '{"stock": 6.0, "fleet": 6.0, "government": 8.0, "custom": 10.0}',
+   '[{"q": "Wire gauge correct?", "type": "bool"}, {"q": "Boxes secured?", "type": "bool"}, {"q": "Circuits labeled?", "type": "bool"}]'),
+
+  ('Plumbing Rough-in', 'PLUMB_ROUGH', 'Plumbing lines and fixtures rough-in', 6, true, false, '#14b8a6',
+   '{"stock": 4.0, "fleet": 4.0, "government": 6.0, "custom": 8.0}',
+   '[{"q": "Pressure test passed?", "type": "bool"}, {"q": "Proper slope on drains?", "type": "bool"}]'),
+
+  ('HVAC Install', 'HVAC', 'HVAC system installation', 7, true, false, '#06b6d4',
+   '{"stock": 4.0, "fleet": 4.0, "government": 6.0, "custom": 8.0}',
+   '[{"q": "Ductwork sealed?", "type": "bool"}, {"q": "Unit properly mounted?", "type": "bool"}]'),
+
+  ('In-Wall Inspection', 'INWALL_INSP', 'Configurable inspection after rough-in', 8, false, true, '#0ea5e9',
+   '{"stock": 2.0, "fleet": 2.0, "government": 4.0, "custom": 4.0}',
+   '[{"q": "Electrical inspection passed?", "type": "bool"}, {"q": "Plumbing inspection passed?", "type": "bool"}, {"q": "HVAC inspection passed?", "type": "bool"}]'),
+
+  ('Interior Finish', 'INT_FINISH', 'Tape, mud, paint, flooring, trim', 9, false, false, '#6366f1',
+   '{"stock": 10.0, "fleet": 10.0, "government": 12.0, "custom": 16.0}',
+   '[{"q": "Drywall finish level acceptable?", "type": "bool"}, {"q": "Paint coverage complete?", "type": "bool"}, {"q": "Flooring installed correctly?", "type": "bool"}]'),
+
+  ('Final State Inspection', 'FINAL_INSP', 'End of line state inspection', 10, false, true, '#8b5cf6',
+   '{"stock": 2.0, "fleet": 2.0, "government": 4.0, "custom": 4.0}',
+   '[{"q": "All systems operational?", "type": "bool"}, {"q": "Safety devices installed?", "type": "bool"}, {"q": "Documentation complete?", "type": "bool"}]'),
+
+  ('Staging', 'STAGING', 'Pre-pickup staging area', 11, false, false, '#a855f7',
+   '{"stock": 1.0, "fleet": 1.0, "government": 2.0, "custom": 2.0}',
+   '[{"q": "Final clean complete?", "type": "bool"}, {"q": "Paperwork ready?", "type": "bool"}]'),
+
+  ('Dealer Pickup', 'PICKUP', 'Ready for dealer transport', 12, false, false, '#ec4899',
+   '{"stock": 0.5, "fleet": 0.5, "government": 1.0, "custom": 1.0}',
+   '[{"q": "Bill of lading signed?", "type": "bool"}, {"q": "Photos taken?", "type": "bool"}]');
+
+SELECT 'Step 4B: Station templates created (12 production line stages)' AS status;
+
+-- ############################################################################
 -- STEP 5: ENSURE PROJECT_WORKFLOW_STATUS TABLE EXISTS
 -- ############################################################################
 
@@ -1843,6 +1927,7 @@ DECLARE
   v_module_count INTEGER;
   v_worker_count INTEGER;
   v_station_count INTEGER;
+  v_production_station_count INTEGER;
   v_workflow_count INTEGER;
   v_shift_count INTEGER;
   v_assignment_count INTEGER;
@@ -1859,6 +1944,7 @@ BEGIN
   SELECT COUNT(*) INTO v_module_count FROM modules;
   SELECT COUNT(*) INTO v_worker_count FROM workers WHERE is_active = true;
   SELECT COUNT(*) INTO v_station_count FROM workflow_stations WHERE is_active = true;
+  SELECT COUNT(*) INTO v_production_station_count FROM station_templates WHERE is_active = true;
   SELECT COUNT(*) INTO v_workflow_count FROM project_workflow_status;
   SELECT COUNT(*) INTO v_shift_count FROM worker_shifts;
   SELECT COUNT(*) INTO v_assignment_count FROM station_assignments;
@@ -1877,7 +1963,8 @@ BEGIN
   RAISE NOTICE 'Projects: %', v_project_count;
   RAISE NOTICE 'Tasks: %', v_task_count;
   RAISE NOTICE 'Modules: %', v_module_count;
-  RAISE NOTICE 'Workflow stations: %', v_station_count;
+  RAISE NOTICE 'PM Workflow stations: %', v_station_count;
+  RAISE NOTICE 'Production line stations: %', v_production_station_count;
   RAISE NOTICE 'Workflow status records: %', v_workflow_count;
   RAISE NOTICE '';
   RAISE NOTICE '=== PLANT MANAGER DATA (Mission Critical) ===';

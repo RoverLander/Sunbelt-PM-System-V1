@@ -165,6 +165,24 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ### January 16, 2026 (Demo Data System Fixes)
 
+- **CRITICAL FIX: Station Templates Missing - Complete**
+  - **Root Cause:** Plant Manager Dashboard showed 0 modules because `station_templates` table was empty
+  - **Issue:** Demo SQL created `workflow_stations` (PM workflow) but not `station_templates` (production line)
+  - **Fix:** Added Step 4B to COMPLETE_DEMO_SETUP.sql that creates the 12 production line stations:
+    1. Metal Frame Welding
+    2. Rough Carpentry
+    3. Exterior Siding/Sheathing
+    4. Interior Rough-out
+    5. Electrical Rough-in
+    6. Plumbing Rough-in
+    7. HVAC Install
+    8. In-Wall Inspection
+    9. Interior Finish
+    10. Final State Inspection
+    11. Staging
+    12. Dealer Pickup
+  - These global templates (factory_id = NULL) are used by all factories
+
 - **COMPLETE_DEMO_SETUP.sql Schema Fixes - Complete**
   - Fixed multiple table/column schema mismatches preventing demo data generation
   - **QC Records Column Fix:**
@@ -187,7 +205,7 @@ The Sunbelt PM System is a comprehensive project management platform built for S
   - Applied to: `getQCRecordById`, `getQCRecordsByModule`, `getQCRecordsByFactory`
 
 - **Files Modified:**
-  - `supabase/demo/COMPLETE_DEMO_SETUP.sql` - QC records, project logs, sales tables fixes
+  - `supabase/demo/COMPLETE_DEMO_SETUP.sql` - Added station_templates, QC records, project logs, sales tables fixes
   - `src/services/qcService.js` - Supabase relationship syntax corrections
 
 ---
