@@ -32,7 +32,11 @@ const EXPIRES_KEY = 'worker_session_expires';
  */
 export async function loginWorker(employeeId, pin, factoryCode = null, deviceInfo = null) {
   try {
-    const response = await fetch(`${WORKER_AUTH_URL}/login`, {
+    const url = `${WORKER_AUTH_URL}/login`;
+    console.log('[workerAuthService] Login URL:', url);
+    console.log('[workerAuthService] Attempting login for employee:', employeeId);
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -51,7 +55,9 @@ export async function loginWorker(employeeId, pin, factoryCode = null, deviceInf
       })
     });
 
+    console.log('[workerAuthService] Response status:', response.status);
     const data = await response.json();
+    console.log('[workerAuthService] Response data:', data);
 
     if (!response.ok) {
       return {

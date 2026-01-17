@@ -136,7 +136,9 @@ export default function WorkerLogin() {
       }
     }
 
+    console.log('[WorkerLogin] Attempting login for:', employeeId.trim());
     const result = await login(employeeId.trim(), pin);
+    console.log('[WorkerLogin] Login result:', result);
 
     if (!result.success) {
       if (result.locked) {
@@ -145,10 +147,8 @@ export default function WorkerLogin() {
       } else if (result.attemptsRemaining !== undefined) {
         setAttemptsRemaining(result.attemptsRemaining);
       }
-      // Set local error if not already set
-      if (!result.error) {
-        setLocalError('Login failed. Please check your credentials.');
-      }
+      // Set local error - use result.error or fallback
+      setLocalError(result.error || 'Login failed. Please check your credentials.');
     }
   };
 

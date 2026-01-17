@@ -111,9 +111,9 @@ ON projects USING gin(to_tsvector('english', coalesce(name, '') || ' ' || coales
 CREATE INDEX IF NOT EXISTS idx_tasks_search
 ON tasks USING gin(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(description, '')));
 
--- RFIs search
+-- RFIs search (uses subject, not title)
 CREATE INDEX IF NOT EXISTS idx_rfis_search
-ON rfis USING gin(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(question, '')));
+ON rfis USING gin(to_tsvector('english', coalesce(subject, '') || ' ' || coalesce(question, '')));
 
 -- ============================================================================
 -- 4. ANALYZE TABLES (update statistics for query planner)
