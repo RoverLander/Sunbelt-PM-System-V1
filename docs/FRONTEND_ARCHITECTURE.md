@@ -2,7 +2,7 @@
 
 **Last Updated:** January 17, 2026
 **Framework:** React 18 + Vite + PWA
-**Version:** 1.4.3
+**Version:** 1.5.0
 
 ---
 
@@ -78,16 +78,29 @@ src/
 └── pwa/                 # PWA Mobile Floor App (separate from desktop)
     ├── index.js         # Module barrel exports
     ├── PWAApp.jsx       # Main PWA app component
+    │
     ├── contexts/
     │   └── WorkerAuthContext.jsx  # Worker PIN auth context
+    │
     ├── components/
     │   ├── auth/
     │   │   └── WorkerLogin.jsx    # PIN login screen
     │   ├── layout/
-    │   │   ├── PWAShell.jsx       # App shell with header/nav
+    │   │   ├── PWAShell.jsx       # App shell with header/nav + SyncIndicator
     │   │   └── BottomNav.jsx      # Bottom navigation (5 items)
     │   └── common/
-    │       └── OfflineBanner.jsx  # Offline status indicator
+    │       ├── OfflineBanner.jsx  # Offline status indicator
+    │       └── SyncIndicator.jsx  # Sync status dropdown with actions
+    │
+    ├── hooks/                     # PWA-specific hooks
+    │   ├── useOnlineStatus.js     # Online/offline detection with debounce
+    │   ├── useOfflineSync.js      # Offline action queue management
+    │   └── useRealtimeSubscription.js # Supabase real-time subscriptions
+    │
+    ├── lib/                       # PWA utilities
+    │   ├── indexedDB.js           # IndexedDB wrapper for offline storage
+    │   └── syncManager.js         # Sync orchestration for pending actions
+    │
     └── pages/
         ├── PWAHome.jsx            # Home dashboard page
         ├── ModuleLookup.jsx       # Module search with autocomplete

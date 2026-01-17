@@ -21,6 +21,24 @@ export { default as WorkerLogin } from './components/auth/WorkerLogin';
 
 // Common Components
 export { default as OfflineBanner } from './components/common/OfflineBanner';
+export { default as SyncIndicator } from './components/common/SyncIndicator';
+
+// Hooks
+export { useOfflineSync, usePendingCount, useLastSync } from './hooks/useOfflineSync';
+export { useOnlineStatus, useIsOnline } from './hooks/useOnlineStatus';
+export {
+  useRealtimeSubscription,
+  useModulesSubscription,
+  useStationAssignmentsSubscription,
+  useQCRecordsSubscription,
+  useInventoryReceiptsSubscription,
+  useWorkerShiftsSubscription,
+  usePWASubscriptions
+} from './hooks/useRealtimeSubscription';
+
+// Libraries
+export { default as indexedDB } from './lib/indexedDB';
+export { default as syncManager } from './lib/syncManager';
 
 // Pages
 export { default as PWAHome } from './pages/PWAHome';

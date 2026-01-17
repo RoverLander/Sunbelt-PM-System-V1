@@ -11,6 +11,7 @@ import React from 'react';
 import { useWorkerAuth } from '../../contexts/WorkerAuthContext';
 import BottomNav from './BottomNav';
 import OfflineBanner from '../common/OfflineBanner';
+import SyncIndicator from '../common/SyncIndicator';
 import { Wifi, WifiOff, Clock, LogOut, User } from 'lucide-react';
 
 // ============================================================================
@@ -168,6 +169,9 @@ export default function PWAShell({
           </div>
 
           <div style={styles.headerRight}>
+            {/* Sync Indicator */}
+            <SyncIndicator />
+
             {/* Session Time */}
             {sessionTimeRemaining?.valid && (
               <div style={{ ...styles.sessionTime, ...getSessionTimeStyle() }}>

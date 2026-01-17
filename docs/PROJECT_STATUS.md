@@ -1,8 +1,8 @@
 # Project Status
 
 **Last Updated:** January 17, 2026
-**Version:** 1.4.3
-**Status:** Production Ready (Beta) + PGM Dashboard Batch 4 Complete + PWA Phase 1 Foundation Complete
+**Version:** 1.5.0
+**Status:** Production Ready (Beta) + PWA Mobile Floor App Phase 7 Complete
 
 ---
 
@@ -162,6 +162,52 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 ---
 
 ## Recent Updates (January 2026)
+
+### January 17, 2026 (PWA Mobile Floor App - Phases 6 & 7 Offline Sync & Real-Time)
+
+- **Phase 6: Offline Sync - Complete**
+  - **IndexedDB Library:**
+    - `src/pwa/lib/indexedDB.js` - Comprehensive offline storage wrapper (~630 lines)
+    - 7 object stores: modules, stations, workers, purchase_orders, pending_actions, photo_queue, sync_meta
+    - CRUD operations, cache management, storage quota monitoring
+  - **SyncManager:**
+    - `src/pwa/lib/syncManager.js` - Sync orchestration (~450 lines)
+    - Processes pending actions queue when online
+    - Handles QC submissions, station moves, inventory receipts
+    - Photo upload with chunking support
+    - Background sync registration for Service Worker
+  - **Hooks:**
+    - `useOnlineStatus` - Online/offline detection with debouncing
+    - `useOfflineSync` - Queue actions, trigger sync, monitor status
+    - `usePendingCount` - Simple pending count hook
+    - `useLastSync` - Last sync timestamp hook
+  - **SyncIndicator Component:**
+    - `src/pwa/components/common/SyncIndicator.jsx` - Visual sync status
+    - Shows: Online/Offline, Syncing, Pending count, Failed count
+    - Dropdown with storage info, retry button, last sync time
+    - Integrated into PWAShell header
+
+- **Phase 7: Real-Time & Polish - Complete**
+  - **Real-Time Subscription Hooks:**
+    - `src/pwa/hooks/useRealtimeSubscription.js` - Supabase real-time integration
+    - Generic `useRealtimeSubscription` with filter support
+    - Table-specific hooks: modules, station_assignments, qc_records, inventory_receipts, worker_shifts
+    - Combined `usePWASubscriptions` for multi-table subscriptions
+    - Auto-pause when tab hidden, auto-resume when visible
+
+- **Files Created:**
+  - `src/pwa/lib/indexedDB.js`
+  - `src/pwa/lib/syncManager.js`
+  - `src/pwa/hooks/useOnlineStatus.js`
+  - `src/pwa/hooks/useOfflineSync.js`
+  - `src/pwa/hooks/useRealtimeSubscription.js`
+  - `src/pwa/components/common/SyncIndicator.jsx`
+
+- **Files Modified:**
+  - `src/pwa/components/layout/PWAShell.jsx` - Added SyncIndicator
+  - `src/pwa/index.js` - Added all new exports
+
+---
 
 ### January 17, 2026 (PWA Mobile Floor App - Phase 5 Inventory Receiving)
 
