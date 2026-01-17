@@ -12,14 +12,9 @@ import { WorkerAuthProvider, useWorkerAuth } from './contexts/WorkerAuthContext'
 import WorkerLogin from './components/auth/WorkerLogin';
 import PWAShell from './components/layout/PWAShell';
 import PWAHome from './pages/PWAHome';
+import ModuleLookup from './pages/ModuleLookup';
 
-// Placeholder pages (to be implemented in Phase 2+)
-const ModulesPage = () => (
-  <div style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
-    <h2>Module Lookup</h2>
-    <p style={{ color: 'var(--text-secondary)' }}>Coming in Phase 2</p>
-  </div>
-);
+// Placeholder pages (to be implemented in Phase 3+)
 
 const QCPage = () => (
   <div style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
@@ -88,7 +83,7 @@ function PWAContent() {
       case 'home':
         return <PWAHome onNavigate={setCurrentView} />;
       case 'modules':
-        return <ModulesPage />;
+        return <ModuleLookup />;
       case 'qc':
         return <QCPage />;
       case 'inventory':

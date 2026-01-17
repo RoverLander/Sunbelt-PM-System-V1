@@ -146,6 +146,70 @@ export async function getScheduledModules(factoryId, startDate, endDate) {
 }
 
 /**
+ * Search modules by serial number or project name (for PWA autocomplete)
+ *
+ * @param {string} factoryId - Factory UUID
+ * @param {string} query - Search query (min 2 characters)
+ * @param {number} limit - Max results (default 10)
+ * @returns {Promise<{data: Array, error: Error}>}
+ */
+export async function searchModules(factoryId, query, limit = 10) {
+  try {
+    if (!query || query.length < 2) {
+      return { data: [], error: null };
+    }
+
+    const searchPattern = `%${query}%`;
+
+    const { data, error } = await supabase
+      .from('modules')
+      .select(`
+        id,
+        serial_number,
+        name,
+        status,
+        project:projects(id, name, project_number),
+        current_station:station_templates(id, name, code, color)
+      `)
+      .eq('factory_id', factoryId)
+      .not('status', 'in', '("Completed", "Shipped")')
+      .or(`serial_number.ilike.${searchPattern},name.ilike.${searchPattern}`)
+      .order('serial_number', { ascending: true })
+      .limit(limit);
+
+    if (error) throw error;
+
+    // Also search by project name/number if no serial matches found
+    if ((!data || data.length === 0) && query.length >= 3) {
+      const { data: projectMatches, error: projectError } = await supabase
+        .from('modules')
+        .select(`
+          id,
+          serial_number,
+          name,
+          status,
+          project:projects!inner(id, name, project_number),
+          current_station:station_templates(id, name, code, color)
+        `)
+        .eq('factory_id', factoryId)
+        .not('status', 'in', '("Completed", "Shipped")')
+        .or(`projects.name.ilike.${searchPattern},projects.project_number.ilike.${searchPattern}`)
+        .order('serial_number', { ascending: true })
+        .limit(limit);
+
+      if (!projectError && projectMatches) {
+        return { data: projectMatches, error: null };
+      }
+    }
+
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Error searching modules:', error);
+    return { data: [], error };
+  }
+}
+
+/**
  * Get a module by serial number (for PWA lookup)
  *
  * @param {string} factoryId - Factory UUID
@@ -634,6 +698,7 @@ export default {
   getModulesByFactory,
   getScheduledModules,
   getModulesAtStation,
+  searchModules,
   generateModuleSerial,
   createModule,
   createModulesForProject,
