@@ -25,3 +25,4 @@ export { default as OfflineBanner } from './components/common/OfflineBanner';
 // Pages
 export { default as PWAHome } from './pages/PWAHome';
 export { default as ModuleLookup } from './pages/ModuleLookup';
+export { default as QCInspection } from './pages/QCInspection';

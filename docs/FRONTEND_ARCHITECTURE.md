@@ -90,7 +90,8 @@ src/
     │       └── OfflineBanner.jsx  # Offline status indicator
     └── pages/
         ├── PWAHome.jsx            # Home dashboard page
-        └── ModuleLookup.jsx       # Module search with autocomplete
+        ├── ModuleLookup.jsx       # Module search with autocomplete
+        └── QCInspection.jsx       # QC inspection 5-step workflow
 ```
 
 ---
@@ -1197,6 +1198,37 @@ Module search page with autocomplete functionality.
 
 ---
 
+#### QCInspection.jsx
+
+QC inspection workflow page with 5-step process.
+
+**Features:**
+- Module selection (search or pending inspections list)
+- Checklist loaded from `station_templates.checklist` JSONB
+- Pass/Fail buttons for each checklist item
+- Photo capture via camera API
+- Photo preview grid with remove functionality
+- Notes field for observations
+- Pass/Fail result summary
+- QC record submission
+- Auto-rework flagging on failure
+
+**Steps:**
+1. SELECT_MODULE - Search or select from pending
+2. CHECKLIST - Complete all checklist items
+3. PHOTOS - Capture optional photos
+4. REVIEW - Review results and add notes
+5. COMPLETE - Success confirmation
+
+**Components:**
+- `ModuleListItem` - Module selection card
+- `StepHeader` - Step indicator with back navigation
+- `ChecklistItemComponent` - Pass/Fail response buttons
+
+**Uses:** `createQCRecord()`, `getPendingInspections()` from qcService.js
+
+---
+
 ### PWA Services
 
 The PWA uses dedicated services for worker-specific functionality:
@@ -1205,6 +1237,7 @@ The PWA uses dedicated services for worker-specific functionality:
 |---------|------|---------|
 | workerAuthService | `src/services/workerAuthService.js` | PIN login, session management |
 | modulesService | `src/services/modulesService.js` | Module search, lookup, status |
+| qcService | `src/services/qcService.js` | QC records, inspections, defects |
 | purchaseOrdersService | `src/services/purchaseOrdersService.js` | PO lookup for inventory receiving |
 | inventoryReceiptsService | `src/services/inventoryReceiptsService.js` | Receipt tracking with photos |
 

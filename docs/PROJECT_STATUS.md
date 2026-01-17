@@ -163,6 +163,40 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ## Recent Updates (January 2026)
 
+### January 17, 2026 (PWA Mobile Floor App - Phase 3 QC Inspection)
+
+- **Phase 3: QC Inspection Workflow - Complete**
+  - **QCInspection Page Component:**
+    - `src/pwa/pages/QCInspection.jsx` - Full 5-step workflow (~1145 lines)
+    - Steps: Select Module → Checklist → Photos → Review → Complete
+  - **Features:**
+    - Module search with pending inspections list
+    - Checklist loaded from `station_templates.checklist` (JSONB)
+    - Pass/Fail buttons for each checklist item
+    - Photo capture via camera API with file input
+    - Photo preview grid with remove option
+    - Notes field for additional observations
+    - Pass/Fail result summary with counts
+    - Auto-rework flagging on failure
+    - QC record submission to Supabase
+  - **Sub-Components:**
+    - `ModuleListItem` - Module selection item
+    - `StepHeader` - Step indicator with back navigation
+    - `ChecklistItemComponent` - Pass/Fail response buttons
+  - **Integration:**
+    - Uses `qcService.js` for `createQCRecord`, `getPendingInspections`
+    - Uses `modulesService.js` for `searchModules`, `getModuleById`
+    - Uploads photos to `qc-photos` Supabase Storage bucket
+
+- **Files Created:**
+  - `src/pwa/pages/QCInspection.jsx`
+
+- **Files Modified:**
+  - `src/pwa/PWAApp.jsx` - Replaced placeholder with QCInspection
+  - `src/pwa/index.js` - Added QCInspection export
+
+---
+
 ### January 17, 2026 (PWA Mobile Floor App - Phase 2 Module Lookup)
 
 - **Phase 2: Module Lookup - Complete**

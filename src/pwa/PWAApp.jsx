@@ -13,15 +13,9 @@ import WorkerLogin from './components/auth/WorkerLogin';
 import PWAShell from './components/layout/PWAShell';
 import PWAHome from './pages/PWAHome';
 import ModuleLookup from './pages/ModuleLookup';
+import QCInspection from './pages/QCInspection';
 
-// Placeholder pages (to be implemented in Phase 3+)
-
-const QCPage = () => (
-  <div style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
-    <h2>QC Inspection</h2>
-    <p style={{ color: 'var(--text-secondary)' }}>Coming in Phase 3</p>
-  </div>
-);
+// Placeholder pages (to be implemented in Phase 4+)
 
 const InventoryPage = () => (
   <div style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
@@ -85,7 +79,7 @@ function PWAContent() {
       case 'modules':
         return <ModuleLookup />;
       case 'qc':
-        return <QCPage />;
+        return <QCInspection />;
       case 'inventory':
         return <InventoryPage />;
       case 'more':
