@@ -31,7 +31,7 @@ export async function getReceiptById(receiptId) {
         *,
         purchase_order:purchase_orders(id, po_number, vendor_name, project_id),
         received_by_worker:workers!inventory_receipts_received_by_fkey(id, full_name, employee_id),
-        verified_by_user:users!inventory_receipts_verified_by_fkey(id, full_name)
+        verified_by_user:users!inventory_receipts_verified_by_fkey(id, name)
       `)
       .eq('id', receiptId)
       .single();

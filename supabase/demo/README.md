@@ -41,6 +41,40 @@ This single file creates all demo data for demonstrating:
 - Plant Manager Dashboard (Stations, Modules, Crews, QC)
 - PWA Mobile Floor App (Worker Auth, Module Lookup, QC, Inventory)
 
+### Step 3: Run Master Fix Script (RECOMMENDED)
+
+After running COMPREHENSIVE_DEMO_DATA.sql, run this single file to fix all known issues:
+
+```
+FIX_ALL_DEMO_ISSUES.sql  → MASTER FIX FILE - Includes all fixes in one file:
+  1. Announcements - dismissals table, type column, removes duplicates
+  2. Sales quotes FK constraint for assigned_to → users
+  3. Directory contacts - 100+ contacts with correct schema
+  4. Crew members - 100 workers for NWBS with station assignments
+  5. Modules - realistic modules for all NWBS projects
+  6. PC-specific projects - stock/fleet projects (non-PM jobs)
+  7. Sales pipeline - quotes for both PM and PC-driven projects
+```
+
+### Alternative: Individual Fix Scripts
+
+If you prefer granular control, run these individual scripts instead:
+
+```
+FIX_ANNOUNCEMENTS.sql               → Announcements dismissals, type column, duplicates
+FIX_SALES_AND_CREW.sql              → Sales FK, 100 workers, modules, PC projects
+FIX_WORKFLOW_TASKS_AND_CLIENTS.sql  → Client names to DEALERS, workflow tasks
+FIX_DIRECTORY_CONTACTS.sql          → Populates 200+ contacts from CSV (DEPRECATED - use FIX_ALL)
+FIX_PM_ASSIGNMENTS.sql              → Assigns projects to specific PMs by name
+```
+
+**Important Notes:**
+- The workflow canvas derives station status from tasks with `workflow_station_key`,
+  not from the `project_workflow_status` table
+- PC (Project Coordinators) manage stock/fleet projects which are simpler, lower-dollar jobs
+- PMs manage larger, more complex "PM jobs" (is_pm_job = true)
+- Client names should always be DEALERS, not end users
+
 ---
 
 ## Legacy Scripts (Individual Files)

@@ -119,3 +119,31 @@ Impact: [consequences]
 ---
 
 Now read the architecture and help me build. If anything is unclear, ask before coding.
+
+---
+
+RECENT FIXES & CHANGES (January 17, 2026):
+
+SERVICE LAYER FIXES:
+• qcService.js - Changed users table queries from `full_name` to `name`
+• efficiencyService.js - Fixed Kaizen queries with explicit FK hints (!user_id, !worker_id, !reviewed_by)
+• vpService.js - Removed invalid factories!inner join, fixed modules query
+• purchaseOrdersService.js - Changed users table queries from `full_name` to `name`
+• inventoryReceiptsService.js - Changed users table queries from `full_name` to `name`
+
+DATABASE SCHEMA NOTES:
+• `users` table has `name` column (NOT `full_name`)
+• `workers` table has `full_name` as a generated column (first_name || ' ' || last_name)
+• `projects` table has `factory` as VARCHAR (factory code like 'NWBS'), NOT a FK to factories
+• `kaizen_suggestions` has multiple FKs to users (user_id, reviewed_by) - ALWAYS use explicit FK hints
+• `sales_quotes.assigned_to` needs FK constraint to users table
+
+DEMO DATA SQL FILES (in supabase/demo/):
+• FIX_ALL_DEMO_ISSUES.sql - MASTER fix file, run this after COMPREHENSIVE_DEMO_DATA.sql
+• Includes: announcements, sales FK, directory contacts, 100 crew members, modules, PC projects, sales pipeline
+
+PROJECT STRUCTURE NOTES:
+• PM jobs (is_pm_job = true) - Complex, high-dollar projects managed by Project Managers
+• PC jobs (is_pm_job = false) - Stock/fleet projects managed by Project Coordinators
+• Client names should ALWAYS be DEALERS, not end users
+• Workflow canvas uses tasks with `workflow_station_key`, NOT project_workflow_status table

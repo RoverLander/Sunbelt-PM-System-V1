@@ -27,8 +27,8 @@ export async function getPurchaseOrderById(poId) {
         *,
         project:projects(id, name, project_number),
         factory:factories(id, name, code),
-        created_by_user:users!purchase_orders_created_by_fkey(id, full_name),
-        approved_by_user:users!purchase_orders_approved_by_fkey(id, full_name)
+        created_by_user:users!purchase_orders_created_by_fkey(id, name),
+        approved_by_user:users!purchase_orders_approved_by_fkey(id, name)
       `)
       .eq('id', poId)
       .single();

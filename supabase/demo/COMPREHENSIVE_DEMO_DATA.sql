@@ -365,6 +365,13 @@ DECLARE
   v_amt_id UUID;
   v_smm_id UUID;
   v_owner_id UUID;
+  -- PM user IDs for proper assignment
+  v_matthew_id UUID;
+  v_crystal_id UUID;
+  v_candy_id UUID;
+  v_michael_id UUID;
+  v_hector_id UUID;
+  v_fallback_pm_id UUID;
 BEGIN
   -- Get factory IDs
   SELECT id INTO v_nwbs_id FROM factories WHERE code = 'NWBS';
@@ -375,85 +382,204 @@ BEGIN
   SELECT id INTO v_amt_id FROM factories WHERE code = 'AMT';
   SELECT id INTO v_smm_id FROM factories WHERE code = 'SMM';
 
-  -- Get an owner (any active user)
+  -- Get PM user IDs by name (flexible matching)
+  -- Matthew McDaniel
+  SELECT id INTO v_matthew_id FROM users
+  WHERE (LOWER(name) LIKE '%matthew%' AND LOWER(name) LIKE '%mcdaniel%')
+     OR LOWER(email) LIKE '%matthew%mcdaniel%'
+     OR LOWER(email) LIKE '%mmcdaniel%'
+  LIMIT 1;
+
+  -- Crystal (James/Meyers)
+  SELECT id INTO v_crystal_id FROM users
+  WHERE LOWER(name) LIKE '%crystal%'
+     OR LOWER(email) LIKE '%crystal%'
+  LIMIT 1;
+
+  -- Candy (Juhnke/Nelson)
+  SELECT id INTO v_candy_id FROM users
+  WHERE LOWER(name) LIKE '%candy%'
+     OR LOWER(email) LIKE '%candy%'
+  LIMIT 1;
+
+  -- Michael (Caracciolo)
+  SELECT id INTO v_michael_id FROM users
+  WHERE LOWER(name) LIKE '%michael%' AND role = 'PM'
+     OR (LOWER(email) LIKE '%michael%' AND role = 'PM')
+  LIMIT 1;
+
+  -- Hector (Vazquez)
+  SELECT id INTO v_hector_id FROM users
+  WHERE LOWER(name) LIKE '%hector%'
+     OR LOWER(email) LIKE '%hector%'
+  LIMIT 1;
+
+  -- Fallback: any PM user
+  SELECT id INTO v_fallback_pm_id FROM users
+  WHERE role = 'PM' AND is_active = true
+  LIMIT 1;
+
+  -- Final fallback: any active user
   SELECT id INTO v_owner_id FROM users WHERE is_active = true LIMIT 1;
 
   IF v_owner_id IS NULL THEN
     RAISE EXCEPTION 'No active users found!';
   END IF;
 
+  -- Use fallbacks if specific PMs not found
+  v_matthew_id := COALESCE(v_matthew_id, v_fallback_pm_id, v_owner_id);
+  v_crystal_id := COALESCE(v_crystal_id, v_fallback_pm_id, v_owner_id);
+  v_candy_id := COALESCE(v_candy_id, v_fallback_pm_id, v_owner_id);
+  v_michael_id := COALESCE(v_michael_id, v_fallback_pm_id, v_owner_id);
+  v_hector_id := COALESCE(v_hector_id, v_fallback_pm_id, v_owner_id);
+
+  RAISE NOTICE 'PM assignments: Matthew=%, Crystal=%, Candy=%, Michael=%, Hector=%',
+    v_matthew_id, v_crystal_id, v_candy_id, v_michael_id, v_hector_id;
+
   -- ============================================================================
-  -- NWBS PROJECTS (6 projects in various phases)
+  -- NWBS PROJECTS (6 projects in various phases) - Assigned to MATTHEW
   -- ============================================================================
 
   -- Phase 4 - In Production (modules on floor, perfect for PWA demo)
   -- is_pm_job: true = PM-managed (tracked in PM Dashboard), false = PC/STOCK job (factory-managed by PC and PGM)
-  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
+  -- owner_id AND primary_pm_id both set for dashboard visibility
+  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, primary_pm_id, backup_pm_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
   VALUES
-    ('NWBS-26-001', 'Boise School District Admin Building', 'NWBS', v_nwbs_id, 'GOVERNMENT', 'In Progress', 'On Track', 4, 1850000, v_owner_id, 8, CURRENT_DATE + 30, CURRENT_DATE - 120, 'Boise ISD', 'ID', true),
-    ('NWBS-26-002', 'Idaho State University Research Lab', 'NWBS', v_nwbs_id, 'GOVERNMENT', 'In Progress', 'At Risk', 4, 2100000, v_owner_id, 10, CURRENT_DATE + 45, CURRENT_DATE - 90, 'Idaho State University', 'ID', true),
-    ('NWBS-26-003', 'Boeing Everett Support Facility', 'NWBS', v_nwbs_id, 'CUSTOM', 'In Progress', 'On Track', 3, 1650000, v_owner_id, 6, CURRENT_DATE + 60, CURRENT_DATE - 60, 'Boeing Company', 'WA', true),
-    ('NWBS-26-004', 'Nampa Medical Clinic', 'NWBS', v_nwbs_id, 'CUSTOM', 'In Progress', 'On Track', 2, 980000, v_owner_id, 4, CURRENT_DATE + 90, CURRENT_DATE - 30, 'St. Luke Health', 'ID', true),
-    ('NWBS-26-005', 'Meridian Office Park Unit A', 'NWBS', v_nwbs_id, 'STOCK', 'Active', 'On Track', 2, 450000, v_owner_id, 2, CURRENT_DATE + 75, CURRENT_DATE - 15, 'Meridian Commerce', 'ID', false),
-    ('NWBS-26-006', 'Twin Falls Retail Expansion', 'NWBS', v_nwbs_id, 'FLEET', 'In Progress', 'On Track', 4, 620000, v_owner_id, 3, CURRENT_DATE + 20, CURRENT_DATE - 100, 'Magic Valley Retail', 'ID', false);
+    ('NWBS-26-001', 'Boise School District Admin Building', 'NWBS', v_nwbs_id, 'GOVERNMENT', 'In Progress', 'On Track', 4, 1850000, v_matthew_id, v_matthew_id, v_crystal_id, 8, CURRENT_DATE + 30, CURRENT_DATE - 120, 'Boise ISD', 'ID', true),
+    ('NWBS-26-002', 'Idaho State University Research Lab', 'NWBS', v_nwbs_id, 'GOVERNMENT', 'In Progress', 'At Risk', 4, 2100000, v_matthew_id, v_matthew_id, v_candy_id, 10, CURRENT_DATE + 45, CURRENT_DATE - 90, 'Idaho State University', 'ID', true),
+    ('NWBS-26-003', 'Boeing Everett Support Facility', 'NWBS', v_nwbs_id, 'CUSTOM', 'In Progress', 'On Track', 3, 1650000, v_matthew_id, v_matthew_id, v_crystal_id, 6, CURRENT_DATE + 60, CURRENT_DATE - 60, 'Boeing Company', 'WA', true),
+    ('NWBS-26-004', 'Nampa Medical Clinic', 'NWBS', v_nwbs_id, 'CUSTOM', 'In Progress', 'On Track', 2, 980000, v_matthew_id, v_matthew_id, v_michael_id, 4, CURRENT_DATE + 90, CURRENT_DATE - 30, 'St. Luke Health', 'ID', true),
+    ('NWBS-26-005', 'Meridian Office Park Unit A', 'NWBS', v_nwbs_id, 'STOCK', 'Active', 'On Track', 2, 450000, v_owner_id, NULL, NULL, 2, CURRENT_DATE + 75, CURRENT_DATE - 15, 'Meridian Commerce', 'ID', false),
+    ('NWBS-26-006', 'Twin Falls Retail Expansion', 'NWBS', v_nwbs_id, 'FLEET', 'In Progress', 'On Track', 4, 620000, v_owner_id, NULL, NULL, 3, CURRENT_DATE + 20, CURRENT_DATE - 100, 'Magic Valley Retail', 'ID', false);
 
   -- ============================================================================
-  -- PMI PROJECTS (4 projects)
+  -- PMI PROJECTS (4 projects) - Assigned to CRYSTAL
   -- ============================================================================
-  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
+  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, primary_pm_id, backup_pm_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
   VALUES
-    ('PMI-26-001', 'Phoenix VA Outpatient Clinic', 'PMI', v_pmi_id, 'GOVERNMENT', 'In Progress', 'On Track', 4, 2400000, v_owner_id, 12, CURRENT_DATE + 25, CURRENT_DATE - 150, 'US Dept of Veterans Affairs', 'AZ', true),
-    ('PMI-26-002', 'Scottsdale Charter School', 'PMI', v_pmi_id, 'GOVERNMENT', 'In Progress', 'At Risk', 3, 1200000, v_owner_id, 6, CURRENT_DATE + 50, CURRENT_DATE - 80, 'Scottsdale USD', 'AZ', true),
-    ('PMI-26-003', 'Tempe Tech Campus B', 'PMI', v_pmi_id, 'CUSTOM', 'In Progress', 'On Track', 2, 890000, v_owner_id, 4, CURRENT_DATE + 90, CURRENT_DATE - 40, 'Arizona Tech Partners', 'AZ', true),
-    ('PMI-26-004', 'Mesa Fleet Storage', 'PMI', v_pmi_id, 'FLEET', 'Active', 'On Track', 1, 380000, v_owner_id, 2, CURRENT_DATE + 120, CURRENT_DATE - 10, 'Desert Fleet Services', 'AZ', false);
+    ('PMI-26-001', 'Phoenix VA Outpatient Clinic', 'PMI', v_pmi_id, 'GOVERNMENT', 'In Progress', 'On Track', 4, 2400000, v_crystal_id, v_crystal_id, v_matthew_id, 12, CURRENT_DATE + 25, CURRENT_DATE - 150, 'US Dept of Veterans Affairs', 'AZ', true),
+    ('PMI-26-002', 'Scottsdale Charter School', 'PMI', v_pmi_id, 'GOVERNMENT', 'In Progress', 'At Risk', 3, 1200000, v_crystal_id, v_crystal_id, v_hector_id, 6, CURRENT_DATE + 50, CURRENT_DATE - 80, 'Scottsdale USD', 'AZ', true),
+    ('PMI-26-003', 'Tempe Tech Campus B', 'PMI', v_pmi_id, 'CUSTOM', 'In Progress', 'On Track', 2, 890000, v_crystal_id, v_crystal_id, v_candy_id, 4, CURRENT_DATE + 90, CURRENT_DATE - 40, 'Arizona Tech Partners', 'AZ', true),
+    ('PMI-26-004', 'Mesa Fleet Storage', 'PMI', v_pmi_id, 'FLEET', 'Active', 'On Track', 1, 380000, v_owner_id, NULL, NULL, 2, CURRENT_DATE + 120, CURRENT_DATE - 10, 'Desert Fleet Services', 'AZ', false);
 
   -- ============================================================================
-  -- WM-EVERGREEN PROJECTS (3 projects) - All PM jobs
+  -- WM-EVERGREEN PROJECTS (3 projects) - All PM jobs - Assigned to MATTHEW (secondary region)
   -- ============================================================================
-  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
+  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, primary_pm_id, backup_pm_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
   VALUES
-    ('WMEV-26-001', 'Seattle Metro Fire Station 12', 'WM-EVERGREEN', v_wm_evergreen_id, 'GOVERNMENT', 'In Progress', 'On Track', 4, 1980000, v_owner_id, 8, CURRENT_DATE + 35, CURRENT_DATE - 110, 'Seattle Fire Dept', 'WA', true),
-    ('WMEV-26-002', 'Tacoma Port Authority Office', 'WM-EVERGREEN', v_wm_evergreen_id, 'GOVERNMENT', 'In Progress', 'On Track', 3, 1450000, v_owner_id, 6, CURRENT_DATE + 65, CURRENT_DATE - 70, 'Port of Tacoma', 'WA', true),
-    ('WMEV-26-003', 'Olympia State Complex Annex', 'WM-EVERGREEN', v_wm_evergreen_id, 'GOVERNMENT', 'In Progress', 'Critical', 2, 2200000, v_owner_id, 10, CURRENT_DATE + 100, CURRENT_DATE - 25, 'Washington State', 'WA', true);
+    ('WMEV-26-001', 'Seattle Metro Fire Station 12', 'WM-EVERGREEN', v_wm_evergreen_id, 'GOVERNMENT', 'In Progress', 'On Track', 4, 1980000, v_matthew_id, v_matthew_id, v_candy_id, 8, CURRENT_DATE + 35, CURRENT_DATE - 110, 'Seattle Fire Dept', 'WA', true),
+    ('WMEV-26-002', 'Tacoma Port Authority Office', 'WM-EVERGREEN', v_wm_evergreen_id, 'GOVERNMENT', 'In Progress', 'On Track', 3, 1450000, v_matthew_id, v_matthew_id, v_crystal_id, 6, CURRENT_DATE + 65, CURRENT_DATE - 70, 'Port of Tacoma', 'WA', true),
+    ('WMEV-26-003', 'Olympia State Complex Annex', 'WM-EVERGREEN', v_wm_evergreen_id, 'GOVERNMENT', 'In Progress', 'Critical', 2, 2200000, v_candy_id, v_candy_id, v_matthew_id, 10, CURRENT_DATE + 100, CURRENT_DATE - 25, 'Washington State', 'WA', true);
 
   -- ============================================================================
-  -- WM-EAST PROJECTS (3 projects) - Mix of PM and PC jobs
+  -- WM-EAST PROJECTS (3 projects) - Mix of PM and PC jobs - Assigned to MICHAEL
   -- ============================================================================
-  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
+  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, primary_pm_id, backup_pm_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
   VALUES
-    ('WMEA-26-001', 'Charlotte Regional Hospital Wing', 'WM-EAST', v_wm_east_id, 'CUSTOM', 'In Progress', 'On Track', 4, 3200000, v_owner_id, 14, CURRENT_DATE + 40, CURRENT_DATE - 140, 'Atrium Health', 'NC', true),
-    ('WMEA-26-002', 'Raleigh School District Portables', 'WM-EAST', v_wm_east_id, 'FLEET', 'In Progress', 'On Track', 3, 960000, v_owner_id, 8, CURRENT_DATE + 55, CURRENT_DATE - 60, 'Wake County Schools', 'NC', false),
-    ('WMEA-26-003', 'Durham Tech Incubator', 'WM-EAST', v_wm_east_id, 'CUSTOM', 'Active', 'On Track', 1, 780000, v_owner_id, 4, CURRENT_DATE + 150, CURRENT_DATE - 5, 'Durham Innovation', 'NC', true);
+    ('WMEA-26-001', 'Charlotte Regional Hospital Wing', 'WM-EAST', v_wm_east_id, 'CUSTOM', 'In Progress', 'On Track', 4, 3200000, v_michael_id, v_michael_id, v_candy_id, 14, CURRENT_DATE + 40, CURRENT_DATE - 140, 'Atrium Health', 'NC', true),
+    ('WMEA-26-002', 'Raleigh School District Portables', 'WM-EAST', v_wm_east_id, 'FLEET', 'In Progress', 'On Track', 3, 960000, v_owner_id, NULL, NULL, 8, CURRENT_DATE + 55, CURRENT_DATE - 60, 'Wake County Schools', 'NC', false),
+    ('WMEA-26-003', 'Durham Tech Incubator', 'WM-EAST', v_wm_east_id, 'CUSTOM', 'Active', 'On Track', 1, 780000, v_michael_id, v_michael_id, v_hector_id, 4, CURRENT_DATE + 150, CURRENT_DATE - 5, 'Durham Innovation', 'NC', true);
 
   -- ============================================================================
-  -- WM-SOUTH PROJECTS (3 projects) - All PM jobs
+  -- WM-SOUTH PROJECTS (3 projects) - All PM jobs - Assigned to HECTOR
   -- ============================================================================
-  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
+  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, primary_pm_id, backup_pm_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
   VALUES
-    ('WMSO-26-001', 'Houston Energy Sector Office', 'WM-SOUTH', v_wm_south_id, 'CUSTOM', 'In Progress', 'On Track', 4, 2800000, v_owner_id, 12, CURRENT_DATE + 30, CURRENT_DATE - 130, 'Gulf Coast Energy', 'TX', true),
-    ('WMSO-26-002', 'San Antonio Military Housing', 'WM-SOUTH', v_wm_south_id, 'GOVERNMENT', 'In Progress', 'At Risk', 3, 4500000, v_owner_id, 20, CURRENT_DATE + 80, CURRENT_DATE - 90, 'US Army', 'TX', true),
-    ('WMSO-26-003', 'Austin Startup Campus Phase 2', 'WM-SOUTH', v_wm_south_id, 'CUSTOM', 'Active', 'On Track', 2, 1100000, v_owner_id, 5, CURRENT_DATE + 110, CURRENT_DATE - 20, 'Capital Factory', 'TX', true);
+    ('WMSO-26-001', 'Houston Energy Sector Office', 'WM-SOUTH', v_wm_south_id, 'CUSTOM', 'In Progress', 'On Track', 4, 2800000, v_hector_id, v_hector_id, v_crystal_id, 12, CURRENT_DATE + 30, CURRENT_DATE - 130, 'Gulf Coast Energy', 'TX', true),
+    ('WMSO-26-002', 'San Antonio Military Housing', 'WM-SOUTH', v_wm_south_id, 'GOVERNMENT', 'In Progress', 'At Risk', 3, 4500000, v_hector_id, v_hector_id, v_candy_id, 20, CURRENT_DATE + 80, CURRENT_DATE - 90, 'US Army', 'TX', true),
+    ('WMSO-26-003', 'Austin Startup Campus Phase 2', 'WM-SOUTH', v_wm_south_id, 'CUSTOM', 'Active', 'On Track', 2, 1100000, v_candy_id, v_candy_id, v_hector_id, 5, CURRENT_DATE + 110, CURRENT_DATE - 20, 'Capital Factory', 'TX', true);
 
   -- ============================================================================
-  -- AMT PROJECTS (2 projects) - All PM jobs (higher value fleet is PM managed)
+  -- AMT PROJECTS (2 projects) - All PM jobs - Assigned to CRYSTAL (secondary region)
   -- ============================================================================
-  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
+  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, primary_pm_id, backup_pm_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
   VALUES
-    ('AMT-26-001', 'Dallas ISD Temporary Classrooms', 'AMT', v_amt_id, 'FLEET', 'In Progress', 'On Track', 4, 1600000, v_owner_id, 12, CURRENT_DATE + 15, CURRENT_DATE - 120, 'Dallas ISD', 'TX', true),
-    ('AMT-26-002', 'Fort Worth Convention Annex', 'AMT', v_amt_id, 'CUSTOM', 'In Progress', 'On Track', 3, 2100000, v_owner_id, 8, CURRENT_DATE + 70, CURRENT_DATE - 50, 'City of Fort Worth', 'TX', true);
+    ('AMT-26-001', 'Dallas ISD Temporary Classrooms', 'AMT', v_amt_id, 'FLEET', 'In Progress', 'On Track', 4, 1600000, v_crystal_id, v_crystal_id, v_hector_id, 12, CURRENT_DATE + 15, CURRENT_DATE - 120, 'Dallas ISD', 'TX', true),
+    ('AMT-26-002', 'Fort Worth Convention Annex', 'AMT', v_amt_id, 'CUSTOM', 'In Progress', 'On Track', 3, 2100000, v_hector_id, v_hector_id, v_crystal_id, 8, CURRENT_DATE + 70, CURRENT_DATE - 50, 'City of Fort Worth', 'TX', true);
 
   -- ============================================================================
-  -- SMM PROJECTS (2 projects) - All PM jobs
+  -- SMM PROJECTS (2 projects) - All PM jobs - Assigned to CANDY
   -- ============================================================================
-  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
+  INSERT INTO projects (project_number, name, factory, factory_id, building_type, status, health_status, current_phase, contract_value, owner_id, primary_pm_id, backup_pm_id, module_count, target_online_date, start_date, client_name, site_state, is_pm_job)
   VALUES
-    ('SMM-26-001', 'Mobile Port Facilities', 'SMM', v_smm_id, 'GOVERNMENT', 'In Progress', 'On Track', 4, 1400000, v_owner_id, 6, CURRENT_DATE + 25, CURRENT_DATE - 100, 'Alabama Port Authority', 'AL', true),
-    ('SMM-26-002', 'Birmingham Medical Campus', 'SMM', v_smm_id, 'CUSTOM', 'In Progress', 'On Track', 2, 1850000, v_owner_id, 8, CURRENT_DATE + 95, CURRENT_DATE - 35, 'UAB Health System', 'AL', true);
+    ('SMM-26-001', 'Mobile Port Facilities', 'SMM', v_smm_id, 'GOVERNMENT', 'In Progress', 'On Track', 4, 1400000, v_candy_id, v_candy_id, v_michael_id, 6, CURRENT_DATE + 25, CURRENT_DATE - 100, 'Alabama Port Authority', 'AL', true),
+    ('SMM-26-002', 'Birmingham Medical Campus', 'SMM', v_smm_id, 'CUSTOM', 'In Progress', 'On Track', 2, 1850000, v_candy_id, v_candy_id, v_crystal_id, 8, CURRENT_DATE + 95, CURRENT_DATE - 35, 'UAB Health System', 'AL', true);
 
-  RAISE NOTICE 'Created 25 demo projects across all factories';
+  RAISE NOTICE 'Created 25 demo projects with PM assignments: Matthew (6), Crystal (5), Candy (4), Michael (2), Hector (3)';
+
+  -- ============================================================================
+  -- UPDATE existing projects if they were inserted without PM assignments
+  -- (handles re-running demo data without clearing first)
+  -- ============================================================================
+
+  -- NWBS projects -> Matthew
+  UPDATE projects SET owner_id = v_matthew_id, primary_pm_id = v_matthew_id, backup_pm_id = v_crystal_id
+  WHERE project_number = 'NWBS-26-001' AND (owner_id != v_matthew_id OR primary_pm_id IS NULL);
+
+  UPDATE projects SET owner_id = v_matthew_id, primary_pm_id = v_matthew_id, backup_pm_id = v_candy_id
+  WHERE project_number = 'NWBS-26-002' AND (owner_id != v_matthew_id OR primary_pm_id IS NULL);
+
+  UPDATE projects SET owner_id = v_matthew_id, primary_pm_id = v_matthew_id, backup_pm_id = v_crystal_id
+  WHERE project_number = 'NWBS-26-003' AND (owner_id != v_matthew_id OR primary_pm_id IS NULL);
+
+  UPDATE projects SET owner_id = v_matthew_id, primary_pm_id = v_matthew_id, backup_pm_id = v_michael_id
+  WHERE project_number = 'NWBS-26-004' AND (owner_id != v_matthew_id OR primary_pm_id IS NULL);
+
+  -- PMI projects -> Crystal
+  UPDATE projects SET owner_id = v_crystal_id, primary_pm_id = v_crystal_id, backup_pm_id = v_matthew_id
+  WHERE project_number = 'PMI-26-001' AND (owner_id != v_crystal_id OR primary_pm_id IS NULL);
+
+  UPDATE projects SET owner_id = v_crystal_id, primary_pm_id = v_crystal_id, backup_pm_id = v_hector_id
+  WHERE project_number = 'PMI-26-002' AND (owner_id != v_crystal_id OR primary_pm_id IS NULL);
+
+  UPDATE projects SET owner_id = v_crystal_id, primary_pm_id = v_crystal_id, backup_pm_id = v_candy_id
+  WHERE project_number = 'PMI-26-003' AND (owner_id != v_crystal_id OR primary_pm_id IS NULL);
+
+  -- WM-EVERGREEN projects -> Matthew/Candy
+  UPDATE projects SET owner_id = v_matthew_id, primary_pm_id = v_matthew_id, backup_pm_id = v_candy_id
+  WHERE project_number = 'WMEV-26-001' AND (owner_id != v_matthew_id OR primary_pm_id IS NULL);
+
+  UPDATE projects SET owner_id = v_matthew_id, primary_pm_id = v_matthew_id, backup_pm_id = v_crystal_id
+  WHERE project_number = 'WMEV-26-002' AND (owner_id != v_matthew_id OR primary_pm_id IS NULL);
+
+  UPDATE projects SET owner_id = v_candy_id, primary_pm_id = v_candy_id, backup_pm_id = v_matthew_id
+  WHERE project_number = 'WMEV-26-003' AND (owner_id != v_candy_id OR primary_pm_id IS NULL);
+
+  -- WM-EAST projects -> Michael
+  UPDATE projects SET owner_id = v_michael_id, primary_pm_id = v_michael_id, backup_pm_id = v_candy_id
+  WHERE project_number = 'WMEA-26-001' AND (owner_id != v_michael_id OR primary_pm_id IS NULL);
+
+  UPDATE projects SET owner_id = v_michael_id, primary_pm_id = v_michael_id, backup_pm_id = v_hector_id
+  WHERE project_number = 'WMEA-26-003' AND (owner_id != v_michael_id OR primary_pm_id IS NULL);
+
+  -- WM-SOUTH projects -> Hector/Candy
+  UPDATE projects SET owner_id = v_hector_id, primary_pm_id = v_hector_id, backup_pm_id = v_crystal_id
+  WHERE project_number = 'WMSO-26-001' AND (owner_id != v_hector_id OR primary_pm_id IS NULL);
+
+  UPDATE projects SET owner_id = v_hector_id, primary_pm_id = v_hector_id, backup_pm_id = v_candy_id
+  WHERE project_number = 'WMSO-26-002' AND (owner_id != v_hector_id OR primary_pm_id IS NULL);
+
+  UPDATE projects SET owner_id = v_candy_id, primary_pm_id = v_candy_id, backup_pm_id = v_hector_id
+  WHERE project_number = 'WMSO-26-003' AND (owner_id != v_candy_id OR primary_pm_id IS NULL);
+
+  -- AMT projects -> Crystal/Hector
+  UPDATE projects SET owner_id = v_crystal_id, primary_pm_id = v_crystal_id, backup_pm_id = v_hector_id
+  WHERE project_number = 'AMT-26-001' AND (owner_id != v_crystal_id OR primary_pm_id IS NULL);
+
+  UPDATE projects SET owner_id = v_hector_id, primary_pm_id = v_hector_id, backup_pm_id = v_crystal_id
+  WHERE project_number = 'AMT-26-002' AND (owner_id != v_hector_id OR primary_pm_id IS NULL);
+
+  -- SMM projects -> Candy
+  UPDATE projects SET owner_id = v_candy_id, primary_pm_id = v_candy_id, backup_pm_id = v_michael_id
+  WHERE project_number = 'SMM-26-001' AND (owner_id != v_candy_id OR primary_pm_id IS NULL);
+
+  UPDATE projects SET owner_id = v_candy_id, primary_pm_id = v_candy_id, backup_pm_id = v_crystal_id
+  WHERE project_number = 'SMM-26-002' AND (owner_id != v_candy_id OR primary_pm_id IS NULL);
+
+  RAISE NOTICE 'Updated existing project PM assignments';
 END $$;
 
-SELECT 'Section 5: Demo projects created (25 projects)' AS status;
+SELECT 'Section 5: Demo projects created/updated (25 projects with PM assignments)' AS status;
 
 -- ############################################################################
 -- SECTION 6: WORKERS WITH PWA AUTH (PIN-enabled for PWA login)

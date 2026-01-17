@@ -36,7 +36,9 @@ import {
   TrendingUp,
   Truck,
   AlertCircle,
-  Layers
+  Layers,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -372,7 +374,7 @@ function ProjectCard({ project, onClick }) {
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-function ProjectsPage({ isDirectorView = false, isSalesView = false, onNavigateToProject }) {
+function ProjectsPage({ isDirectorView = false, isSalesView = false, onNavigateToProject, includeBackupProjects = false, onToggleBackup }) {
   const { user } = useAuth();
 
   // ==========================================================================
@@ -411,7 +413,7 @@ function ProjectsPage({ isDirectorView = false, isSalesView = false, onNavigateT
   // ==========================================================================
   useEffect(() => {
     if (user) fetchData();
-  }, [user, isDirectorView]);
+  }, [user, isDirectorView, includeBackupProjects]);
 
   // ==========================================================================
   // FETCH DATA
@@ -451,12 +453,16 @@ function ProjectsPage({ isDirectorView = false, isSalesView = false, onNavigateT
 
       let projectsData = allProjectsData || [];
       if (!isDirectorView && userData) {
-        projectsData = projectsData.filter(p =>
-          p.owner_id === userData.id ||
-          p.primary_pm_id === userData.id ||
-          p.backup_pm_id === userData.id ||
-          p.created_by === userData.id
-        );
+        // Filter to only show projects where user is primary PM or owner
+        // If includeBackupProjects is true, also include backup assignments
+        projectsData = projectsData.filter(p => {
+          const isPrimaryOrOwner = p.owner_id === userData.id ||
+                                    p.primary_pm_id === userData.id ||
+                                    p.created_by === userData.id;
+          const isBackup = p.backup_pm_id === userData.id;
+
+          return isPrimaryOrOwner || (includeBackupProjects && isBackup);
+        });
       }
 
       projectsData.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
@@ -962,6 +968,31 @@ function ProjectsPage({ isDirectorView = false, isSalesView = false, onNavigateT
             }}
           >
             Clear Filters
+          </button>
+        )}
+
+        {/* Backup Projects Toggle - Only show for PM view (not Director/Sales) */}
+        {!isDirectorView && !isSalesView && onToggleBackup && (
+          <button
+            onClick={() => onToggleBackup(!includeBackupProjects)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              background: includeBackupProjects ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
+              border: `1px solid ${includeBackupProjects ? 'var(--sunbelt-orange)' : 'var(--border-color)'}`,
+              borderRadius: 'var(--radius-md)',
+              color: includeBackupProjects ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+              fontSize: '0.8125rem',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              whiteSpace: 'nowrap'
+            }}
+            title={includeBackupProjects ? 'Hide backup PM projects' : 'Show backup PM projects'}
+          >
+            {includeBackupProjects ? <Eye size={14} /> : <EyeOff size={14} />}
+            Backup Projects
           </button>
         )}
       </div>

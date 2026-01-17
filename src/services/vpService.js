@@ -413,8 +413,7 @@ export async function getPipelineData(factoryIds = null) {
         contract_value,
         start_date,
         target_completion,
-        module_count,
-        factories!inner(id, code, short_name)
+        module_count
       `)
       .in('status', ['Planning', 'In Progress', 'Production', 'Scheduled'])
       .order('target_completion');
@@ -452,12 +451,11 @@ export async function getAutoScheduleSuggestions(factoryId) {
         status,
         scheduled_start,
         scheduled_end,
-        projects!inner(id, name, target_completion)
+        project:project_id(id, name, target_completion)
       `)
       .eq('factory_id', factoryId)
       .is('scheduled_start', null)
-      .in('status', ['Not Started', 'Scheduled'])
-      .order('projects(target_completion)');
+      .in('status', ['Not Started', 'Scheduled']);
 
     if (error) throw error;
 

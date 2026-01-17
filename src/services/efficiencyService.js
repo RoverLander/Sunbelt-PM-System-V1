@@ -27,10 +27,10 @@ export async function getKaizenSuggestions(factoryId, filters = {}) {
       .from('kaizen_suggestions')
       .select(`
         *,
-        worker:workers(id, full_name, employee_id),
-        user:users(id, full_name),
+        worker:workers!worker_id(id, full_name, employee_id),
+        submitter:users!user_id(id, name),
         station:station_templates(id, name, code, color),
-        reviewer:users!reviewed_by(id, full_name)
+        reviewer:users!reviewed_by(id, name)
       `)
       .eq('factory_id', factoryId);
 
@@ -157,9 +157,9 @@ export async function getKaizenLeaderboard(factoryId, limit = 10) {
       .from('kaizen_suggestions')
       .select(`
         worker_id,
-        worker:workers(id, full_name, employee_id),
+        worker:workers!worker_id(id, full_name, employee_id),
         user_id,
-        user:users(id, full_name)
+        submitter:users!user_id(id, name)
       `)
       .eq('factory_id', factoryId)
       .eq('status', 'Approved')
@@ -171,7 +171,7 @@ export async function getKaizenLeaderboard(factoryId, limit = 10) {
     const counts = {};
     (data || []).forEach(s => {
       const key = s.worker_id || s.user_id;
-      const name = s.worker?.full_name || s.user?.full_name || 'Unknown';
+      const name = s.worker?.full_name || s.submitter?.name || 'Unknown';
       if (!counts[key]) {
         counts[key] = { id: key, name, count: 0 };
       }

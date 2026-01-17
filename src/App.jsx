@@ -541,7 +541,7 @@ function AppContent() {
       case 'dashboard':
         return <PMDashboard onNavigateToProject={handleNavigateToProject} />;
       case 'projects':
-        return <ProjectsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} />;
+        return <ProjectsPage isDirectorView={false} onNavigateToProject={handleNavigateToProject} includeBackupProjects={includeBackupProjects} onToggleBackup={handleToggleBackupProjects} />;
       case 'tasks':
         return (
           <TasksPage
