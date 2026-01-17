@@ -1,8 +1,8 @@
 # Database Schema Reference
 
-**Last Updated:** January 14, 2026 (Late Night)
+**Last Updated:** January 17, 2026
 **Database:** Supabase (PostgreSQL)
-**Version:** 1.2.0
+**Version:** 1.4.3
 
 ---
 
@@ -14,8 +14,10 @@
 4. [Sales Pipeline Tables](#sales-pipeline-tables)
 5. [Directory System Tables](#directory-system-tables)
 6. [IT Admin Tables](#it-admin-tables)
-7. [Supporting Tables](#supporting-tables)
-8. [Row Level Security (RLS)](#row-level-security-rls)
+7. [Plant Manager System Tables](#plant-manager-system-tables)
+8. [PWA Mobile Floor App Tables](#pwa-mobile-floor-app-tables)
+9. [Supporting Tables](#supporting-tables)
+10. [Row Level Security (RLS)](#row-level-security-rls)
 
 ---
 
@@ -1252,6 +1254,113 @@ Per-plant configuration settings.
 
 ---
 
+## PWA Mobile Floor App Tables
+
+These tables support the PWA Mobile Floor App for factory workers. Added in migration `20260116_pwa_schema_remediation_fix.sql`.
+
+### workers (Extended for PWA)
+
+Added columns for PIN-based authentication:
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| pin_hash | VARCHAR(60) | YES | | bcrypt-hashed PIN (4-6 digits) |
+| pin_attempts | INTEGER | NO | 0 | Failed login attempts |
+| pin_locked_until | TIMESTAMPTZ | YES | | Lockout expiry (after 3 failures) |
+| last_login | TIMESTAMPTZ | YES | | Last PWA login timestamp |
+
+---
+
+### worker_sessions
+
+JWT session tracking for PWA authentication. Sessions are valid for 8 hours (shift length).
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| worker_id | UUID | NO | | FK to workers.id |
+| factory_id | UUID | NO | | FK to factories.id |
+| token_hash | VARCHAR(64) | NO | | SHA256 hash of JWT for revocation |
+| device_info | JSONB | NO | '{}' | Browser/device fingerprint |
+| created_at | TIMESTAMPTZ | NO | NOW() | Session start |
+| expires_at | TIMESTAMPTZ | NO | | 8 hours from creation |
+| revoked_at | TIMESTAMPTZ | YES | | Set when session is terminated |
+
+**Indexes:** `idx_worker_sessions_worker`, `idx_worker_sessions_token`, `idx_worker_sessions_expires`
+
+---
+
+### purchase_orders
+
+Purchase order tracking for inventory receiving in the PWA.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| factory_id | UUID | NO | | FK to factories.id |
+| project_id | UUID | YES | | FK to projects.id (optional) |
+| po_number | VARCHAR(50) | NO | | PO reference number (UNIQUE) |
+| vendor | VARCHAR(200) | NO | | Vendor/supplier name |
+| vendor_contact | VARCHAR(100) | YES | | Contact person |
+| vendor_email | VARCHAR(255) | YES | | Contact email |
+| vendor_phone | VARCHAR(50) | YES | | Contact phone |
+| status | VARCHAR(30) | NO | 'pending' | pending, ordered, partial, received, cancelled |
+| order_date | DATE | YES | | Date order placed |
+| expected_delivery | DATE | YES | | Expected delivery date |
+| actual_delivery | DATE | YES | | Actual delivery date |
+| line_items | JSONB | NO | '[]' | Array of {part_name, part_number, qty, unit_cost} |
+| subtotal | NUMERIC(12,2) | YES | | Calculated subtotal |
+| tax | NUMERIC(10,2) | YES | | Tax amount |
+| shipping | NUMERIC(10,2) | YES | | Shipping cost |
+| total | NUMERIC(12,2) | YES | | Total amount |
+| notes | TEXT | YES | | Order notes |
+| created_by | UUID | YES | | FK to users.id |
+| created_at | TIMESTAMPTZ | NO | NOW() | |
+| updated_at | TIMESTAMPTZ | NO | NOW() | |
+
+**Indexes:** `idx_purchase_orders_factory`, `idx_purchase_orders_status`, `idx_purchase_orders_po_number`, `idx_purchase_orders_vendor`
+
+---
+
+### inventory_receipts
+
+Receipt tracking when materials arrive at factory. Linked to purchase orders for verification.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | UUID | NO | gen_random_uuid() | Primary key |
+| factory_id | UUID | NO | | FK to factories.id |
+| po_id | UUID | YES | | FK to purchase_orders.id |
+| po_line_index | INTEGER | YES | | Index into PO line_items array |
+| part_name | VARCHAR(200) | NO | | Material/part name |
+| part_number | VARCHAR(100) | YES | | Part number/SKU |
+| quantity_expected | INTEGER | YES | | Expected quantity from PO |
+| quantity_received | INTEGER | NO | | Actual quantity received |
+| unit_of_measure | VARCHAR(30) | NO | 'each' | each, box, pallet, etc. |
+| received_by | UUID | NO | | FK to workers.id |
+| received_at | TIMESTAMPTZ | NO | NOW() | Receipt timestamp |
+| photo_url | TEXT | YES | | Supabase Storage URL |
+| gps_location | JSONB | YES | | {lat, lng, accuracy} |
+| condition | VARCHAR(30) | NO | 'good' | good, damaged, partial |
+| notes | TEXT | YES | | Receipt notes |
+| status | VARCHAR(30) | NO | 'received' | received, partial, damaged, rejected |
+| verified_by | UUID | YES | | FK to users.id (supervisor verification) |
+| verified_at | TIMESTAMPTZ | YES | | Verification timestamp |
+| created_at | TIMESTAMPTZ | NO | NOW() | |
+
+**Indexes:** `idx_inventory_receipts_factory`, `idx_inventory_receipts_po`, `idx_inventory_receipts_date`, `idx_inventory_receipts_worker`
+
+---
+
+### Supabase Storage Buckets (PWA)
+
+| Bucket Name | Purpose | Public |
+|-------------|---------|--------|
+| `inventory-receipts` | Photos of received materials | No |
+| `qc-photos` | QC inspection photos (existing) | No |
+
+---
+
 ## Migration Files
 
 | File | Description |
@@ -1262,6 +1371,7 @@ Per-plant configuration settings.
 | `20260114_directory_system.sql` | Directory system with departments, contacts |
 | `20260114_team_builder.sql` | Teams for Director/VP management |
 | `20260115_plant_manager_system.sql` | Complete PGM dashboard schema (15 tables) |
+| `20260116_pwa_schema_remediation_fix.sql` | PWA auth columns, worker_sessions, purchase_orders, inventory_receipts |
 
 ---
 
@@ -1272,3 +1382,4 @@ Per-plant configuration settings.
 3. **Soft Deletes**: Tables use `is_active` boolean instead of hard deletes
 4. **Generated Columns**: `full_name` columns are auto-generated from first_name + last_name
 5. **Case Sensitivity**: Role values use mixed case (VP, Director, PM, etc.)
+6. **RLS Audit (January 16, 2026)**: All PGM tables verified to have proper RLS policies enabled (modules, station_templates, station_assignments, workers, worker_shifts, qc_records)

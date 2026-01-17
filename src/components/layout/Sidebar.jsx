@@ -330,13 +330,14 @@ function Sidebar({
       const weekEndDate = weekFromNow.toISOString().split('T')[0];
 
       // Get user's factory CODE (not just factory_id)
+      // The 'factory' column in users already contains the factory code string
       const { data: userData } = await supabase
         .from('users')
-        .select('factory_id, factory:factories(code)')
+        .select('factory_id, factory')
         .eq('id', user.id)
         .single();
 
-      const factoryCode = userData?.factory?.code;
+      const factoryCode = userData?.factory;
 
       const { data: allProjects } = await supabase
         .from('projects')

@@ -8,6 +8,13 @@
 // ============================================================================
 
 import { supabase } from '../utils/supabaseClient';
+import {
+  validateStationProgression,
+  validateQCGate,
+  validateModuleStatusTransition,
+  validateCrewCertifications,
+  validateCrewSize
+} from './validationService';
 
 // ============================================================================
 // FETCH FUNCTIONS
@@ -135,6 +142,40 @@ export async function getScheduledModules(factoryId, startDate, endDate) {
   } catch (error) {
     console.error('Error fetching scheduled modules:', error);
     return { data: [], error };
+  }
+}
+
+/**
+ * Get a module by serial number (for PWA lookup)
+ *
+ * @param {string} factoryId - Factory UUID
+ * @param {string} serialNumber - Serial number (e.g., 'NWBS-25250-M1')
+ * @returns {Promise<{data: Object, error: Error}>}
+ */
+export async function getModuleBySerialNumber(factoryId, serialNumber) {
+  try {
+    const { data, error } = await supabase
+      .from('modules')
+      .select(`
+        *,
+        project:projects(id, name, project_number, building_type, delivery_date),
+        current_station:station_templates(id, name, code, color, order_num, checklist)
+      `)
+      .eq('factory_id', factoryId)
+      .ilike('serial_number', serialNumber)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No rows returned - module not found
+        return { data: null, error: new Error(`Module not found: ${serialNumber}`) };
+      }
+      throw error;
+    }
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error fetching module by serial:', error);
+    return { data: null, error };
   }
 }
 
@@ -314,10 +355,50 @@ export async function updateModule(moduleId, updates) {
  * @param {string} moduleId - Module UUID
  * @param {string} newStatus - New status value
  * @param {string} stationId - Optional new station ID
- * @returns {Promise<{data: Object, error: Error}>}
+ * @param {Object} options - Options { skipValidation: false }
+ * @returns {Promise<{data: Object, error: Error, validation: Object}>}
  */
-export async function updateModuleStatus(moduleId, newStatus, stationId = null) {
+export async function updateModuleStatus(moduleId, newStatus, stationId = null, options = {}) {
+  const { skipValidation = false } = options;
+
   try {
+    // ========================================================================
+    // VALIDATION: Status Transition
+    // ========================================================================
+    if (!skipValidation) {
+      const transitionResult = await validateModuleStatusTransition(moduleId, newStatus);
+      if (!transitionResult.valid) {
+        return {
+          data: null,
+          error: new Error(transitionResult.error),
+          validation: transitionResult
+        };
+      }
+
+      // If completing, check QC gate at current station
+      if (newStatus === 'Completed' || newStatus === 'Staged') {
+        const { data: module } = await supabase
+          .from('modules')
+          .select('current_station_id')
+          .eq('id', moduleId)
+          .single();
+
+        if (module?.current_station_id) {
+          const qcResult = await validateQCGate(moduleId, module.current_station_id);
+          if (!qcResult.valid) {
+            return {
+              data: null,
+              error: new Error(qcResult.error),
+              validation: qcResult
+            };
+          }
+        }
+      }
+    }
+
+    // ========================================================================
+    // UPDATE: Change status
+    // ========================================================================
     const updates = {
       status: newStatus,
       updated_at: new Date().toISOString()
@@ -353,10 +434,10 @@ export async function updateModuleStatus(moduleId, newStatus, stationId = null) 
       .single();
 
     if (error) throw error;
-    return { data, error: null };
+    return { data, error: null, validation: { valid: true } };
   } catch (error) {
     console.error('Error updating module status:', error);
-    return { data: null, error };
+    return { data: null, error, validation: null };
   }
 }
 
@@ -367,11 +448,53 @@ export async function updateModuleStatus(moduleId, newStatus, stationId = null) 
  * @param {string} stationId - Target station UUID
  * @param {string} leadId - Lead user ID (optional)
  * @param {Array} crewIds - Array of worker IDs (optional)
- * @returns {Promise<{data: Object, error: Error}>}
+ * @param {Object} options - Options { skipValidation: false, isRework: false }
+ * @returns {Promise<{data: Object, error: Error, validation: Object}>}
  */
-export async function moveModuleToStation(moduleId, stationId, leadId = null, crewIds = []) {
+export async function moveModuleToStation(moduleId, stationId, leadId = null, crewIds = [], options = {}) {
+  const { skipValidation = false, isRework = false } = options;
+
   try {
-    // Update module's current station
+    // ========================================================================
+    // VALIDATION: Station Progression and QC Gate
+    // ========================================================================
+    if (!skipValidation) {
+      // Check station progression rules
+      const progressionResult = await validateStationProgression(moduleId, stationId, { isRework });
+      if (!progressionResult.valid) {
+        return {
+          data: null,
+          error: new Error(progressionResult.error),
+          validation: progressionResult
+        };
+      }
+
+      // Check crew size constraints if crew provided
+      if (crewIds.length > 0 || leadId) {
+        const crewSizeResult = await validateCrewSize(stationId, crewIds, leadId);
+        if (!crewSizeResult.valid) {
+          return {
+            data: null,
+            error: new Error(crewSizeResult.error),
+            validation: crewSizeResult
+          };
+        }
+
+        // Validate all crew members are certified
+        const crewCertResult = await validateCrewCertifications(stationId, crewIds);
+        if (!crewCertResult.valid) {
+          return {
+            data: null,
+            error: new Error(`Uncertified workers: ${crewCertResult.errors.join(', ')}`),
+            validation: crewCertResult
+          };
+        }
+      }
+    }
+
+    // ========================================================================
+    // UPDATE: Move module to station
+    // ========================================================================
     const { data: module, error: moduleError } = await supabase
       .from('modules')
       .update({
@@ -399,10 +522,10 @@ export async function moveModuleToStation(moduleId, stationId, leadId = null, cr
 
     if (assignmentError) throw assignmentError;
 
-    return { data: module, error: null };
+    return { data: module, error: null, validation: { valid: true } };
   } catch (error) {
     console.error('Error moving module to station:', error);
-    return { data: null, error };
+    return { data: null, error, validation: null };
   }
 }
 
@@ -506,6 +629,7 @@ export function getDaysUntilDelivery(module) {
 
 export default {
   getModuleById,
+  getModuleBySerialNumber,
   getModulesByProject,
   getModulesByFactory,
   getScheduledModules,

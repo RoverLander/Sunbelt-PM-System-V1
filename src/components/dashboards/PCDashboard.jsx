@@ -321,28 +321,47 @@ function PCDashboard({ onNavigateToProject }) {
       setLoading(true);
       setError(null);
 
-      // Get user's factory info (including factory code)
+      // Get user's factory_id first
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('factory_id, factory:factories(id, code, short_name)')
+        .select('factory_id')
         .eq('id', user.id)
         .single();
 
       if (userError) throw userError;
 
       const factoryId = userData?.factory_id;
-      const factoryCode = userData?.factory?.code;
 
       // If no factory assigned, show message
-      if (!factoryId || !factoryCode) {
+      if (!factoryId) {
         setError('No factory assigned. Please contact an administrator.');
         setLoading(false);
         return;
       }
 
-      // Set factory info from the joined data
-      if (userData?.factory) {
-        setFactoryInfo(userData.factory);
+      // Fetch factory details separately (no FK join required)
+      const { data: factoryData, error: factoryError } = await supabase
+        .from('factories')
+        .select('id, code, short_name, full_name')
+        .eq('id', factoryId)
+        .single();
+
+      if (factoryError) {
+        console.warn('Could not fetch factory details:', factoryError);
+      }
+
+      const factoryCode = factoryData?.code;
+
+      // If no factory code found, show message
+      if (!factoryCode) {
+        setError('Factory configuration incomplete. Please contact an administrator.');
+        setLoading(false);
+        return;
+      }
+
+      // Set factory info
+      if (factoryData) {
+        setFactoryInfo(factoryData);
       }
 
       // Fetch projects for this factory

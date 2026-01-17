@@ -1,8 +1,9 @@
 // ============================================================================
-// App.jsx - Main Application with PM/Director/VP/IT/PC Routing
+// App.jsx - Main Application with PM/Director/VP/IT/PC Routing + PWA
 // ============================================================================
 // Routes all sidebar navigation to appropriate pages based on view mode.
 // Includes deep navigation from Tasks/RFIs/Submittals pages to ProjectDetails.
+// Also serves the PWA at /pwa/* routes for factory floor workers.
 //
 // FIXES (Jan 9, 2026):
 // - ✅ FIXED: VP now has 'reports' route
@@ -10,12 +11,16 @@
 // - ✅ FIXED: Main content margin-left matches 260px sidebar width
 // - ✅ ADDED: PC (Project Coordinator) dashboard routing
 // - ✅ ADDED: Workflow tab navigation support
+// - ✅ ADDED: PWA routing for /pwa/* paths (Jan 17, 2026)
 // ============================================================================
 
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import Login from './components/auth/Login';
 import Sidebar from './components/layout/Sidebar';
+
+// PWA App (served at /pwa/*)
+import { PWAApp } from './pwa';
 
 // Dashboards
 import PMDashboard from './components/dashboards/PMDashboard';
@@ -626,6 +631,15 @@ function AppContent() {
 // APP WRAPPER
 // ============================================================================
 function App() {
+  // Check if we're on a PWA route
+  const isPWARoute = window.location.pathname.startsWith('/pwa');
+
+  // Render PWA app for /pwa/* routes (separate auth system)
+  if (isPWARoute) {
+    return <PWAApp />;
+  }
+
+  // Render main desktop app
   return (
     <AuthProvider>
       <AppContent />

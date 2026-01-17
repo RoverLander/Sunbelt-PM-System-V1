@@ -24,7 +24,10 @@ import {
   AlertTriangle,
   Zap,
   Play,
-  Eye
+  Eye,
+  Radio,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import { getModuleStatusColor } from '../../services/modulesService';
 
@@ -48,9 +51,16 @@ const styles = {
     alignItems: 'center',
     padding: 'var(--space-lg)',
     borderBottom: '1px solid var(--border-color)',
-    background: 'var(--bg-tertiary)'
+    background: 'var(--bg-tertiary)',
+    flexWrap: 'wrap',
+    gap: 'var(--space-md)'
   },
   headerLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 'var(--space-md)'
+  },
+  headerRight: {
     display: 'flex',
     alignItems: 'center',
     gap: 'var(--space-md)'
@@ -59,14 +69,21 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '32px',
+    gap: '4px',
+    padding: 'var(--space-sm) var(--space-md)',
+    minWidth: '36px',
     height: '32px',
     background: 'var(--bg-secondary)',
     border: '1px solid var(--border-color)',
     borderRadius: 'var(--radius-md)',
     cursor: 'pointer',
-    color: 'var(--text-secondary)',
+    color: 'var(--text-primary)',
+    fontWeight: '500',
+    fontSize: '0.75rem',
     transition: 'all 0.15s ease'
+  },
+  navButtonIcon: {
+    color: 'var(--sunbelt-orange)'
   },
   currentDate: {
     fontSize: '1rem',
@@ -77,13 +94,13 @@ const styles = {
   },
   todayBtn: {
     padding: 'var(--space-sm) var(--space-md)',
-    background: 'var(--bg-secondary)',
-    border: '1px solid var(--border-color)',
+    background: 'var(--sunbelt-orange)',
+    border: '1px solid var(--sunbelt-orange)',
     borderRadius: 'var(--radius-md)',
     fontSize: '0.75rem',
-    color: 'var(--text-secondary)',
+    color: 'white',
     cursor: 'pointer',
-    fontWeight: '500'
+    fontWeight: '600'
   },
   viewToggle: {
     display: 'flex',
@@ -225,22 +242,23 @@ const styles = {
 
   // Module blocks
   moduleBlock: {
-    padding: 'var(--space-xs) var(--space-sm)',
-    marginBottom: '2px',
+    padding: 'var(--space-sm)',
+    marginBottom: '3px',
     borderRadius: 'var(--radius-sm)',
-    fontSize: '0.7rem',
-    fontWeight: '500',
+    fontSize: '0.75rem',
+    fontWeight: '600',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    borderLeft: '3px solid',
-    transition: 'all 0.15s ease'
+    borderLeft: '4px solid',
+    transition: 'all 0.15s ease',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
   },
   moduleBlockCompact: {
     display: 'flex',
     alignItems: 'center',
-    gap: '4px'
+    gap: '6px'
   },
   moduleMore: {
     fontSize: '0.65rem',
@@ -268,6 +286,86 @@ const styles = {
     fontSize: '0.7rem',
     fontStyle: 'italic',
     padding: 'var(--space-sm)'
+  },
+
+  // Legend
+  legendContainer: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 'var(--space-md)',
+    padding: 'var(--space-md) var(--space-lg)',
+    borderTop: '1px solid var(--border-color)',
+    background: 'var(--bg-tertiary)'
+  },
+  legendItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '0.7rem',
+    color: 'var(--text-secondary)'
+  },
+  legendColor: {
+    width: '12px',
+    height: '12px',
+    borderRadius: 'var(--radius-sm)',
+    border: '1px solid rgba(0,0,0,0.1)'
+  },
+  legendLabel: {
+    whiteSpace: 'nowrap'
+  },
+
+  // Mode indicator
+  modeToggle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '2px',
+    background: 'var(--bg-secondary)',
+    border: '1px solid var(--border-color)',
+    borderRadius: 'var(--radius-md)',
+    padding: '2px'
+  },
+  modeBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: 'var(--space-sm) var(--space-md)',
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 'var(--radius-sm)',
+    fontSize: '0.75rem',
+    fontWeight: '500',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease'
+  },
+  modeBtnLive: {
+    background: 'rgba(34, 197, 94, 0.15)',
+    color: '#22c55e'
+  },
+  modeBtnSim: {
+    background: 'rgba(245, 158, 11, 0.15)',
+    color: '#f59e0b'
+  },
+  modeBtnInactive: {
+    color: 'var(--text-tertiary)'
+  },
+  liveIndicator: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: 'var(--space-xs) var(--space-sm)',
+    background: 'rgba(34, 197, 94, 0.1)',
+    border: '1px solid rgba(34, 197, 94, 0.3)',
+    borderRadius: 'var(--radius-sm)',
+    fontSize: '0.7rem',
+    fontWeight: '600',
+    color: '#22c55e'
+  },
+  liveDot: {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    background: '#22c55e',
+    animation: 'pulse 2s infinite'
   }
 };
 
@@ -279,6 +377,18 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+// Module status colors for legend
+const MODULE_STATUSES = [
+  { status: 'Not Started', color: '#64748b', description: 'Not yet started' },
+  { status: 'In Queue', color: '#eab308', description: 'Waiting at station' },
+  { status: 'In Progress', color: '#3b82f6', description: 'Currently being worked on' },
+  { status: 'QC Hold', color: '#f97316', description: 'On hold for QC inspection' },
+  { status: 'Rework', color: '#ef4444', description: 'Needs rework' },
+  { status: 'Completed', color: '#22c55e', description: 'Production complete' },
+  { status: 'Staged', color: '#8b5cf6', description: 'Ready for shipment' },
+  { status: 'Shipped', color: '#14b8a6', description: 'Delivered to site' }
 ];
 
 function getMonthDays(year, month) {
@@ -374,6 +484,30 @@ function ModuleBlock({ module, compact = false, onClick, isSimulated }) {
         {module.is_rush && <Zap size={10} color="#ef4444" />}
         {isSimulated && <Eye size={10} color="#f59e0b" />}
         <span>{compact ? module.serial_number : `${module.serial_number} - ${module.project?.name || ''}`}</span>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// LEGEND COMPONENT
+// ============================================================================
+
+function StatusLegend() {
+  return (
+    <div style={styles.legendContainer}>
+      <span style={{ fontSize: '0.7rem', fontWeight: '600', color: 'var(--text-primary)', marginRight: 'var(--space-sm)' }}>
+        Status:
+      </span>
+      {MODULE_STATUSES.map(({ status, color }) => (
+        <div key={status} style={styles.legendItem} title={status}>
+          <div style={{ ...styles.legendColor, background: color }} />
+          <span style={styles.legendLabel}>{status}</span>
+        </div>
+      ))}
+      <div style={{ ...styles.legendItem, marginLeft: 'var(--space-md)' }}>
+        <Zap size={10} color="#ef4444" />
+        <span style={styles.legendLabel}>Rush Order</span>
       </div>
     </div>
   );
@@ -775,53 +909,98 @@ export default function ProductionCalendar({
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.headerLeft}>
+          {/* Navigation Buttons */}
           <button
             style={styles.navButton}
             onClick={goToPrevious}
             onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
             onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+            title={`Previous ${viewMode}`}
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={16} style={styles.navButtonIcon} />
+            <span>Prev</span>
           </button>
           <button
             style={styles.navButton}
             onClick={goToNext}
             onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
             onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+            title={`Next ${viewMode}`}
           >
-            <ChevronRight size={18} />
+            <span>Next</span>
+            <ChevronRight size={16} style={styles.navButtonIcon} />
           </button>
+
+          {/* Current Date Display */}
           <div style={styles.currentDate}>{dateDisplay}</div>
+
+          {/* Today Button */}
           <button
             style={styles.todayBtn}
             onClick={goToToday}
-            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
-            onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.85'}
+            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
           >
             Today
           </button>
+        </div>
 
+        <div style={styles.headerRight}>
+          {/* Mode Indicator */}
+          <div style={styles.modeToggle}>
+            <button
+              style={{
+                ...styles.modeBtn,
+                ...(isSimMode ? styles.modeBtnInactive : styles.modeBtnLive)
+              }}
+              title="Live Schedule - Shows actual production schedule"
+            >
+              <Radio size={12} />
+              Live
+            </button>
+            <button
+              style={{
+                ...styles.modeBtn,
+                ...(isSimMode ? styles.modeBtnSim : styles.modeBtnInactive)
+              }}
+              title="Simulation Mode - Test scheduling changes without saving"
+            >
+              <Eye size={12} />
+              Simulation
+            </button>
+          </div>
+
+          {/* Live Schedule Indicator */}
+          {!isSimMode && (
+            <div style={styles.liveIndicator}>
+              <div style={styles.liveDot} />
+              Live Schedule
+            </div>
+          )}
+
+          {/* Simulation Mode Badge */}
           {isSimMode && (
             <span style={styles.simBadge}>
               <Eye size={12} />
-              Simulation Mode
+              Changes Not Saved
             </span>
           )}
-        </div>
 
-        <div style={styles.viewToggle}>
-          {['day', 'week', 'month'].map(mode => (
-            <button
-              key={mode}
-              style={{
-                ...styles.viewBtn,
-                ...(viewMode === mode ? styles.viewBtnActive : {})
-              }}
-              onClick={() => setViewMode(mode)}
-            >
-              {mode.charAt(0).toUpperCase() + mode.slice(1)}
-            </button>
-          ))}
+          {/* View Mode Toggle */}
+          <div style={styles.viewToggle}>
+            {['day', 'week', 'month'].map(mode => (
+              <button
+                key={mode}
+                style={{
+                  ...styles.viewBtn,
+                  ...(viewMode === mode ? styles.viewBtnActive : {})
+                }}
+                onClick={() => setViewMode(mode)}
+              >
+                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -856,6 +1035,9 @@ export default function ProductionCalendar({
           />
         )}
       </div>
+
+      {/* Status Legend */}
+      <StatusLegend />
     </div>
   );
 }

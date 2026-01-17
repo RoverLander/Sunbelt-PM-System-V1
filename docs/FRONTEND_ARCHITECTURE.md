@@ -1,8 +1,8 @@
 # Frontend Architecture Reference
 
-**Last Updated:** January 14, 2026 (Late Night)
-**Framework:** React 18 + Vite
-**Version:** 1.2.1
+**Last Updated:** January 17, 2026
+**Framework:** React 18 + Vite + PWA
+**Version:** 1.4.3
 
 ---
 
@@ -18,6 +18,7 @@
 8. [Hooks Reference](#hooks-reference)
 9. [Utilities Reference](#utilities-reference)
 10. [Data Flow Patterns](#data-flow-patterns)
+11. [PWA Mobile Floor App](#pwa-mobile-floor-app)
 
 ---
 
@@ -55,19 +56,40 @@ src/
 │   └── FeatureFlagContext.jsx # Feature flags
 │
 ├── hooks/               # Custom React hooks
+│   ├── index.js         # Central hook exports
 │   ├── useContacts.js   # Contact fetching hooks
 │   ├── useFloorPlans.js # Floor plan hooks
-│   └── useProjects.js   # Project data hooks
+│   ├── useProjects.js   # Project data hooks
+│   ├── useInterval.js   # Safe interval with cleanup
+│   ├── useDebounce.js   # Value debouncing
+│   ├── useAsyncEffect.js # Async effects with cancellation
+│   └── useEventListener.js # Event listeners with cleanup
 │
 ├── pages/               # (Legacy - migrated to components/pages)
 │
 ├── styles/              # Additional style files
 │
-└── utils/               # Utility functions
-    ├── supabaseClient.js # Supabase configuration
-    ├── pdfUtils.js      # PDF generation
-    ├── praxisImport.js  # Praxis CSV parsing
-    └── itAnalytics.js   # IT dashboard analytics
+├── utils/               # Utility functions
+│   ├── supabaseClient.js # Supabase configuration
+│   ├── pdfUtils.js      # PDF generation
+│   ├── praxisImport.js  # Praxis CSV parsing
+│   └── itAnalytics.js   # IT dashboard analytics
+│
+└── pwa/                 # PWA Mobile Floor App (separate from desktop)
+    ├── index.js         # Module barrel exports
+    ├── PWAApp.jsx       # Main PWA app component
+    ├── contexts/
+    │   └── WorkerAuthContext.jsx  # Worker PIN auth context
+    ├── components/
+    │   ├── auth/
+    │   │   └── WorkerLogin.jsx    # PIN login screen
+    │   ├── layout/
+    │   │   ├── PWAShell.jsx       # App shell with header/nav
+    │   │   └── BottomNav.jsx      # Bottom navigation (5 items)
+    │   └── common/
+    │       └── OfflineBanner.jsx  # Offline status indicator
+    └── pages/
+        └── PWAHome.jsx            # Home dashboard page
 ```
 
 ---
@@ -97,6 +119,7 @@ Main application component handling:
 - Layout structure (Sidebar + Content)
 - Announcement banner
 - Feature flag context
+- **PWA route detection** - Routes starting with `/pwa` render PWAApp instead of desktop app
 
 **Key Routes:**
 
@@ -121,6 +144,7 @@ Main application component handling:
 | `/announcements` | AnnouncementManager | IT_Manager |
 | `/feature-flags` | FeatureFlagManager | IT_Manager |
 | `/sessions` | SessionManager | IT_Manager |
+| `/pwa/*` | PWAApp | Workers (PIN auth) |
 
 ---
 
@@ -146,6 +170,7 @@ components/
 │   ├── ContactPicker.jsx    # Directory contact selection
 │   ├── ErrorBoundary.jsx    # Error handling
 │   ├── FileAttachments.jsx  # File upload/display
+│   ├── Skeleton.jsx         # Loading placeholders (shimmer effects)
 │   └── Toast.jsx            # Toast notifications
 │
 ├── dashboards/              # Role Dashboards
@@ -723,6 +748,79 @@ const { nodes, edges, progress, loading } = useWorkflowGraph(projectId);
 
 ---
 
+### Memory Leak Prevention Hooks (src/hooks/)
+
+These hooks prevent common React memory leaks by handling cleanup automatically.
+
+**Import all hooks from central barrel:**
+```jsx
+import { useInterval, useDebounce, useAsyncEffect, useEventListener } from '../hooks';
+```
+
+#### useInterval
+
+Safe setInterval with automatic cleanup on unmount.
+
+```jsx
+import { useInterval } from '../hooks';
+
+// Fetch data every 5 seconds
+useInterval(() => fetchData(), 5000);
+
+// Pause when inactive (pass null)
+useInterval(() => fetchData(), isActive ? 5000 : null);
+```
+
+#### useDebounce
+
+Debounces a value with automatic timeout cleanup.
+
+```jsx
+import { useDebounce } from '../hooks';
+
+const [searchTerm, setSearchTerm] = useState('');
+const debouncedSearch = useDebounce(searchTerm, 500);
+
+useEffect(() => {
+  if (debouncedSearch) performSearch(debouncedSearch);
+}, [debouncedSearch]);
+```
+
+#### useAsyncEffect
+
+Async effects with cancellation to prevent setState on unmounted components.
+
+```jsx
+import { useAsyncEffect } from '../hooks';
+
+useAsyncEffect(async (isCancelled) => {
+  const data = await fetchData();
+  if (isCancelled()) return; // Check before setState
+  setData(data);
+}, [dependency]);
+```
+
+#### useEventListener
+
+Event listeners with automatic cleanup.
+
+```jsx
+import { useEventListener } from '../hooks';
+
+// Window resize
+useEventListener('resize', () => setWidth(window.innerWidth));
+
+// Keyboard shortcuts
+useEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+});
+
+// Custom element
+useEventListener('scroll', handleScroll, containerRef.current);
+```
+
+---
+
 ## Utilities Reference
 
 ### supabaseClient.js
@@ -918,7 +1016,15 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 ### Build Output
 
-- **Build Size:** ~1.5MB (uncompressed), ~375KB (gzip)
+- **Total Build Size:** ~2.5MB (optimized from 3.8MB - 34% reduction)
+- **Code Splitting:** Vendor chunks separated via Vite manualChunks
+  - `vendor-react`: react, react-dom (141KB)
+  - `vendor-dates`: date-fns (77KB)
+  - `vendor-supabase`: @supabase/supabase-js (68KB)
+  - `vendor-icons`: lucide-react (294KB)
+  - `vendor-flow`: @xyflow/react (230KB)
+  - `vendor-excel`: exceljs (536KB)
+- **Main Bundle:** ~620KB
 - **Initial Load:** ~2-3 seconds
 
 ---
@@ -930,3 +1036,244 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 3. Test contact picker in all modal forms
 4. Test responsive layout at different widths
 5. Verify PDF exports include correct factory logos
+
+---
+
+## PWA Mobile Floor App
+
+### Overview
+
+The PWA (Progressive Web App) is a mobile-optimized application for factory floor workers. It runs within the same codebase but has its own routing, authentication, and UI components.
+
+**Key Characteristics:**
+- **Separate auth system** - Workers use PIN-based authentication (not Supabase Auth)
+- **Mobile-first UI** - Touch-friendly components, bottom navigation
+- **Offline capable** - Workbox caching for API and static assets
+- **Installable** - Can be added to home screen as an app
+
+---
+
+### PWA Routing
+
+The PWA is detected and rendered in `App.jsx`:
+
+```jsx
+import { PWAApp } from './pwa';
+
+function App() {
+  // Detect PWA routes
+  const isPWARoute = window.location.pathname.startsWith('/pwa');
+
+  if (isPWARoute) {
+    return <PWAApp />;
+  }
+
+  // Regular desktop app
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+}
+```
+
+---
+
+### PWA Components
+
+#### PWAApp.jsx
+
+Root component that wraps the PWA with WorkerAuthProvider and handles view routing.
+
+```jsx
+export default function PWAApp() {
+  return (
+    <WorkerAuthProvider>
+      <PWAContent />
+    </WorkerAuthProvider>
+  );
+}
+```
+
+**Views:** home, modules, qc, inventory, more
+
+---
+
+#### WorkerAuthContext.jsx
+
+Context provider for worker PIN authentication. Separate from the main AuthContext used by desktop app.
+
+**Provides:**
+- `worker` - Current authenticated worker object
+- `factoryId` - Worker's factory
+- `isLead` - Whether worker is a station lead
+- `isAuthenticated` - Login state
+- `login(employeeId, pin)` - PIN login function
+- `logout()` - Terminate session
+- `sessionTimeRemaining` - Minutes until session expires
+
+---
+
+#### WorkerLogin.jsx
+
+Mobile-optimized PIN login screen.
+
+**Features:**
+- Employee ID input
+- 4-6 digit PIN input (password mode)
+- Lockout warning (after 3 failed attempts)
+- Loading state during authentication
+
+---
+
+#### PWAShell.jsx
+
+App shell layout with header, content area, and bottom navigation.
+
+**Props:**
+- `title` - Header title
+- `currentView` - Active navigation item
+- `onViewChange` - Navigation callback
+- `children` - Page content
+
+---
+
+#### BottomNav.jsx
+
+Mobile bottom navigation bar with 5 items.
+
+**Navigation Items:**
+| ID | Label | Icon | Access |
+|----|-------|------|--------|
+| home | Home | Home | All workers |
+| modules | Modules | Search | All workers |
+| qc | QC | ClipboardCheck | Leads only (`is_lead = true`) |
+| inventory | Inventory | Package | All workers |
+| more | More | MoreHorizontal | All workers |
+
+---
+
+#### OfflineBanner.jsx
+
+Shows connection status and sync state.
+
+**States:**
+- **Offline (red)** - "Offline (duration) - Changes will sync when connected"
+- **Syncing (yellow)** - "Syncing changes..."
+- **Back online (green)** - "Back online" with refresh button
+
+---
+
+#### PWAHome.jsx
+
+Home dashboard page with quick actions and activity stats.
+
+**Sections:**
+1. Greeting with worker name and factory
+2. Quick Actions grid (Find Module, QC Inspection, Receive Inventory)
+3. Today's Activity stats (Pending, Completed, Issues)
+4. Recent Activity list
+
+---
+
+### PWA Services
+
+The PWA uses dedicated services for worker-specific functionality:
+
+| Service | File | Purpose |
+|---------|------|---------|
+| workerAuthService | `src/services/workerAuthService.js` | PIN login, session management |
+| purchaseOrdersService | `src/services/purchaseOrdersService.js` | PO lookup for inventory receiving |
+| inventoryReceiptsService | `src/services/inventoryReceiptsService.js` | Receipt tracking with photos |
+
+---
+
+### PWA Infrastructure
+
+#### Vite PWA Plugin (vite.config.js)
+
+```javascript
+import { VitePWA } from 'vite-plugin-pwa';
+
+VitePWA({
+  registerType: 'autoUpdate',
+  workbox: {
+    globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+    runtimeCaching: [
+      {
+        urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*/,
+        handler: 'NetworkFirst',
+        options: { cacheName: 'supabase-api', networkTimeoutSeconds: 10 }
+      },
+      {
+        urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/.*/,
+        handler: 'CacheFirst',
+        options: { cacheName: 'supabase-storage' }
+      }
+    ]
+  },
+  manifest: {
+    name: 'Sunbelt Floor App',
+    short_name: 'Floor App',
+    start_url: '/pwa/',
+    scope: '/pwa/',
+    display: 'standalone',
+    theme_color: '#0ea5e9',
+    background_color: '#18181b'
+  }
+})
+```
+
+---
+
+#### Supabase Edge Function (worker-auth)
+
+Custom authentication for workers using PIN instead of email/password.
+
+**Location:** `supabase/functions/worker-auth/index.ts`
+
+**Endpoints:**
+- `POST /worker-auth` - Login with employee_id + PIN
+- Returns JWT token valid for 8 hours
+
+**Security:**
+- bcrypt password hashing
+- 3-attempt lockout (15 minute cooldown)
+- JWT signed with Supabase secret
+
+---
+
+### PWA Dependencies
+
+```json
+{
+  "dependencies": {
+    "idb": "^8.0.0"           // IndexedDB wrapper for offline storage
+  },
+  "devDependencies": {
+    "vite-plugin-pwa": "^0.21.1"  // PWA manifest and service worker
+  }
+}
+```
+
+---
+
+### Testing PWA
+
+1. **Install as PWA:**
+   - Open `/pwa` in Chrome/Safari
+   - Use "Add to Home Screen" option
+
+2. **Test PIN Login:**
+   - Enter valid employee_id + PIN
+   - Verify session persists on refresh
+   - Test lockout after 3 failed attempts
+
+3. **Test Offline:**
+   - Disconnect network
+   - Verify offline banner appears
+   - Verify cached pages still load
+
+4. **Test Navigation:**
+   - Verify bottom nav switches views
+   - Verify QC tab only visible for leads

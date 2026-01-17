@@ -79,7 +79,7 @@ SELECT 'Step 1 complete: Data cleared' AS status;
 -- Factories table schema uses: code, short_name, full_name, display_value, city, state, region
 INSERT INTO factories (code, short_name, full_name, display_value, city, state, region, address_line1, zip_code, is_active)
 VALUES
-  ('NWBS', 'Northwest Building', 'Northwest Building Systems', 'NWBS - Northwest Building Systems', 'Boise', 'ID', 'Northwest', '1234 Industrial Way', '83702', true),
+  ('NWBS', 'Northwest Building', 'Northwest Building Systems', 'NWBS', 'Boise', 'ID', 'Northwest', '1234 Industrial Way', '83702', true),
   ('PMI', 'Phoenix Modular', 'Phoenix Modular Industries', 'PMI - Phoenix Modular Industries', 'Phoenix', 'AZ', 'Southwest', '5678 Manufacturing Blvd', '85001', true),
   ('SSI', 'Sunbelt Idaho', 'Sunbelt Systems Idaho', 'SSI - Sunbelt Systems Idaho', 'Twin Falls', 'ID', 'Northwest', '9012 Factory Lane', '83301', true),
   ('SMM', 'Sunbelt Mobile', 'Sunbelt Mobile Manufacturing', 'SMM - Sunbelt Mobile Manufacturing', 'Salt Lake City', 'UT', 'West', '3456 Production Dr', '84101', true),
@@ -351,7 +351,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-001', 'Boise School District Admin', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-001', 'Boise School District Admin', 'NWBS', v_nwbs_factory_id,
     'GOVERNMENT', 'In Progress', 'On Track', 3, 1850000.00,
     v_matt_id, v_matt_id, 8,
     CURRENT_DATE + INTERVAL '60 days', CURRENT_DATE - INTERVAL '90 days', NOW()
@@ -363,7 +363,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-002', 'Idaho State University Labs', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-002', 'Idaho State University Labs', 'NWBS', v_nwbs_factory_id,
     'GOVERNMENT', 'In Progress', 'At Risk', 2, 1450000.00,
     v_matt_id, v_matt_id, 6,
     CURRENT_DATE + INTERVAL '90 days', CURRENT_DATE - INTERVAL '60 days', NOW()
@@ -375,7 +375,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-003', 'Boeing Everett Support', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-003', 'Boeing Everett Support', 'NWBS', v_nwbs_factory_id,
     'CUSTOM', 'In Progress', 'On Track', 4, 2100000.00,
     v_matt_id, v_matt_id, 8,
     CURRENT_DATE + INTERVAL '21 days', CURRENT_DATE - INTERVAL '150 days', NOW()
@@ -387,7 +387,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-004', 'Microsoft Redmond Campus', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-004', 'Microsoft Redmond Campus', 'NWBS', v_nwbs_factory_id,
     'CUSTOM', 'In Progress', 'On Track', 2, 2100000.00,
     v_matt_id, v_matt_id, 5,
     CURRENT_DATE + INTERVAL '120 days', CURRENT_DATE - INTERVAL '30 days', NOW()
@@ -405,7 +405,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-S01', 'United Rentals Fleet Order 1', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-S01', 'United Rentals Fleet Order 1', 'NWBS', v_nwbs_factory_id,
     'STOCK', 'In Progress', 'On Track', 4, 285000.00,
     v_dawn_id, v_dawn_id, 3,
     CURRENT_DATE + INTERVAL '14 days', CURRENT_DATE - INTERVAL '60 days', NOW()
@@ -417,7 +417,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-S02', 'United Rentals Fleet Order 2', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-S02', 'United Rentals Fleet Order 2', 'NWBS', v_nwbs_factory_id,
     'STOCK', 'In Progress', 'On Track', 3, 285000.00,
     v_dawn_id, v_dawn_id, 3,
     CURRENT_DATE + INTERVAL '30 days', CURRENT_DATE - INTERVAL '45 days', NOW()
@@ -429,7 +429,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-S03', 'ModSpace Standard 24x60', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-S03', 'ModSpace Standard 24x60', 'NWBS', v_nwbs_factory_id,
     'STOCK', 'In Progress', 'On Track', 3, 320000.00,
     v_dawn_id, v_dawn_id, 3,
     CURRENT_DATE + INTERVAL '35 days', CURRENT_DATE - INTERVAL '40 days', NOW()
@@ -441,7 +441,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-S04', 'Pacific Mobile Standard', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-S04', 'Pacific Mobile Standard', 'NWBS', v_nwbs_factory_id,
     'STOCK', 'In Progress', 'On Track', 2, 295000.00,
     v_dawn_id, v_dawn_id, 3,
     CURRENT_DATE + INTERVAL '60 days', CURRENT_DATE - INTERVAL '20 days', NOW()
@@ -453,7 +453,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-S05', 'ATCO Site Office', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-S05', 'ATCO Site Office', 'NWBS', v_nwbs_factory_id,
     'STOCK', 'In Progress', 'On Track', 2, 180000.00,
     v_dawn_id, v_dawn_id, 2,
     CURRENT_DATE + INTERVAL '45 days', CURRENT_DATE - INTERVAL '15 days', NOW()
@@ -465,7 +465,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-S06', 'Williams Scotsman Classroom', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-S06', 'Williams Scotsman Classroom', 'NWBS', v_nwbs_factory_id,
     'STOCK', 'In Progress', 'On Track', 3, 380000.00,
     v_dawn_id, v_dawn_id, 4,
     CURRENT_DATE + INTERVAL '28 days', CURRENT_DATE - INTERVAL '50 days', NOW()
@@ -477,7 +477,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-S07', 'Target Distribution Temp', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-S07', 'Target Distribution Temp', 'NWBS', v_nwbs_factory_id,
     'STOCK', 'In Progress', 'At Risk', 2, 310000.00,
     v_dawn_id, v_dawn_id, 3,
     CURRENT_DATE + INTERVAL '50 days', CURRENT_DATE - INTERVAL '25 days', NOW()
@@ -489,7 +489,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-S08', 'Amazon Warehouse Office', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-S08', 'Amazon Warehouse Office', 'NWBS', v_nwbs_factory_id,
     'STOCK', 'In Progress', 'On Track', 3, 295000.00,
     v_dawn_id, v_dawn_id, 3,
     CURRENT_DATE + INTERVAL '35 days', CURRENT_DATE - INTERVAL '35 days', NOW()
@@ -501,7 +501,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-S09', 'Costco Break Room', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-S09', 'Costco Break Room', 'NWBS', v_nwbs_factory_id,
     'STOCK', 'In Progress', 'On Track', 4, 195000.00,
     v_dawn_id, v_dawn_id, 2,
     CURRENT_DATE + INTERVAL '10 days', CURRENT_DATE - INTERVAL '70 days', NOW()
@@ -513,7 +513,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-S10', 'Starbucks Training', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-S10', 'Starbucks Training', 'NWBS', v_nwbs_factory_id,
     'STOCK', 'In Progress', 'On Track', 2, 275000.00,
     v_dawn_id, v_dawn_id, 3,
     CURRENT_DATE + INTERVAL '55 days', CURRENT_DATE - INTERVAL '18 days', NOW()
@@ -525,7 +525,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-S11', 'Home Depot Site Office', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-S11', 'Home Depot Site Office', 'NWBS', v_nwbs_factory_id,
     'STOCK', 'In Progress', 'On Track', 3, 185000.00,
     v_dawn_id, v_dawn_id, 2,
     CURRENT_DATE + INTERVAL '25 days', CURRENT_DATE - INTERVAL '42 days', NOW()
@@ -537,7 +537,7 @@ BEGIN
     current_phase, contract_value, owner_id, primary_pm_id, module_count,
     target_online_date, start_date, created_at
   ) VALUES (
-    'NWBS-26-S12', 'Lowes District Office', 'NWBS - Northwest Building Systems', v_nwbs_factory_id,
+    'NWBS-26-S12', 'Lowes District Office', 'NWBS', v_nwbs_factory_id,
     'STOCK', 'In Progress', 'On Track', 2, 290000.00,
     v_dawn_id, v_dawn_id, 3,
     CURRENT_DATE + INTERVAL '65 days', CURRENT_DATE - INTERVAL '12 days', NOW()

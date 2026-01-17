@@ -9,26 +9,28 @@
  * - PTO/absence indicators
  * - Overtime highlighting
  * - Drag-to-assign capability (future)
+ *
+ * Updated: January 16, 2026 - Dark mode support
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { format, startOfWeek, addDays, isSameDay, parseISO } from 'date-fns';
 
-// Shift type configurations
+// Shift type configurations - using rgba for dark mode compatibility
 const SHIFT_TYPES = {
-  DAY: { label: 'Day', hours: '6:00 AM - 2:30 PM', color: '#3b82f6', bg: '#eff6ff' },
-  SWING: { label: 'Swing', hours: '2:00 PM - 10:30 PM', color: '#8b5cf6', bg: '#f5f3ff' },
-  NIGHT: { label: 'Night', hours: '10:00 PM - 6:30 AM', color: '#6366f1', bg: '#eef2ff' },
-  FLEX: { label: 'Flex', hours: 'Varies', color: '#06b6d4', bg: '#ecfeff' }
+  DAY: { label: 'Day', hours: '6:00 AM - 2:30 PM', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' },
+  SWING: { label: 'Swing', hours: '2:00 PM - 10:30 PM', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)' },
+  NIGHT: { label: 'Night', hours: '10:00 PM - 6:30 AM', color: '#6366f1', bg: 'rgba(99, 102, 241, 0.15)' },
+  FLEX: { label: 'Flex', hours: 'Varies', color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.15)' }
 };
 
-// Absence type configurations
+// Absence type configurations - using rgba for dark mode compatibility
 const ABSENCE_TYPES = {
-  PTO: { label: 'PTO', color: '#10b981', bg: '#d1fae5', icon: '🏖️' },
-  SICK: { label: 'Sick', color: '#f59e0b', bg: '#fef3c7', icon: '🤒' },
-  FMLA: { label: 'FMLA', color: '#8b5cf6', bg: '#ede9fe', icon: '📋' },
-  JURY: { label: 'Jury Duty', color: '#6b7280', bg: '#f3f4f6', icon: '⚖️' },
-  BEREAVEMENT: { label: 'Bereavement', color: '#374151', bg: '#e5e7eb', icon: '🕯️' }
+  PTO: { label: 'PTO', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', icon: '🏖️' },
+  SICK: { label: 'Sick', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', icon: '🤒' },
+  FMLA: { label: 'FMLA', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)', icon: '📋' },
+  JURY: { label: 'Jury Duty', color: 'var(--text-secondary)', bg: 'var(--bg-tertiary)', icon: '⚖️' },
+  BEREAVEMENT: { label: 'Bereavement', color: 'var(--text-primary)', bg: 'var(--bg-tertiary)', icon: '🕯️' }
 };
 
 // Day of week labels
@@ -84,19 +86,19 @@ function ScheduleCell({
 
   const cellStyle = {
     padding: '4px 6px',
-    borderRight: '1px solid #e5e7eb',
-    borderBottom: '1px solid #e5e7eb',
+    borderRight: '1px solid var(--border-color)',
+    borderBottom: '1px solid var(--border-color)',
     minHeight: '48px',
     cursor: 'pointer',
     transition: 'background-color 0.15s',
-    backgroundColor: isToday ? '#fefce8' : 'white',
+    backgroundColor: isToday ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-secondary)',
     position: 'relative'
   };
 
   if (absence) {
     cellStyle.backgroundColor = absenceType.bg;
   } else if (hasShift && shift.is_overtime) {
-    cellStyle.backgroundColor = '#fef2f2';
+    cellStyle.backgroundColor = 'rgba(239, 68, 68, 0.1)';
   }
 
   const handleClick = () => {
@@ -142,7 +144,7 @@ function ScheduleCell({
           </span>
           <span style={{
             fontSize: '10px',
-            color: '#6b7280',
+            color: 'var(--text-secondary)',
             textAlign: 'center'
           }}>
             {shift.clock_in ? format(parseISO(shift.clock_in), 'h:mm a') : shiftType.hours.split(' - ')[0]}
@@ -164,7 +166,7 @@ function ScheduleCell({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#d1d5db',
+          color: 'var(--text-tertiary)',
           fontSize: '18px'
         }}>
           −
@@ -224,9 +226,9 @@ function WorkerRow({
       {/* Worker info cell */}
       <td style={{
         padding: '8px 12px',
-        borderRight: '2px solid #e5e7eb',
-        borderBottom: '1px solid #e5e7eb',
-        backgroundColor: '#f9fafb',
+        borderRight: '2px solid var(--border-color)',
+        borderBottom: '1px solid var(--border-color)',
+        backgroundColor: 'var(--bg-tertiary)',
         position: 'sticky',
         left: 0,
         zIndex: 1,
@@ -237,21 +239,21 @@ function WorkerRow({
             width: '32px',
             height: '32px',
             borderRadius: '50%',
-            backgroundColor: '#dbeafe',
+            backgroundColor: 'rgba(59, 130, 246, 0.15)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '12px',
             fontWeight: '600',
-            color: '#1d4ed8'
+            color: '#3b82f6'
           }}>
             {worker.first_name?.[0]}{worker.last_name?.[0]}
           </div>
           <div>
-            <div style={{ fontWeight: '500', fontSize: '13px', color: '#111827' }}>
+            <div style={{ fontWeight: '500', fontSize: '13px', color: 'var(--text-primary)' }}>
               {worker.first_name} {worker.last_name}
             </div>
-            <div style={{ fontSize: '11px', color: '#6b7280' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
               {worker.role || worker.skill_level || 'Worker'}
             </div>
           </div>
@@ -277,12 +279,12 @@ function WorkerRow({
       {/* Weekly totals cell */}
       <td style={{
         padding: '8px 12px',
-        borderBottom: '1px solid #e5e7eb',
-        backgroundColor: '#f9fafb',
+        borderBottom: '1px solid var(--border-color)',
+        backgroundColor: 'var(--bg-tertiary)',
         textAlign: 'center',
         minWidth: '80px'
       }}>
-        <div style={{ fontWeight: '600', fontSize: '13px', color: '#111827' }}>
+        <div style={{ fontWeight: '600', fontSize: '13px', color: 'var(--text-primary)' }}>
           {weeklyHours.total.toFixed(1)}h
         </div>
         {weeklyHours.overtime > 0 && (
@@ -308,11 +310,11 @@ function CrewHeader({ crewName, workerCount, expanded, onToggle }) {
         colSpan={9}
         style={{
           padding: '10px 12px',
-          backgroundColor: '#f3f4f6',
-          borderBottom: '2px solid #d1d5db',
+          backgroundColor: 'var(--bg-tertiary)',
+          borderBottom: '2px solid var(--border-color)',
           fontWeight: '600',
           fontSize: '13px',
-          color: '#374151'
+          color: 'var(--text-primary)'
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -326,7 +328,7 @@ function CrewHeader({ crewName, workerCount, expanded, onToggle }) {
           <span>{crewName}</span>
           <span style={{
             fontSize: '11px',
-            color: '#6b7280',
+            color: 'var(--text-secondary)',
             fontWeight: '400',
             marginLeft: '8px'
           }}>
@@ -481,18 +483,18 @@ export default function CrewScheduleView({
     return { scheduled, unscheduled, onPTO, overtime };
   }, [workers, shiftsByWorker, absencesByWorker]);
 
-  // Styles
+  // Styles - using CSS variables for dark mode
   const containerStyle = {
-    backgroundColor: 'white',
+    backgroundColor: 'var(--bg-secondary)',
     borderRadius: '8px',
-    border: '1px solid #e5e7eb',
+    border: '1px solid var(--border-color)',
     overflow: 'hidden'
   };
 
   const headerStyle = {
     padding: compact ? '12px 16px' : '16px 20px',
-    borderBottom: '1px solid #e5e7eb',
-    backgroundColor: '#f9fafb'
+    borderBottom: '1px solid var(--border-color)',
+    backgroundColor: 'var(--bg-tertiary)'
   };
 
   return (
@@ -512,7 +514,7 @@ export default function CrewScheduleView({
               margin: 0,
               fontSize: compact ? '14px' : '16px',
               fontWeight: '600',
-              color: '#111827'
+              color: 'var(--text-primary)'
             }}>
               Crew Schedule
             </h3>
@@ -521,10 +523,10 @@ export default function CrewScheduleView({
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              backgroundColor: 'white',
+              backgroundColor: 'var(--bg-secondary)',
               padding: '4px',
               borderRadius: '6px',
-              border: '1px solid #e5e7eb'
+              border: '1px solid var(--border-color)'
             }}>
               <button
                 onClick={handlePrevWeek}
@@ -534,7 +536,7 @@ export default function CrewScheduleView({
                   backgroundColor: 'transparent',
                   cursor: 'pointer',
                   fontSize: '14px',
-                  color: '#6b7280'
+                  color: 'var(--text-secondary)'
                 }}
               >
                 ◀
@@ -543,7 +545,7 @@ export default function CrewScheduleView({
               <span style={{
                 fontSize: '13px',
                 fontWeight: '500',
-                color: '#374151',
+                color: 'var(--text-primary)',
                 minWidth: '160px',
                 textAlign: 'center'
               }}>
@@ -558,7 +560,7 @@ export default function CrewScheduleView({
                   backgroundColor: 'transparent',
                   cursor: 'pointer',
                   fontSize: '14px',
-                  color: '#6b7280'
+                  color: 'var(--text-secondary)'
                 }}
               >
                 ▶
@@ -569,13 +571,13 @@ export default function CrewScheduleView({
               onClick={handleToday}
               style={{
                 padding: '4px 12px',
-                border: '1px solid #e5e7eb',
-                backgroundColor: 'white',
+                border: '1px solid var(--border-color)',
+                backgroundColor: 'var(--bg-secondary)',
                 borderRadius: '4px',
                 cursor: 'pointer',
                 fontSize: '12px',
                 fontWeight: '500',
-                color: '#374151'
+                color: 'var(--text-primary)'
               }}
             >
               Today
@@ -587,32 +589,32 @@ export default function CrewScheduleView({
             <div style={{ display: 'flex', gap: '12px' }}>
               <div style={{
                 padding: '4px 12px',
-                backgroundColor: '#dcfce7',
+                backgroundColor: 'rgba(16, 185, 129, 0.15)',
                 borderRadius: '12px',
                 fontSize: '12px',
                 fontWeight: '500',
-                color: '#166534'
+                color: '#10b981'
               }}>
                 {scheduleStats.scheduled} Scheduled
               </div>
               <div style={{
                 padding: '4px 12px',
-                backgroundColor: '#fef3c7',
+                backgroundColor: 'rgba(245, 158, 11, 0.15)',
                 borderRadius: '12px',
                 fontSize: '12px',
                 fontWeight: '500',
-                color: '#92400e'
+                color: '#f59e0b'
               }}>
                 {scheduleStats.onPTO} On Leave
               </div>
               {scheduleStats.overtime > 0 && (
                 <div style={{
                   padding: '4px 12px',
-                  backgroundColor: '#fee2e2',
+                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
                   borderRadius: '12px',
                   fontSize: '12px',
                   fontWeight: '500',
-                  color: '#991b1b'
+                  color: '#ef4444'
                 }}>
                   {scheduleStats.overtime} OT
                 </div>
@@ -647,9 +649,9 @@ export default function CrewScheduleView({
             gap: '16px',
             marginTop: '12px',
             paddingTop: '12px',
-            borderTop: '1px solid #e5e7eb'
+            borderTop: '1px solid var(--border-color)'
           }}>
-            <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: '500' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '500' }}>
               SHIFT TYPES:
             </span>
             {Object.entries(SHIFT_TYPES).map(([key, config]) => (
@@ -668,7 +670,7 @@ export default function CrewScheduleView({
                   borderRadius: '2px',
                   backgroundColor: config.color
                 }} />
-                <span style={{ color: '#6b7280' }}>{config.label}</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{config.label}</span>
               </div>
             ))}
           </div>
@@ -687,13 +689,14 @@ export default function CrewScheduleView({
               <th style={{
                 padding: '10px 12px',
                 textAlign: 'left',
-                backgroundColor: '#f3f4f6',
-                borderRight: '2px solid #e5e7eb',
-                borderBottom: '2px solid #d1d5db',
+                backgroundColor: 'var(--bg-tertiary)',
+                borderRight: '2px solid var(--border-color)',
+                borderBottom: '2px solid var(--border-color)',
                 position: 'sticky',
                 left: 0,
                 zIndex: 2,
-                minWidth: '180px'
+                minWidth: '180px',
+                color: 'var(--text-primary)'
               }}>
                 Worker
               </th>
@@ -706,18 +709,18 @@ export default function CrewScheduleView({
                     style={{
                       padding: '10px 12px',
                       textAlign: 'center',
-                      backgroundColor: isToday ? '#fef9c3' : isWeekend ? '#f9fafb' : '#f3f4f6',
-                      borderRight: '1px solid #e5e7eb',
-                      borderBottom: '2px solid #d1d5db',
+                      backgroundColor: isToday ? 'rgba(245, 158, 11, 0.15)' : isWeekend ? 'var(--bg-tertiary)' : 'var(--bg-tertiary)',
+                      borderRight: '1px solid var(--border-color)',
+                      borderBottom: '2px solid var(--border-color)',
                       minWidth: '90px'
                     }}
                   >
-                    <div style={{ fontWeight: '600', color: '#374151' }}>
+                    <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
                       {WEEKDAYS[idx]}
                     </div>
                     <div style={{
                       fontSize: '11px',
-                      color: isToday ? '#854d0e' : '#6b7280',
+                      color: isToday ? '#f59e0b' : 'var(--text-secondary)',
                       fontWeight: isToday ? '600' : '400'
                     }}>
                       {format(date, 'MMM d')}
@@ -729,12 +732,13 @@ export default function CrewScheduleView({
                 <th style={{
                   padding: '10px 12px',
                   textAlign: 'center',
-                  backgroundColor: '#f3f4f6',
-                  borderBottom: '2px solid #d1d5db',
-                  minWidth: '80px'
+                  backgroundColor: 'var(--bg-tertiary)',
+                  borderBottom: '2px solid var(--border-color)',
+                  minWidth: '80px',
+                  color: 'var(--text-primary)'
                 }}>
-                  <div style={{ fontWeight: '600', color: '#374151' }}>Total</div>
-                  <div style={{ fontSize: '11px', color: '#6b7280' }}>Hours</div>
+                  <div style={{ fontWeight: '600' }}>Total</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Hours</div>
                 </th>
               )}
             </tr>
@@ -775,7 +779,7 @@ export default function CrewScheduleView({
                   style={{
                     padding: '40px',
                     textAlign: 'center',
-                    color: '#6b7280'
+                    color: 'var(--text-secondary)'
                   }}
                 >
                   <div style={{ fontSize: '32px', marginBottom: '8px' }}>📅</div>
@@ -794,13 +798,13 @@ export default function CrewScheduleView({
       {!compact && (
         <div style={{
           padding: '12px 20px',
-          borderTop: '1px solid #e5e7eb',
-          backgroundColor: '#f9fafb',
+          borderTop: '1px solid var(--border-color)',
+          backgroundColor: 'var(--bg-tertiary)',
           display: 'flex',
           gap: '16px',
           alignItems: 'center'
         }}>
-          <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: '500' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '500' }}>
             ABSENCE TYPES:
           </span>
           {Object.entries(ABSENCE_TYPES).map(([key, config]) => (
@@ -814,7 +818,7 @@ export default function CrewScheduleView({
               }}
             >
               <span>{config.icon}</span>
-              <span style={{ color: '#6b7280' }}>{config.label}</span>
+              <span style={{ color: 'var(--text-secondary)' }}>{config.label}</span>
             </div>
           ))}
         </div>

@@ -9,19 +9,21 @@
  * - Real-time headcount by area/station
  * - Overtime tracking
  * - Quick clock in/out actions
+ *
+ * Updated: January 16, 2026 - Dark mode support
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { format, parseISO, differenceInMinutes, isToday } from 'date-fns';
 
-// Status configurations
+// Status configurations - using rgba for dark mode compatibility
 const ATTENDANCE_STATUS = {
-  CLOCKED_IN: { label: 'Clocked In', color: '#10b981', bg: '#d1fae5', icon: '✓' },
-  CLOCKED_OUT: { label: 'Clocked Out', color: '#6b7280', bg: '#f3f4f6', icon: '−' },
-  LATE: { label: 'Late', color: '#f59e0b', bg: '#fef3c7', icon: '⚠' },
-  ON_BREAK: { label: 'On Break', color: '#8b5cf6', bg: '#ede9fe', icon: '☕' },
-  ABSENT: { label: 'Absent', color: '#ef4444', bg: '#fee2e2', icon: '✗' },
-  PTO: { label: 'PTO', color: '#3b82f6', bg: '#dbeafe', icon: '🏖' }
+  CLOCKED_IN: { label: 'Clocked In', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', icon: '✓' },
+  CLOCKED_OUT: { label: 'Clocked Out', color: 'var(--text-secondary)', bg: 'var(--bg-tertiary)', icon: '−' },
+  LATE: { label: 'Late', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', icon: '⚠' },
+  ON_BREAK: { label: 'On Break', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)', icon: '☕' },
+  ABSENT: { label: 'Absent', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', icon: '✗' },
+  PTO: { label: 'PTO', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)', icon: '🏖' }
 };
 
 // Shift timing (for late detection)
@@ -91,16 +93,16 @@ function StatCard({ label, value, subValue, color, bg, icon, onClick }) {
         flex: '1',
         minWidth: '120px',
         padding: '16px',
-        backgroundColor: bg || '#f9fafb',
+        backgroundColor: bg || 'var(--bg-tertiary)',
         borderRadius: '8px',
         cursor: onClick ? 'pointer' : 'default',
         transition: 'transform 0.15s, box-shadow 0.15s',
-        border: `1px solid ${color}20`
+        border: '1px solid var(--border-color)'
       }}
       onMouseEnter={(e) => {
         if (onClick) {
           e.currentTarget.style.transform = 'translateY(-2px)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
         }
       }}
       onMouseLeave={(e) => {
@@ -120,7 +122,7 @@ function StatCard({ label, value, subValue, color, bg, icon, onClick }) {
         <span style={{
           fontSize: '12px',
           fontWeight: '500',
-          color: '#6b7280',
+          color: 'var(--text-tertiary)',
           textTransform: 'uppercase',
           letterSpacing: '0.5px'
         }}>
@@ -130,14 +132,14 @@ function StatCard({ label, value, subValue, color, bg, icon, onClick }) {
       <div style={{
         fontSize: '28px',
         fontWeight: '700',
-        color: color || '#111827'
+        color: color || 'var(--text-primary)'
       }}>
         {value}
       </div>
       {subValue && (
         <div style={{
           fontSize: '12px',
-          color: '#6b7280',
+          color: 'var(--text-secondary)',
           marginTop: '4px'
         }}>
           {subValue}
@@ -169,7 +171,7 @@ function WorkerAttendanceRow({
     display: 'flex',
     alignItems: 'center',
     padding: compact ? '8px 12px' : '12px 16px',
-    borderBottom: '1px solid #f3f4f6',
+    borderBottom: '1px solid var(--border-color)',
     transition: 'background-color 0.15s',
     gap: '12px'
   };
@@ -177,8 +179,8 @@ function WorkerAttendanceRow({
   return (
     <div
       style={rowStyle}
-      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
-      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
+      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
     >
       {/* Status indicator */}
       <div style={{
@@ -194,13 +196,13 @@ function WorkerAttendanceRow({
         <div style={{
           fontWeight: '500',
           fontSize: '13px',
-          color: '#111827'
+          color: 'var(--text-primary)'
         }}>
           {worker.first_name} {worker.last_name}
         </div>
         <div style={{
           fontSize: '11px',
-          color: '#6b7280'
+          color: 'var(--text-secondary)'
         }}>
           {worker.role || worker.station_name || 'Worker'}
         </div>
@@ -227,7 +229,7 @@ function WorkerAttendanceRow({
       {/* Clock in time */}
       <div style={{
         fontSize: '12px',
-        color: '#6b7280',
+        color: 'var(--text-secondary)',
         minWidth: '70px',
         textAlign: 'center'
       }}>
@@ -251,7 +253,7 @@ function WorkerAttendanceRow({
       <div style={{
         fontSize: '12px',
         fontWeight: '500',
-        color: '#374151',
+        color: 'var(--text-primary)',
         minWidth: '50px',
         textAlign: 'center'
       }}>
@@ -309,7 +311,7 @@ function WorkerAttendanceRow({
                       onClick={() => onClockOut(shift.id)}
                       style={{
                         padding: '4px 8px',
-                        backgroundColor: '#6b7280',
+                        backgroundColor: 'var(--text-secondary)',
                         color: 'white',
                         border: 'none',
                         borderRadius: '4px',
@@ -377,13 +379,13 @@ function AreaBreakdown({ workers, shifts, absences }) {
 
   return (
     <div style={{
-      borderTop: '1px solid #e5e7eb',
+      borderTop: '1px solid var(--border-color)',
       padding: '16px'
     }}>
       <div style={{
         fontSize: '12px',
         fontWeight: '600',
-        color: '#374151',
+        color: 'var(--text-primary)',
         marginBottom: '12px',
         textTransform: 'uppercase',
         letterSpacing: '0.5px'
@@ -404,15 +406,15 @@ function AreaBreakdown({ workers, shifts, absences }) {
               key={area.name}
               style={{
                 padding: '10px 12px',
-                backgroundColor: '#f9fafb',
+                backgroundColor: 'var(--bg-tertiary)',
                 borderRadius: '6px',
-                border: '1px solid #e5e7eb'
+                border: '1px solid var(--border-color)'
               }}
             >
               <div style={{
                 fontSize: '12px',
                 fontWeight: '500',
-                color: '#374151',
+                color: 'var(--text-primary)',
                 marginBottom: '6px',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -428,13 +430,13 @@ function AreaBreakdown({ workers, shifts, absences }) {
                 <span style={{
                   fontSize: '20px',
                   fontWeight: '700',
-                  color: '#111827'
+                  color: 'var(--text-primary)'
                 }}>
                   {area.present}
                 </span>
                 <span style={{
                   fontSize: '12px',
-                  color: '#6b7280'
+                  color: 'var(--text-secondary)'
                 }}>
                   / {area.total}
                 </span>
@@ -596,11 +598,11 @@ export default function AttendanceDashboard({
     return filtered;
   }, [workers, shifts, absences, searchTerm, statusFilter, sortBy]);
 
-  // Container styles
+  // Container styles - using CSS variables for dark mode
   const containerStyle = {
-    backgroundColor: 'white',
+    backgroundColor: 'var(--bg-secondary)',
     borderRadius: '8px',
-    border: '1px solid #e5e7eb',
+    border: '1px solid var(--border-color)',
     overflow: 'hidden'
   };
 
@@ -609,8 +611,8 @@ export default function AttendanceDashboard({
       {/* Header */}
       <div style={{
         padding: compact ? '12px 16px' : '16px 20px',
-        borderBottom: '1px solid #e5e7eb',
-        backgroundColor: '#f9fafb'
+        borderBottom: '1px solid var(--border-color)',
+        backgroundColor: 'var(--bg-tertiary)'
       }}>
         <div style={{
           display: 'flex',
@@ -622,7 +624,7 @@ export default function AttendanceDashboard({
             margin: 0,
             fontSize: compact ? '14px' : '16px',
             fontWeight: '600',
-            color: '#111827',
+            color: 'var(--text-primary)',
             display: 'flex',
             alignItems: 'center',
             gap: '8px'
@@ -638,7 +640,7 @@ export default function AttendanceDashboard({
           }}>
             <span style={{
               fontSize: '12px',
-              color: '#6b7280'
+              color: 'var(--text-secondary)'
             }}>
               {format(new Date(), 'EEEE, MMM d')}
             </span>
@@ -648,11 +650,12 @@ export default function AttendanceDashboard({
                 onClick={onRefresh}
                 style={{
                   padding: '4px 8px',
-                  backgroundColor: 'white',
-                  border: '1px solid #e5e7eb',
+                  backgroundColor: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
                   borderRadius: '4px',
                   cursor: 'pointer',
-                  fontSize: '12px'
+                  fontSize: '12px',
+                  color: 'var(--text-primary)'
                 }}
               >
                 ↻
@@ -672,7 +675,7 @@ export default function AttendanceDashboard({
             value={stats.present}
             subValue={`${stats.attendanceRate}% rate`}
             color="#10b981"
-            bg="#d1fae5"
+            bg="rgba(16, 185, 129, 0.15)"
             icon="✓"
             onClick={() => setStatusFilter(statusFilter === 'present' ? 'all' : 'present')}
           />
@@ -680,7 +683,7 @@ export default function AttendanceDashboard({
             label="Absent"
             value={stats.absent}
             color="#ef4444"
-            bg="#fee2e2"
+            bg="rgba(239, 68, 68, 0.15)"
             icon="✗"
             onClick={() => setStatusFilter(statusFilter === 'absent' ? 'all' : 'absent')}
           />
@@ -688,7 +691,7 @@ export default function AttendanceDashboard({
             label="Late"
             value={stats.late}
             color="#f59e0b"
-            bg="#fef3c7"
+            bg="rgba(245, 158, 11, 0.15)"
             icon="⚠"
             onClick={() => setStatusFilter(statusFilter === 'late' ? 'all' : 'late')}
           />
@@ -696,7 +699,7 @@ export default function AttendanceDashboard({
             label="On PTO"
             value={stats.onPTO}
             color="#3b82f6"
-            bg="#dbeafe"
+            bg="rgba(59, 130, 246, 0.15)"
             icon="🏖"
             onClick={() => setStatusFilter(statusFilter === 'pto' ? 'all' : 'pto')}
           />
@@ -706,7 +709,7 @@ export default function AttendanceDashboard({
               value={stats.totalHours.toFixed(1)}
               subValue={stats.overtimeCount > 0 ? `${stats.overtimeCount} on OT` : null}
               color="#6366f1"
-              bg="#eef2ff"
+              bg="rgba(99, 102, 241, 0.15)"
               icon="⏱"
             />
           )}
@@ -716,11 +719,12 @@ export default function AttendanceDashboard({
       {/* Filter bar */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: '1px solid #e5e7eb',
+        borderBottom: '1px solid var(--border-color)',
         display: 'flex',
         gap: '12px',
         alignItems: 'center',
-        flexWrap: 'wrap'
+        flexWrap: 'wrap',
+        backgroundColor: 'var(--bg-secondary)'
       }}>
         {/* Search */}
         <div style={{
@@ -737,10 +741,12 @@ export default function AttendanceDashboard({
             style={{
               width: '100%',
               padding: '6px 12px 6px 32px',
-              border: '1px solid #e5e7eb',
+              border: '1px solid var(--border-color)',
               borderRadius: '6px',
               fontSize: '13px',
-              outline: 'none'
+              outline: 'none',
+              backgroundColor: 'var(--bg-primary)',
+              color: 'var(--text-primary)'
             }}
           />
           <span style={{
@@ -748,7 +754,7 @@ export default function AttendanceDashboard({
             left: '10px',
             top: '50%',
             transform: 'translateY(-50%)',
-            color: '#9ca3af',
+            color: 'var(--text-tertiary)',
             fontSize: '14px'
           }}>
             🔍
@@ -759,7 +765,7 @@ export default function AttendanceDashboard({
         <div style={{
           display: 'flex',
           gap: '4px',
-          backgroundColor: '#f3f4f6',
+          backgroundColor: 'var(--bg-tertiary)',
           padding: '3px',
           borderRadius: '6px'
         }}>
@@ -769,14 +775,14 @@ export default function AttendanceDashboard({
               onClick={() => setStatusFilter(status)}
               style={{
                 padding: '4px 12px',
-                backgroundColor: statusFilter === status ? 'white' : 'transparent',
+                backgroundColor: statusFilter === status ? 'var(--bg-primary)' : 'transparent',
                 border: 'none',
                 borderRadius: '4px',
                 cursor: 'pointer',
                 fontSize: '12px',
                 fontWeight: statusFilter === status ? '500' : '400',
-                color: statusFilter === status ? '#111827' : '#6b7280',
-                boxShadow: statusFilter === status ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                color: statusFilter === status ? 'var(--text-primary)' : 'var(--text-secondary)',
+                boxShadow: statusFilter === status ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
                 textTransform: 'capitalize'
               }}
             >
@@ -791,10 +797,11 @@ export default function AttendanceDashboard({
           onChange={(e) => setSortBy(e.target.value)}
           style={{
             padding: '6px 12px',
-            border: '1px solid #e5e7eb',
+            border: '1px solid var(--border-color)',
             borderRadius: '6px',
             fontSize: '12px',
-            backgroundColor: 'white',
+            backgroundColor: 'var(--bg-primary)',
+            color: 'var(--text-primary)',
             cursor: 'pointer'
           }}
         >
@@ -806,7 +813,7 @@ export default function AttendanceDashboard({
         {/* Results count */}
         <span style={{
           fontSize: '12px',
-          color: '#6b7280',
+          color: 'var(--text-secondary)',
           marginLeft: 'auto'
         }}>
           {filteredWorkers.length} of {workers.length} workers
@@ -816,7 +823,8 @@ export default function AttendanceDashboard({
       {/* Worker list */}
       <div style={{
         maxHeight: compact ? '300px' : '400px',
-        overflowY: 'auto'
+        overflowY: 'auto',
+        backgroundColor: 'var(--bg-secondary)'
       }}>
         {filteredWorkers.length > 0 ? (
           filteredWorkers.map(worker => (
@@ -836,7 +844,7 @@ export default function AttendanceDashboard({
           <div style={{
             padding: '40px',
             textAlign: 'center',
-            color: '#6b7280'
+            color: 'var(--text-secondary)'
           }}>
             <div style={{ fontSize: '32px', marginBottom: '8px' }}>👥</div>
             <div style={{ fontWeight: '500' }}>No workers found</div>

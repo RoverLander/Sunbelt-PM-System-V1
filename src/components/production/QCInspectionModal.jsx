@@ -405,10 +405,10 @@ const styles = {
     alignItems: 'center',
     gap: 'var(--space-sm)',
     padding: 'var(--space-md)',
-    background: '#fef3c7',
+    background: 'rgba(245, 158, 11, 0.15)',
     borderRadius: 'var(--radius-md)',
     marginBottom: 'var(--space-lg)',
-    color: '#92400e',
+    color: '#f59e0b',
     fontSize: '0.875rem'
   }
 };

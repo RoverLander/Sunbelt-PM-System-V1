@@ -174,8 +174,8 @@ const styles = {
     alignItems: 'center',
     gap: 'var(--space-xs)',
     padding: '2px var(--space-sm)',
-    background: '#fef3c7',
-    color: '#92400e',
+    background: 'rgba(245, 158, 11, 0.15)',
+    color: '#f59e0b',
     borderRadius: 'var(--radius-sm)',
     fontSize: '0.7rem',
     fontWeight: '500'

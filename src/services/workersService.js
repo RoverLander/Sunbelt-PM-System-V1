@@ -8,6 +8,10 @@
 // ============================================================================
 
 import { supabase } from '../utils/supabaseClient';
+import {
+  validateShiftConsistency,
+  validateWorkerCertification
+} from './validationService';
 
 // ============================================================================
 // FETCH FUNCTIONS
@@ -285,16 +289,48 @@ export async function deactivateWorker(workerId) {
  * @param {string} source - Clock source ('kiosk', 'app', 'manual')
  * @returns {Promise<{data: Object, error: Error}>}
  */
-export async function clockIn(workerId, source = 'kiosk') {
+export async function clockIn(workerId, source = 'kiosk', options = {}) {
+  const { skipValidation = false, autoCloseActive = true } = options;
+
   try {
-    // Get worker's factory_id
+    // ========================================================================
+    // VALIDATION: Check shift consistency
+    // ========================================================================
+    if (!skipValidation) {
+      const shiftResult = await validateShiftConsistency(workerId);
+
+      // If worker has an active shift and autoCloseActive is true, close it
+      if (!shiftResult.valid && shiftResult.activeShift && autoCloseActive) {
+        console.log(`Auto-closing active shift ${shiftResult.activeShift.id} for worker ${workerId}`);
+        await clockOut(shiftResult.activeShift.id);
+      } else if (!shiftResult.valid) {
+        return {
+          data: null,
+          error: new Error(shiftResult.error),
+          validation: shiftResult
+        };
+      }
+    }
+
+    // ========================================================================
+    // CREATE: Clock in worker
+    // ========================================================================
     const { data: worker, error: workerError } = await supabase
       .from('workers')
-      .select('factory_id, hourly_rate')
+      .select('factory_id, hourly_rate, is_active')
       .eq('id', workerId)
       .single();
 
     if (workerError) throw workerError;
+
+    // Double-check worker is active
+    if (!worker.is_active) {
+      return {
+        data: null,
+        error: new Error('Cannot clock in inactive worker'),
+        validation: { valid: false, error: 'Worker is inactive' }
+      };
+    }
 
     const { data, error } = await supabase
       .from('worker_shifts')
@@ -310,10 +346,10 @@ export async function clockIn(workerId, source = 'kiosk') {
       .single();
 
     if (error) throw error;
-    return { data, error: null };
+    return { data, error: null, validation: { valid: true } };
   } catch (error) {
     console.error('Error clocking in:', error);
-    return { data: null, error };
+    return { data: null, error, validation: null };
   }
 }
 

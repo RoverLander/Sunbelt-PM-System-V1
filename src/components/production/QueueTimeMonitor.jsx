@@ -78,8 +78,8 @@ const styles = {
     alignItems: 'center',
     gap: 'var(--space-xs)',
     padding: '2px var(--space-sm)',
-    background: '#fee2e2',
-    color: '#dc2626',
+    background: 'rgba(239, 68, 68, 0.15)',
+    color: '#ef4444',
     borderRadius: 'var(--radius-sm)',
     fontSize: '0.7rem',
     fontWeight: '500'
@@ -141,11 +141,11 @@ const styles = {
   },
   queueItemAlert: {
     borderLeftColor: '#ef4444',
-    background: '#fef2f2'
+    background: 'rgba(239, 68, 68, 0.1)'
   },
   queueItemWarning: {
     borderLeftColor: '#f59e0b',
-    background: '#fffbeb'
+    background: 'rgba(245, 158, 11, 0.1)'
   },
   moduleInfo: {
     flex: 1

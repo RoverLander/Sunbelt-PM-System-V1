@@ -1,8 +1,8 @@
 # Project Status
 
-**Last Updated:** January 16, 2026
-**Version:** 1.4.2
-**Status:** Production Ready (Beta) + PGM Dashboard Batch 4 Complete + Performance Optimized
+**Last Updated:** January 17, 2026
+**Version:** 1.4.3
+**Status:** Production Ready (Beta) + PGM Dashboard Batch 4 Complete + PWA Phase 1 Foundation Complete
 
 ---
 
@@ -162,6 +162,65 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 ---
 
 ## Recent Updates (January 2026)
+
+### January 17, 2026 (PWA Mobile Floor App - Phase 1 Foundation)
+
+- **PWA Infrastructure Setup - Complete**
+  - **Database Migration:** `20260116_pwa_schema_remediation_fix.sql` applied
+    - Added worker auth columns: `pin_hash`, `pin_attempts`, `pin_locked_until`, `last_login`
+    - Created `worker_sessions` table for JWT token tracking
+    - Created `purchase_orders` table for inventory receiving (Phase 5)
+    - Created `inventory_receipts` table for material receiving (Phase 5)
+  - **Supabase Storage:** Created `inventory-receipts` bucket for receipt photos
+  - **Edge Function:** Deployed `worker-auth` Edge Function for PIN authentication
+    - bcrypt password hashing
+    - JWT token generation (8-hour sessions)
+    - PIN attempt lockout (3 attempts, 15-minute lockout)
+
+- **PWA Foundation Files Created**
+  - **Build Configuration:**
+    - Updated `package.json` with `vite-plugin-pwa` and `idb` dependencies
+    - Updated `vite.config.js` with PWA manifest and Workbox caching
+  - **PWA Folder Structure (`src/pwa/`):**
+    - `index.js` - Module barrel exports
+    - `PWAApp.jsx` - Main PWA app with view routing
+    - `contexts/WorkerAuthContext.jsx` - Worker PIN auth context
+    - `components/auth/WorkerLogin.jsx` - Mobile PIN login screen
+    - `components/layout/PWAShell.jsx` - App shell with header/footer
+    - `components/layout/BottomNav.jsx` - Bottom navigation (5 items)
+    - `components/common/OfflineBanner.jsx` - Offline status indicator
+    - `pages/PWAHome.jsx` - Home dashboard page
+  - **Service Layers:**
+    - `src/services/workerAuthService.js` - Worker PIN auth functions
+    - `src/services/purchaseOrdersService.js` - Purchase order CRUD
+    - `src/services/inventoryReceiptsService.js` - Receipt tracking
+
+- **PWA Routing Integrated**
+  - Updated `src/App.jsx` to detect `/pwa/*` routes and render PWAApp
+  - Separate from desktop app - mobile-optimized experience
+
+- **PWA Features:**
+  - Mobile-first UI with CSS variables
+  - PIN-based authentication (separate from Supabase Auth)
+  - 8-hour session tokens with auto-refresh
+  - Offline indicator with sync status
+  - Role-based navigation (QC tab for leads only)
+  - Workbox caching for Supabase API/Storage
+
+- **Files Created:**
+  - `src/pwa/` folder (8 files)
+  - `src/services/workerAuthService.js`
+  - `src/services/purchaseOrdersService.js`
+  - `src/services/inventoryReceiptsService.js`
+  - `supabase/functions/worker-auth/index.ts`
+  - `supabase/migrations/20260116_pwa_schema_remediation_fix.sql`
+
+- **Files Modified:**
+  - `package.json` - Added PWA dependencies
+  - `vite.config.js` - Added PWA plugin configuration
+  - `src/App.jsx` - Added PWA route detection
+
+---
 
 ### January 16, 2026 (Demo Data System Fixes)
 
