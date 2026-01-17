@@ -503,19 +503,20 @@ BEGIN
     v_serial_prefix := v_project.project_number || '-M';
 
     FOR i IN 1..v_module_count LOOP
-      INSERT INTO modules (factory_id, project_id, serial_number, name, status, current_station_id, width_ft, length_ft, is_rush, created_at)
+      INSERT INTO modules (factory_id, project_id, serial_number, name, sequence_number, status, current_station_id, module_width, module_length, is_rush, created_at)
       VALUES (
         v_factory_id, v_project.id, v_serial_prefix || LPAD(i::text, 3, '0'),
         'Module ' || i || ' - ' || v_project.name,
+        i,  -- sequence_number
         CASE
-          WHEN v_project.status = 'Completed' THEN 'Complete'
+          WHEN v_project.status = 'Completed' THEN 'Completed'
           WHEN v_project.status IN ('Production', 'In Progress') THEN
-            CASE WHEN i <= v_module_count * 0.3 THEN 'Complete' WHEN i <= v_module_count * 0.6 THEN 'In Progress' ELSE 'Not Started' END
+            CASE WHEN i <= v_module_count * 0.3 THEN 'Completed' WHEN i <= v_module_count * 0.6 THEN 'In Progress' ELSE 'Not Started' END
           ELSE 'Not Started'
         END,
         v_station_ids[LEAST(GREATEST((i % 12) + 1, 1), 12)],
-        CASE WHEN i % 3 = 0 THEN 14 ELSE 12 END,
-        CASE WHEN i % 4 = 0 THEN 72 WHEN i % 2 = 0 THEN 60 ELSE 48 END,
+        CASE WHEN i % 3 = 0 THEN 14 ELSE 12 END,  -- module_width (feet)
+        CASE WHEN i % 4 = 0 THEN 72 WHEN i % 2 = 0 THEN 60 ELSE 48 END,  -- module_length (feet)
         i % 7 = 0,
         NOW() - (RANDOM() * INTERVAL '90 days')
       );
