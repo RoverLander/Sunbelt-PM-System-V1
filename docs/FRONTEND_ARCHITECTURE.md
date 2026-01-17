@@ -89,7 +89,8 @@ src/
     │   └── common/
     │       └── OfflineBanner.jsx  # Offline status indicator
     └── pages/
-        └── PWAHome.jsx            # Home dashboard page
+        ├── PWAHome.jsx            # Home dashboard page
+        └── ModuleLookup.jsx       # Module search with autocomplete
 ```
 
 ---
@@ -1176,6 +1177,26 @@ Home dashboard page with quick actions and activity stats.
 
 ---
 
+#### ModuleLookup.jsx
+
+Module search page with autocomplete functionality.
+
+**Features:**
+- Debounced search (300ms) with minimum 2 characters
+- Search by serial number or project name
+- Module detail card with full information
+- Recent searches persisted to localStorage (last 5)
+- Status badge with color coding
+- Station location display
+
+**Components:**
+- `ModuleLookup` - Main search page
+- `ModuleDetailCard` - Full module information display
+
+**Uses:** `searchModules()` and `getModuleById()` from modulesService.js
+
+---
+
 ### PWA Services
 
 The PWA uses dedicated services for worker-specific functionality:
@@ -1183,6 +1204,7 @@ The PWA uses dedicated services for worker-specific functionality:
 | Service | File | Purpose |
 |---------|------|---------|
 | workerAuthService | `src/services/workerAuthService.js` | PIN login, session management |
+| modulesService | `src/services/modulesService.js` | Module search, lookup, status |
 | purchaseOrdersService | `src/services/purchaseOrdersService.js` | PO lookup for inventory receiving |
 | inventoryReceiptsService | `src/services/inventoryReceiptsService.js` | Receipt tracking with photos |
 

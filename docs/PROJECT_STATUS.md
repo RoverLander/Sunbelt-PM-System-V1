@@ -163,6 +163,34 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ## Recent Updates (January 2026)
 
+### January 17, 2026 (PWA Mobile Floor App - Phase 2 Module Lookup)
+
+- **Phase 2: Module Lookup - Complete**
+  - **Service Layer:**
+    - Added `searchModules()` function to `modulesService.js`
+    - Debounced search with 300ms delay
+    - Search by serial number or project name
+    - Returns up to 10 results with module details
+  - **PWA Components:**
+    - `src/pwa/pages/ModuleLookup.jsx` - Full search page
+    - `ModuleDetailCard` - Module information display
+  - **Features:**
+    - Autocomplete suggestions after 2 characters
+    - Recent searches persisted to localStorage
+    - Module detail with station, dimensions, status
+    - Rush order indicator
+    - Mobile-optimized touch interface
+
+- **Files Created:**
+  - `src/pwa/pages/ModuleLookup.jsx`
+
+- **Files Modified:**
+  - `src/services/modulesService.js` - Added searchModules()
+  - `src/pwa/PWAApp.jsx` - Integrated ModuleLookup view
+  - `src/pwa/index.js` - Added export
+
+---
+
 ### January 17, 2026 (PWA Mobile Floor App - Phase 1 Foundation)
 
 - **PWA Infrastructure Setup - Complete**
