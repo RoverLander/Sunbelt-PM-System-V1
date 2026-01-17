@@ -19,8 +19,9 @@ import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import Login from './components/auth/Login';
 import Sidebar from './components/layout/Sidebar';
 
-// PWA App (served at /pwa/*)
+// PWA Apps (served at /pwa/*)
 import { PWAApp } from './pwa';
+import ManagerApp from './pwa/manager/ManagerApp';
 
 // Dashboards
 import PMDashboard from './components/dashboards/PMDashboard';
@@ -631,10 +632,18 @@ function AppContent() {
 // APP WRAPPER
 // ============================================================================
 function App() {
-  // Check if we're on a PWA route
-  const isPWARoute = window.location.pathname.startsWith('/pwa');
+  const pathname = window.location.pathname;
 
-  // Render PWA app for /pwa/* routes (separate auth system)
+  // Check if we're on a PWA route
+  const isPWARoute = pathname.startsWith('/pwa');
+  const isManagerPWARoute = pathname.startsWith('/pwa/manager');
+
+  // Render Manager PWA for /pwa/manager/* routes (Supabase Auth)
+  if (isManagerPWARoute) {
+    return <ManagerApp />;
+  }
+
+  // Render Floor Worker PWA for /pwa/* routes (PIN Auth)
   if (isPWARoute) {
     return <PWAApp />;
   }

@@ -18,6 +18,7 @@ Before running demo data, ensure these migrations have been applied in Supabase:
 | `20260116_pwa_schema_remediation.sql` | worker_sessions, purchase_orders, inventory_receipts | PWA Mobile Floor App |
 | `20260116_pwa_schema_remediation_fix.sql` | Fixes partial migration issues | PWA (run if first failed) |
 | `20260117_add_is_pm_job_column.sql` | projects.is_pm_job column | PM vs PC job filtering |
+| `20260117_add_queue_position_and_soft_set.sql` | modules.queue_position, modules.station_entered_at, module_queue_history | Queue tracking & analytics |
 
 **Verification Query:**
 ```sql

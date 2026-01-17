@@ -1,18 +1,17 @@
 // ============================================================================
-// PWAShell.jsx - Main Layout Shell for PWA
+// ManagerShell.jsx - Main Layout Shell for Manager PWA
 // ============================================================================
-// Provides the main layout structure for the PWA including header, content
-// area, and bottom navigation. Handles offline indicator and session status.
+// Provides the main layout structure for the manager PWA including header,
+// content area, and bottom navigation.
 //
 // Created: January 17, 2026
 // ============================================================================
 
 import React from 'react';
-import { useWorkerAuth } from '../../contexts/WorkerAuthContext';
-import BottomNav from './BottomNav';
-import OfflineBanner from '../common/OfflineBanner';
-import SyncIndicator from '../common/SyncIndicator';
-import { Wifi, WifiOff, Clock, LogOut, User } from 'lucide-react';
+import { useManagerAuth } from '../../contexts/ManagerAuthContext';
+import ManagerNav from './ManagerNav';
+import OfflineBanner from '../../components/common/OfflineBanner';
+import { LogOut, User, Building2, RefreshCw } from 'lucide-react';
 
 // ============================================================================
 // SUNBELT DARK MODE COLORS
@@ -67,12 +66,29 @@ const styles = {
     color: SUNBELT.textPrimary,
     margin: 0
   },
+  headerSubtitle: {
+    fontSize: '0.75rem',
+    color: SUNBELT.textSecondary,
+    marginTop: '2px'
+  },
   headerRight: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px'
   },
-  userInfo: {
+  refreshButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '10px',
+    background: 'rgba(255,107,53,0.15)',
+    border: 'none',
+    borderRadius: '10px',
+    color: SUNBELT.orange,
+    cursor: 'pointer',
+    transition: 'background 0.15s ease'
+  },
+  userButton: {
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
@@ -80,22 +96,10 @@ const styles = {
     background: 'rgba(255,255,255,0.1)',
     border: 'none',
     borderRadius: '10px',
+    color: SUNBELT.textPrimary,
+    cursor: 'pointer',
     fontSize: '0.875rem',
-    fontWeight: '500',
-    color: SUNBELT.textPrimary
-  },
-  sessionTime: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    fontSize: '0.75rem',
-    color: SUNBELT.textMuted
-  },
-  sessionTimeWarning: {
-    color: '#f59e0b'
-  },
-  sessionTimeCritical: {
-    color: '#ef4444'
+    fontWeight: '500'
   },
   logoutButton: {
     display: 'flex',
@@ -133,47 +137,33 @@ const styles = {
 // COMPONENT
 // ============================================================================
 
-export default function PWAShell({
+export default function ManagerShell({
   children,
-  title = 'Floor App',
+  title = 'Manager',
+  subtitle,
   currentView,
   onViewChange,
+  onRefresh,
+  isRefreshing = false,
   showHeader = true,
-  showBottomNav = true
+  showBottomNav = true,
+  badges = {}
 }) {
-  const { worker, logout, sessionTimeRemaining } = useWorkerAuth();
+  const { user, logout, userName, userRole } = useManagerAuth();
 
   // ==========================================================================
-  // HELPERS
+  // HANDLERS
   // ==========================================================================
-
-  const getSessionTimeStyle = () => {
-    if (!sessionTimeRemaining?.valid) return {};
-
-    const { minutesRemaining } = sessionTimeRemaining;
-
-    if (minutesRemaining <= 15) {
-      return styles.sessionTimeCritical;
-    } else if (minutesRemaining <= 60) {
-      return styles.sessionTimeWarning;
-    }
-    return {};
-  };
-
-  const formatSessionTime = () => {
-    if (!sessionTimeRemaining?.valid) return null;
-
-    const { hoursRemaining, minutesRemaining } = sessionTimeRemaining;
-
-    if (hoursRemaining >= 1) {
-      return `${hoursRemaining}h ${minutesRemaining % 60}m`;
-    }
-    return `${minutesRemaining}m`;
-  };
 
   const handleLogout = async () => {
     if (confirm('Are you sure you want to sign out?')) {
       await logout();
+    }
+  };
+
+  const handleRefresh = () => {
+    if (onRefresh && !isRefreshing) {
+      onRefresh();
     }
   };
 
@@ -190,26 +180,40 @@ export default function PWAShell({
       {showHeader && (
         <header style={styles.header}>
           <div style={styles.headerLeft}>
-            <h1 style={styles.headerTitle}>{title}</h1>
+            <div>
+              <h1 style={styles.headerTitle}>{title}</h1>
+              {subtitle && (
+                <div style={styles.headerSubtitle}>{subtitle}</div>
+              )}
+            </div>
           </div>
 
           <div style={styles.headerRight}>
-            {/* Sync Indicator */}
-            <SyncIndicator />
-
-            {/* Session Time */}
-            {sessionTimeRemaining?.valid && (
-              <div style={{ ...styles.sessionTime, ...getSessionTimeStyle() }}>
-                <Clock size={14} />
-                {formatSessionTime()}
-              </div>
+            {/* Refresh Button */}
+            {onRefresh && (
+              <button
+                onClick={handleRefresh}
+                style={{
+                  ...styles.refreshButton,
+                  opacity: isRefreshing ? 0.5 : 1
+                }}
+                disabled={isRefreshing}
+                title="Refresh data"
+              >
+                <RefreshCw
+                  size={18}
+                  style={{
+                    animation: isRefreshing ? 'spin 1s linear infinite' : 'none'
+                  }}
+                />
+              </button>
             )}
 
             {/* User Info */}
-            {worker && (
-              <div style={styles.userInfo}>
+            {user && (
+              <div style={styles.userButton}>
                 <User size={16} />
-                <span>{worker.name?.split(' ')[0] || worker.employee_id}</span>
+                <span>{userName?.split(' ')[0] || 'User'}</span>
               </div>
             )}
 
@@ -219,7 +223,7 @@ export default function PWAShell({
               style={styles.logoutButton}
               title="Sign out"
             >
-              <LogOut size={20} />
+              <LogOut size={18} />
             </button>
           </div>
         </header>
@@ -233,12 +237,21 @@ export default function PWAShell({
       {/* Bottom Navigation */}
       {showBottomNav && (
         <div style={styles.bottomNav}>
-          <BottomNav
+          <ManagerNav
             currentView={currentView}
             onViewChange={onViewChange}
+            badges={badges}
           />
         </div>
       )}
+
+      {/* Keyframe animation for refresh spinner */}
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

@@ -108,9 +108,21 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    setUser(null);
+    console.log('[Auth] Signing out...');
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('[Auth] Sign out error:', error);
+        throw error;
+      }
+      console.log('[Auth] Sign out successful, clearing user state');
+      setUser(null);
+    } catch (err) {
+      console.error('[Auth] Sign out failed:', err);
+      // Still clear user state even if API call fails
+      setUser(null);
+      throw err;
+    }
   };
 
   const value = {

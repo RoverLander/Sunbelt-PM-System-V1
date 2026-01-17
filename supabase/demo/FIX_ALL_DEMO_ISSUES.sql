@@ -468,6 +468,14 @@ SELECT 'Section 4: Crew members created (' || COUNT(*) || ' workers)' AS status 
 -- ############################################################################
 -- SECTION 5: MODULES FOR NWBS PROJECTS
 -- ############################################################################
+-- Production Flow Logic:
+-- - Sequential flow: Module must complete Station N before entering N+1
+-- - Each station works on 1 module at a time (queue_position = 0)
+-- - Other modules wait in queue (queue_position > 0)
+-- - Factory throughput: ~1-2 modules complete start-to-finish per day
+-- - Bottleneck stations: Electrical, Plumbing, HVAC rough-ins have longer queues
+-- - Frame shop: Works in batches, not always active
+-- - Inspections: Can handle multiple modules (inspector visits daily)
 
 DO $$
 DECLARE
@@ -475,20 +483,37 @@ DECLARE
   v_project RECORD;
   v_module_count INTEGER;
   v_station_ids UUID[];
+  v_station_codes TEXT[];
   i INTEGER;
   v_serial_prefix VARCHAR(20);
+  v_station_idx INTEGER;
+  v_queue_pos INTEGER;
+  v_status TEXT;
+  v_station_queues INTEGER[] := ARRAY[0,0,0,0,0,0,0,0,0,0,0,0]; -- Track queue per station
+  v_total_in_production INTEGER := 0;
+  v_max_wip INTEGER := 18; -- Max work-in-progress modules on factory floor
 BEGIN
   SELECT id INTO v_factory_id FROM factories WHERE code = 'NWBS' LIMIT 1;
   IF v_factory_id IS NULL THEN RETURN; END IF;
 
-  SELECT ARRAY_AGG(id ORDER BY order_num) INTO v_station_ids
-  FROM station_templates WHERE factory_id IS NULL OR factory_id = v_factory_id LIMIT 12;
+  -- Get stations in order (index 1-12)
+  -- Typical order: Frame(1), Rough Carp(2), Ext Siding(3), Int Rough(4),
+  --   Elec Rough(5), Plumb Rough(6), HVAC(7), In-Wall Insp(8),
+  --   Int Finish(9), Final Insp(10), Staging(11), Pickup(12)
+  SELECT ARRAY_AGG(id ORDER BY order_num), ARRAY_AGG(code ORDER BY order_num)
+  INTO v_station_ids, v_station_codes
+  FROM station_templates WHERE factory_id IS NULL OR factory_id = v_factory_id;
 
+  -- Clear existing modules for this factory
   DELETE FROM modules WHERE factory_id = v_factory_id;
+
+  -- Reset queue counters
+  v_station_queues := ARRAY[0,0,0,0,0,0,0,0,0,0,0,0];
 
   FOR v_project IN
     SELECT id, project_number, name, status, module_count, square_footage
     FROM projects WHERE factory = 'NWBS' AND project_number LIKE 'NWBS-26-%'
+    ORDER BY start_date NULLS LAST, created_at
   LOOP
     v_module_count := COALESCE(v_project.module_count,
       CASE
@@ -503,18 +528,66 @@ BEGIN
     v_serial_prefix := v_project.project_number || '-M';
 
     FOR i IN 1..v_module_count LOOP
-      INSERT INTO modules (factory_id, project_id, serial_number, name, sequence_number, status, current_station_id, module_width, module_length, is_rush, created_at)
+      -- Determine module status and station based on project status and realistic flow
+      IF v_project.status = 'Completed' THEN
+        v_status := 'Completed';
+        v_station_idx := NULL;
+        v_queue_pos := NULL;
+      ELSIF v_project.status IN ('Production', 'In Progress') THEN
+        -- Distribute modules realistically across production line
+        -- Earlier modules are further along, later ones at beginning
+        IF i <= v_module_count * 0.15 THEN
+          -- 15% completed or staged
+          v_status := CASE WHEN RANDOM() > 0.5 THEN 'Completed' ELSE 'Staged' END;
+          v_station_idx := CASE WHEN v_status = 'Staged' THEN 11 ELSE NULL END;
+          v_queue_pos := NULL;
+        ELSIF i <= v_module_count * 0.4 AND v_total_in_production < v_max_wip THEN
+          -- 25% in later stations (Int Finish, Final Insp)
+          v_station_idx := 9 + (i % 2); -- stations 9-10
+          v_station_queues[v_station_idx] := v_station_queues[v_station_idx] + 1;
+          v_queue_pos := v_station_queues[v_station_idx] - 1;
+          v_status := CASE WHEN v_queue_pos = 0 THEN 'In Progress' ELSE 'In Queue' END;
+          v_total_in_production := v_total_in_production + 1;
+        ELSIF i <= v_module_count * 0.7 AND v_total_in_production < v_max_wip THEN
+          -- 30% at bottleneck stations (Elec, Plumb, HVAC, In-Wall)
+          v_station_idx := 5 + ((i - 1) % 4); -- stations 5-8 (bottlenecks)
+          v_station_queues[v_station_idx] := v_station_queues[v_station_idx] + 1;
+          v_queue_pos := v_station_queues[v_station_idx] - 1;
+          v_status := CASE WHEN v_queue_pos = 0 THEN 'In Progress' ELSE 'In Queue' END;
+          v_total_in_production := v_total_in_production + 1;
+        ELSIF i <= v_module_count * 0.85 AND v_total_in_production < v_max_wip THEN
+          -- 15% at early stations (Rough Carp, Ext Siding, Int Rough)
+          v_station_idx := 2 + ((i - 1) % 3); -- stations 2-4
+          v_station_queues[v_station_idx] := v_station_queues[v_station_idx] + 1;
+          v_queue_pos := v_station_queues[v_station_idx] - 1;
+          v_status := CASE WHEN v_queue_pos = 0 THEN 'In Progress' ELSE 'In Queue' END;
+          v_total_in_production := v_total_in_production + 1;
+        ELSE
+          -- Rest not started yet
+          v_status := 'Not Started';
+          v_station_idx := NULL;
+          v_queue_pos := NULL;
+        END IF;
+      ELSE
+        -- Planning, Scheduled, etc. - not started
+        v_status := 'Not Started';
+        v_station_idx := NULL;
+        v_queue_pos := NULL;
+      END IF;
+
+      INSERT INTO modules (
+        factory_id, project_id, serial_number, name, sequence_number,
+        status, current_station_id, queue_position, station_entered_at,
+        module_width, module_length, is_rush, created_at
+      )
       VALUES (
         v_factory_id, v_project.id, v_serial_prefix || LPAD(i::text, 3, '0'),
         'Module ' || i || ' - ' || v_project.name,
         i,  -- sequence_number
-        CASE
-          WHEN v_project.status = 'Completed' THEN 'Completed'
-          WHEN v_project.status IN ('Production', 'In Progress') THEN
-            CASE WHEN i <= v_module_count * 0.3 THEN 'Completed' WHEN i <= v_module_count * 0.6 THEN 'In Progress' ELSE 'Not Started' END
-          ELSE 'Not Started'
-        END,
-        v_station_ids[LEAST(GREATEST((i % 12) + 1, 1), 12)],
+        v_status,
+        CASE WHEN v_station_idx IS NOT NULL THEN v_station_ids[v_station_idx] ELSE NULL END,
+        v_queue_pos,
+        CASE WHEN v_station_idx IS NOT NULL THEN NOW() - (RANDOM() * INTERVAL '5 days') ELSE NULL END,
         CASE WHEN i % 3 = 0 THEN 14 ELSE 12 END,  -- module_width (feet)
         CASE WHEN i % 4 = 0 THEN 72 WHEN i % 2 = 0 THEN 60 ELSE 48 END,  -- module_length (feet)
         i % 7 = 0,

@@ -1,30 +1,33 @@
 // ============================================================================
-// BottomNav.jsx - Bottom Navigation for PWA
+// ManagerNav.jsx - Bottom Navigation for Manager PWA
 // ============================================================================
-// Mobile-optimized bottom navigation bar for quick access to main PWA sections.
+// Mobile-optimized bottom navigation for management app with role-aware items.
 //
 // Created: January 17, 2026
 // ============================================================================
 
 import React from 'react';
-import { useWorkerAuth } from '../../contexts/WorkerAuthContext';
+import { useManagerAuth } from '../../contexts/ManagerAuthContext';
 import {
-  Home,
-  Search,
+  LayoutDashboard,
+  FolderKanban,
+  CheckSquare,
+  MessageSquare,
   ClipboardCheck,
-  Package,
   MoreHorizontal
 } from 'lucide-react';
 
 // ============================================================================
 // NAVIGATION ITEMS
 // ============================================================================
+// Note: Mobile nav is limited to 5 items for best UX. QC is accessible via
+// dashboard quick actions or from project detail views.
 
 const NAV_ITEMS = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'modules', label: 'Modules', icon: Search },
-  { id: 'qc', label: 'QC', icon: ClipboardCheck, requiresLead: true },
-  { id: 'inventory', label: 'Inventory', icon: Package },
+  { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
+  { id: 'projects', label: 'Projects', icon: FolderKanban },
+  { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+  { id: 'rfis', label: 'RFIs', icon: MessageSquare },
   { id: 'more', label: 'More', icon: MoreHorizontal }
 ];
 
@@ -106,18 +109,10 @@ const styles = {
 // COMPONENT
 // ============================================================================
 
-export default function BottomNav({ currentView, onViewChange, badges = {} }) {
-  const { isLead } = useWorkerAuth();
-
-  // Filter nav items based on role
-  const visibleItems = NAV_ITEMS.filter(item => {
-    if (item.requiresLead && !isLead) return false;
-    return true;
-  });
-
+export default function ManagerNav({ currentView, onViewChange, badges = {} }) {
   return (
     <nav style={styles.nav}>
-      {visibleItems.map(item => {
+      {NAV_ITEMS.map(item => {
         const Icon = item.icon;
         const isActive = currentView === item.id;
         const badgeCount = badges[item.id];

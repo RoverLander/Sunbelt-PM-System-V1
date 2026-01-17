@@ -566,10 +566,12 @@ function Sidebar({
   }, [toggleCollapsed]);
 
   const handleLogout = async () => {
+    console.log('[Sidebar] Logout button clicked');
     try {
       await signOut();
+      console.log('[Sidebar] Sign out completed');
     } catch (error) {
-      console.error('Error logging out:', error);
+      console.error('[Sidebar] Error logging out:', error);
     }
   };
 

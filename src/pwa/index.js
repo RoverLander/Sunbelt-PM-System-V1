@@ -46,3 +46,7 @@ export { default as ModuleLookup } from './pages/ModuleLookup';
 export { default as QCInspection } from './pages/QCInspection';
 export { default as StationMove } from './pages/StationMove';
 export { default as InventoryReceiving } from './pages/InventoryReceiving';
+
+// Manager PWA
+export { default as ManagerApp } from './manager/ManagerApp';
+export { ManagerAuthProvider, useManagerAuth } from './contexts/ManagerAuthContext';

@@ -1,8 +1,8 @@
 # Project Status
 
 **Last Updated:** January 17, 2026
-**Version:** 1.5.0
-**Status:** Production Ready (Beta) + PWA Mobile Floor App Phase 7 Complete
+**Version:** 1.6.0
+**Status:** Production Ready (Beta) + PWA Floor App Complete + Manager PWA Complete
 
 ---
 
@@ -162,6 +162,46 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 ---
 
 ## Recent Updates (January 2026)
+
+### January 17, 2026 (Manager Mobile PWA - Complete)
+
+- **Manager PWA Implementation - Complete (All 6 Phases)**
+  - A companion Manager PWA for management roles (PM, PC, VP, Director)
+  - Extends existing floor worker PWA at `/pwa/manager` route
+  - Uses Supabase Auth (email/password) instead of PIN auth
+  - Role-based access: PM sees assigned projects, VP/Director sees all
+
+- **Features Implemented:**
+  - **Phase 1: Foundation** - Auth, Shell, Navigation (5 tabs: Home, Projects, Tasks, RFIs, More)
+  - **Phase 2: Project Detail** - Tabbed view with Overview, Tasks, RFIs, Modules
+  - **Phase 3: Create Task** - Bottom sheet for task creation with project/priority selection
+  - **Phase 4: Create RFI** - Bottom sheet for RFI creation with recipient fields
+  - **Phase 5: QC Summary** - Quality control overview (pass rates, recent inspections)
+  - **Phase 6: Offline Support** - Read-only localStorage caching with 30-minute expiry
+
+- **Files Created:**
+  - `src/pwa/contexts/ManagerAuthContext.jsx` - Supabase auth wrapper
+  - `src/pwa/manager/ManagerApp.jsx` - Main app with view routing
+  - `src/pwa/manager/components/ManagerShell.jsx` - App shell layout
+  - `src/pwa/manager/components/ManagerNav.jsx` - Bottom navigation
+  - `src/pwa/manager/components/CreateTaskSheet.jsx` - Task creation sheet
+  - `src/pwa/manager/components/CreateRFISheet.jsx` - RFI creation sheet
+  - `src/pwa/manager/components/ManagerSyncIndicator.jsx` - Sync status
+  - `src/pwa/manager/pages/ManagerLogin.jsx` - Mobile login with revolving factory logos
+  - `src/pwa/manager/pages/ManagerDashboard.jsx` - Metrics dashboard
+  - `src/pwa/manager/pages/ProjectsList.jsx` - Filterable project list
+  - `src/pwa/manager/pages/ProjectDetail.jsx` - Project detail with tabs
+  - `src/pwa/manager/pages/TasksView.jsx` - Tasks list with filters
+  - `src/pwa/manager/pages/RFIsView.jsx` - RFIs list with filters
+  - `src/pwa/manager/pages/QCSummary.jsx` - QC overview
+  - `src/pwa/manager/pages/MorePage.jsx` - Settings page
+  - `src/pwa/manager/hooks/useManagerOffline.js` - Offline caching hook
+
+- **Files Modified:**
+  - `src/App.jsx` - Added `/pwa/manager` route detection
+  - `src/pwa/index.js` - Added manager exports
+
+---
 
 ### January 17, 2026 (PWA Mobile Floor App - Phases 6 & 7 Offline Sync & Real-Time)
 

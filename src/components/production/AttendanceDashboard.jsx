@@ -9,8 +9,9 @@
  * - Real-time headcount by area/station
  * - Overtime tracking
  * - Quick clock in/out actions
+ * - Non-work day detection (weekends/holidays show "Not Scheduled" instead of "Absent")
  *
- * Updated: January 16, 2026 - Dark mode support
+ * Updated: January 17, 2026 - Non-work day handling (weekend/holiday detection)
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
@@ -23,8 +24,12 @@ const ATTENDANCE_STATUS = {
   LATE: { label: 'Late', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', icon: '⚠' },
   ON_BREAK: { label: 'On Break', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)', icon: '☕' },
   ABSENT: { label: 'Absent', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', icon: '✗' },
-  PTO: { label: 'PTO', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)', icon: '🏖' }
+  PTO: { label: 'PTO', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)', icon: '🏖' },
+  NOT_SCHEDULED: { label: 'Not Scheduled', color: 'var(--text-tertiary)', bg: 'var(--bg-tertiary)', icon: '📅' }
 };
+
+// Default work days (Monday-Friday) - 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+const DEFAULT_WORK_DAYS = [1, 2, 3, 4, 5];
 
 // Shift timing (for late detection)
 const SHIFT_START_TIMES = {
@@ -36,15 +41,37 @@ const SHIFT_START_TIMES = {
 const LATE_THRESHOLD_MINUTES = 5;
 
 /**
+ * Check if today is a work day
+ */
+function checkIsWorkDay(workDays = DEFAULT_WORK_DAYS, holidays = []) {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+  // Check if it's a weekend (not in work days)
+  if (!workDays.includes(dayOfWeek)) {
+    return false;
+  }
+
+  // Check if it's a holiday
+  const todayStr = format(today, 'yyyy-MM-dd');
+  if (holidays.some(h => h === todayStr || h.date === todayStr)) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Get worker attendance status
  */
-function getAttendanceStatus(worker, shift, absence) {
+function getAttendanceStatus(worker, shift, absence, isWorkDay = true) {
   if (absence) {
     return ATTENDANCE_STATUS.PTO;
   }
 
   if (!shift) {
-    return ATTENDANCE_STATUS.ABSENT;
+    // If it's not a work day, show "Not Scheduled" instead of "Absent"
+    return isWorkDay ? ATTENDANCE_STATUS.ABSENT : ATTENDANCE_STATUS.NOT_SCHEDULED;
   }
 
   if (shift.on_break) {
@@ -63,7 +90,8 @@ function getAttendanceStatus(worker, shift, absence) {
     return ATTENDANCE_STATUS.CLOCKED_IN;
   }
 
-  return ATTENDANCE_STATUS.ABSENT;
+  // No clock in yet
+  return isWorkDay ? ATTENDANCE_STATUS.ABSENT : ATTENDANCE_STATUS.NOT_SCHEDULED;
 }
 
 /**
@@ -160,9 +188,10 @@ function WorkerAttendanceRow({
   onClockOut,
   onStartBreak,
   onEndBreak,
-  compact
+  compact,
+  isWorkDay = true
 }) {
-  const status = getAttendanceStatus(worker, shift, absence);
+  const status = getAttendanceStatus(worker, shift, absence, isWorkDay);
   const minutesLate = shift?.clock_in
     ? calculateMinutesLate(shift.clock_in, shift.shift_type)
     : 0;
@@ -350,7 +379,7 @@ function WorkerAttendanceRow({
 /**
  * Area/Station breakdown component
  */
-function AreaBreakdown({ workers, shifts, absences }) {
+function AreaBreakdown({ workers, shifts, absences, isWorkDay = true }) {
   // Group by station/area
   const areaStats = useMemo(() => {
     const areas = {};
@@ -358,7 +387,7 @@ function AreaBreakdown({ workers, shifts, absences }) {
     workers.forEach(worker => {
       const area = worker.station_name || worker.area || 'Unassigned';
       if (!areas[area]) {
-        areas[area] = { present: 0, absent: 0, total: 0 };
+        areas[area] = { present: 0, absent: 0, notScheduled: 0, total: 0 };
       }
 
       const shift = shifts.find(s => s.worker_id === worker.id);
@@ -368,14 +397,19 @@ function AreaBreakdown({ workers, shifts, absences }) {
       if (shift?.clock_in && !shift.clock_out) {
         areas[area].present++;
       } else if (!absence) {
-        areas[area].absent++;
+        // If not a work day, count as not scheduled instead of absent
+        if (isWorkDay) {
+          areas[area].absent++;
+        } else {
+          areas[area].notScheduled++;
+        }
       }
     });
 
     return Object.entries(areas)
       .map(([name, stats]) => ({ name, ...stats }))
       .sort((a, b) => b.total - a.total);
-  }, [workers, shifts, absences]);
+  }, [workers, shifts, absences, isWorkDay]);
 
   return (
     <div style={{
@@ -465,6 +499,8 @@ export default function AttendanceDashboard({
   workers = [],
   shifts = [],
   absences = [],
+  workDays = DEFAULT_WORK_DAYS, // Array of work days [1,2,3,4,5] = Mon-Fri
+  holidays = [], // Array of holiday dates (strings 'yyyy-MM-dd' or objects with .date)
   onClockIn,
   onClockOut,
   onStartBreak,
@@ -472,16 +508,22 @@ export default function AttendanceDashboard({
   onRefresh,
   compact = false,
   showAreaBreakdown = true,
-  filterStatus = 'all' // 'all', 'present', 'absent', 'late'
+  filterStatus = 'all' // 'all', 'present', 'absent', 'late', 'not_scheduled'
 }) {
   const [statusFilter, setStatusFilter] = useState(filterStatus);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('name'); // 'name', 'status', 'time'
 
+  // Check if today is a work day
+  const isWorkDay = useMemo(() => {
+    return checkIsWorkDay(workDays, holidays);
+  }, [workDays, holidays]);
+
   // Calculate attendance stats
   const stats = useMemo(() => {
     let present = 0;
     let absent = 0;
+    let notScheduled = 0;
     let late = 0;
     let onBreak = 0;
     let onPTO = 0;
@@ -495,7 +537,12 @@ export default function AttendanceDashboard({
       if (absence) {
         onPTO++;
       } else if (!shift || !shift.clock_in) {
-        absent++;
+        // If not a work day, count as "not scheduled" instead of "absent"
+        if (isWorkDay) {
+          absent++;
+        } else {
+          notScheduled++;
+        }
       } else if (shift.on_break) {
         onBreak++;
         present++;
@@ -524,15 +571,17 @@ export default function AttendanceDashboard({
     return {
       present,
       absent,
+      notScheduled,
       late,
       onBreak,
       onPTO,
       totalHours,
       overtimeCount,
       attendanceRate,
+      isWorkDay,
       total: workers.length
     };
-  }, [workers, shifts, absences]);
+  }, [workers, shifts, absences, isWorkDay]);
 
   // Filter and sort workers
   const filteredWorkers = useMemo(() => {
@@ -550,7 +599,7 @@ export default function AttendanceDashboard({
       if (statusFilter !== 'all') {
         const shift = shifts.find(s => s.worker_id === worker.id);
         const absence = absences.find(a => a.worker_id === worker.id);
-        const status = getAttendanceStatus(worker, shift, absence);
+        const status = getAttendanceStatus(worker, shift, absence, isWorkDay);
 
         switch (statusFilter) {
           case 'present':
@@ -562,6 +611,8 @@ export default function AttendanceDashboard({
             return status === ATTENDANCE_STATUS.LATE;
           case 'pto':
             return status === ATTENDANCE_STATUS.PTO;
+          case 'not_scheduled':
+            return status === ATTENDANCE_STATUS.NOT_SCHEDULED;
           default:
             return true;
         }
@@ -579,8 +630,8 @@ export default function AttendanceDashboard({
       if (sortBy === 'status') {
         const shiftA = shifts.find(s => s.worker_id === a.id);
         const shiftB = shifts.find(s => s.worker_id === b.id);
-        const statusA = getAttendanceStatus(a, shiftA, null);
-        const statusB = getAttendanceStatus(b, shiftB, null);
+        const statusA = getAttendanceStatus(a, shiftA, null, isWorkDay);
+        const statusB = getAttendanceStatus(b, shiftB, null, isWorkDay);
         return statusA.label.localeCompare(statusB.label);
       }
 
@@ -596,7 +647,7 @@ export default function AttendanceDashboard({
     });
 
     return filtered;
-  }, [workers, shifts, absences, searchTerm, statusFilter, sortBy]);
+  }, [workers, shifts, absences, searchTerm, statusFilter, sortBy, isWorkDay]);
 
   // Container styles - using CSS variables for dark mode
   const containerStyle = {
@@ -629,8 +680,8 @@ export default function AttendanceDashboard({
             alignItems: 'center',
             gap: '8px'
           }}>
-            <span>👥</span>
-            Today's Attendance
+            <span>{isWorkDay ? '👥' : '📅'}</span>
+            {isWorkDay ? "Today's Attendance" : 'Non-Work Day'}
           </h3>
 
           <div style={{
@@ -670,48 +721,86 @@ export default function AttendanceDashboard({
           gap: '12px',
           flexWrap: 'wrap'
         }}>
-          <StatCard
-            label="Present"
-            value={stats.present}
-            subValue={`${stats.attendanceRate}% rate`}
-            color="#10b981"
-            bg="rgba(16, 185, 129, 0.15)"
-            icon="✓"
-            onClick={() => setStatusFilter(statusFilter === 'present' ? 'all' : 'present')}
-          />
-          <StatCard
-            label="Absent"
-            value={stats.absent}
-            color="#ef4444"
-            bg="rgba(239, 68, 68, 0.15)"
-            icon="✗"
-            onClick={() => setStatusFilter(statusFilter === 'absent' ? 'all' : 'absent')}
-          />
-          <StatCard
-            label="Late"
-            value={stats.late}
-            color="#f59e0b"
-            bg="rgba(245, 158, 11, 0.15)"
-            icon="⚠"
-            onClick={() => setStatusFilter(statusFilter === 'late' ? 'all' : 'late')}
-          />
-          <StatCard
-            label="On PTO"
-            value={stats.onPTO}
-            color="#3b82f6"
-            bg="rgba(59, 130, 246, 0.15)"
-            icon="🏖"
-            onClick={() => setStatusFilter(statusFilter === 'pto' ? 'all' : 'pto')}
-          />
-          {!compact && (
-            <StatCard
-              label="Total Hours"
-              value={stats.totalHours.toFixed(1)}
-              subValue={stats.overtimeCount > 0 ? `${stats.overtimeCount} on OT` : null}
-              color="#6366f1"
-              bg="rgba(99, 102, 241, 0.15)"
-              icon="⏱"
-            />
+          {isWorkDay ? (
+            // Work day stats - show Present, Absent, Late, PTO
+            <>
+              <StatCard
+                label="Present"
+                value={stats.present}
+                subValue={`${stats.attendanceRate}% rate`}
+                color="#10b981"
+                bg="rgba(16, 185, 129, 0.15)"
+                icon="✓"
+                onClick={() => setStatusFilter(statusFilter === 'present' ? 'all' : 'present')}
+              />
+              <StatCard
+                label="Absent"
+                value={stats.absent}
+                color="#ef4444"
+                bg="rgba(239, 68, 68, 0.15)"
+                icon="✗"
+                onClick={() => setStatusFilter(statusFilter === 'absent' ? 'all' : 'absent')}
+              />
+              <StatCard
+                label="Late"
+                value={stats.late}
+                color="#f59e0b"
+                bg="rgba(245, 158, 11, 0.15)"
+                icon="⚠"
+                onClick={() => setStatusFilter(statusFilter === 'late' ? 'all' : 'late')}
+              />
+              <StatCard
+                label="On PTO"
+                value={stats.onPTO}
+                color="#3b82f6"
+                bg="rgba(59, 130, 246, 0.15)"
+                icon="🏖"
+                onClick={() => setStatusFilter(statusFilter === 'pto' ? 'all' : 'pto')}
+              />
+              {!compact && (
+                <StatCard
+                  label="Total Hours"
+                  value={stats.totalHours.toFixed(1)}
+                  subValue={stats.overtimeCount > 0 ? `${stats.overtimeCount} on OT` : null}
+                  color="#6366f1"
+                  bg="rgba(99, 102, 241, 0.15)"
+                  icon="⏱"
+                />
+              )}
+            </>
+          ) : (
+            // Non-work day stats - show Not Scheduled, any clocked in workers (overtime), PTO
+            <>
+              <StatCard
+                label="Not Scheduled"
+                value={stats.notScheduled}
+                subValue="Weekend/Holiday"
+                color="var(--text-tertiary)"
+                bg="var(--bg-tertiary)"
+                icon="📅"
+              />
+              {stats.present > 0 && (
+                <StatCard
+                  label="Working (OT)"
+                  value={stats.present}
+                  subValue="Overtime pay"
+                  color="#f59e0b"
+                  bg="rgba(245, 158, 11, 0.15)"
+                  icon="⏰"
+                  onClick={() => setStatusFilter(statusFilter === 'present' ? 'all' : 'present')}
+                />
+              )}
+              {stats.onPTO > 0 && (
+                <StatCard
+                  label="On PTO"
+                  value={stats.onPTO}
+                  color="#3b82f6"
+                  bg="rgba(59, 130, 246, 0.15)"
+                  icon="🏖"
+                  onClick={() => setStatusFilter(statusFilter === 'pto' ? 'all' : 'pto')}
+                />
+              )}
+            </>
           )}
         </div>
       </div>
@@ -761,7 +850,7 @@ export default function AttendanceDashboard({
           </span>
         </div>
 
-        {/* Status filter buttons */}
+        {/* Status filter buttons - different options for work day vs non-work day */}
         <div style={{
           display: 'flex',
           gap: '4px',
@@ -769,7 +858,10 @@ export default function AttendanceDashboard({
           padding: '3px',
           borderRadius: '6px'
         }}>
-          {['all', 'present', 'absent', 'late'].map(status => (
+          {(isWorkDay
+            ? ['all', 'present', 'absent', 'late']
+            : ['all', 'present', 'not_scheduled']
+          ).map(status => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
@@ -786,7 +878,7 @@ export default function AttendanceDashboard({
                 textTransform: 'capitalize'
               }}
             >
-              {status}
+              {status === 'not_scheduled' ? 'Not Scheduled' : status}
             </button>
           ))}
         </div>
@@ -838,6 +930,7 @@ export default function AttendanceDashboard({
               onStartBreak={onStartBreak}
               onEndBreak={onEndBreak}
               compact={compact}
+              isWorkDay={isWorkDay}
             />
           ))
         ) : (
@@ -863,6 +956,7 @@ export default function AttendanceDashboard({
           workers={workers}
           shifts={shifts}
           absences={absences}
+          isWorkDay={isWorkDay}
         />
       )}
     </div>

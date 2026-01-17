@@ -149,3 +149,65 @@ PROJECT STRUCTURE NOTES:
 • PC jobs (is_pm_job = false) - Stock/fleet projects managed by Project Coordinators
 • Client names should ALWAYS be DEALERS, not end users
 • Workflow canvas uses tasks with `workflow_station_key`, NOT project_workflow_status table
+
+---
+
+PRODUCTION LINE FLOW LOGIC (January 17, 2026):
+
+SEQUENTIAL STATION FLOW:
+The 12-station production line is STRICTLY SEQUENTIAL:
+1. Frame Shop (batched, not always active)
+2. Rough Carpentry
+3. Exterior Siding
+4. Interior Rough
+5. Electrical Rough-In (BOTTLENECK)
+6. Plumbing Rough-In (BOTTLENECK)
+7. HVAC Install (BOTTLENECK)
+8. In-Wall Inspection
+9. Interior Finish
+10. Final Inspection
+11. Staging Yard
+12. Pickup/Ship
+
+CRITICAL RULES:
+• A module MUST complete Station N before entering Station N+1
+• Each station can only ACTIVELY WORK on 1 module at a time
+• Multiple modules can be IN QUEUE waiting at a station
+• Factory throughput: ~1-2 modules complete start-to-finish per day
+
+QUEUE POSITION SYSTEM:
+• queue_position = 0: Module is being actively worked on
+• queue_position > 0: Module is waiting (1 = next up, 2 = after that, etc.)
+• queue_position = NULL: Module is not at a station (completed, staged, etc.)
+
+MODULE STATUS VALUES:
+• 'Not Started' - Module exists but hasn't entered production
+• 'In Queue' - At a station, waiting for its turn
+• 'In Progress' - Being actively worked on at a station
+• 'QC Hold' - Failed inspection, needs attention
+• 'Rework' - Being reworked after QC failure
+• 'Completed' - Finished all stations
+• 'Staged' - In staging yard awaiting pickup
+• 'Shipped' - Left the factory
+
+BOTTLENECK STATIONS:
+• Electrical, Plumbing, and HVAC rough-ins take longer
+• These stations typically have longer queues
+• Dashboard highlights stations with 3+ modules queued
+
+SPECIAL CASES:
+• Frame Shop: Works in batches, may show 0 modules (batched, not daily)
+• Inspections: Can handle 2+ modules (inspector visits daily)
+• Soft-Set: Factory-configurable option for final finish (multiple modules together on step-up pad)
+  - Configured via plant_config.line_sim_defaults.soft_set_enabled
+  - When enabled, Final Finish station can work on multiple modules
+
+OFF-LINE WORK:
+• Frame shop operates off the main line (batched production)
+• Final finish can be done on soft-set pad (factory dependent)
+• Inspections can happen in staging yard
+
+DATABASE TABLES FOR QUEUE TRACKING:
+• modules.queue_position - Current position in station queue
+• modules.station_entered_at - When module entered current station
+• module_queue_history - Historical queue data for analytics

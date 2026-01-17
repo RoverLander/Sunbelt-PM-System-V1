@@ -35,7 +35,9 @@ import {
   GripVertical,
   XCircle,
   BarChart3,
-  Gauge
+  Gauge,
+  Hourglass,
+  Timer
 } from 'lucide-react';
 import { startOfWeek, addDays, isToday } from 'date-fns';
 import { supabase } from '../../utils/supabaseClient';
@@ -456,15 +458,24 @@ function StatCard({ icon: Icon, value, label, color, onClick }) {
 // STATION BOX COMPONENT
 // ============================================================================
 
-function StationBox({ station, onClick, onDragOver, onDrop, isDragTarget }) {
+function StationBox({ station, onClick, onDragOver, onDrop, isDragTarget, modules = [] }) {
   const queueColor = getQueueStatusColor(station.module_count);
+
+  // Calculate active (queue_position = 0) vs queued (queue_position > 0)
+  const stationModules = modules.filter(m => m.current_station_id === station.id);
+  const activeCount = stationModules.filter(m => m.queue_position === 0 || m.status === 'In Progress').length;
+  const queuedCount = stationModules.filter(m => m.queue_position > 0 || m.status === 'In Queue').length;
+  const totalCount = station.module_count || (activeCount + queuedCount);
+
+  // Determine if this station is a bottleneck (queue > 2)
+  const isBottleneck = queuedCount > 2;
 
   return (
     <div
       style={{
         ...styles.stationBox,
-        borderColor: isDragTarget ? 'var(--sunbelt-orange)' : (station.color || 'var(--border-color)'),
-        boxShadow: isDragTarget ? '0 0 0 2px var(--sunbelt-orange)' : 'none'
+        borderColor: isDragTarget ? 'var(--sunbelt-orange)' : isBottleneck ? '#ef4444' : (station.color || 'var(--border-color)'),
+        boxShadow: isDragTarget ? '0 0 0 2px var(--sunbelt-orange)' : isBottleneck ? '0 0 0 1px rgba(239, 68, 68, 0.3)' : 'none'
       }}
       onClick={() => onClick(station)}
       onDragOver={onDragOver}
@@ -483,9 +494,30 @@ function StationBox({ station, onClick, onDragOver, onDrop, isDragTarget }) {
         {station.name}
       </div>
       <div style={{ ...styles.stationCount, color: queueColor }}>
-        {station.module_count}
+        {totalCount}
       </div>
-      <div style={styles.stationLabel}>modules</div>
+      {/* Show active/queued breakdown if there are modules */}
+      {totalCount > 0 && (
+        <div style={{
+          display: 'flex',
+          gap: '4px',
+          justifyContent: 'center',
+          fontSize: '0.55rem',
+          marginTop: '2px'
+        }}>
+          <span style={{ color: '#22c55e' }} title="Active (being worked on)">
+            {activeCount} active
+          </span>
+          {queuedCount > 0 && (
+            <span style={{ color: isBottleneck ? '#ef4444' : '#f59e0b' }} title="In queue (waiting)">
+              {queuedCount} queued
+            </span>
+          )}
+        </div>
+      )}
+      {totalCount === 0 && (
+        <div style={styles.stationLabel}>modules</div>
+      )}
     </div>
   );
 }
@@ -496,6 +528,17 @@ function StationBox({ station, onClick, onDragOver, onDrop, isDragTarget }) {
 
 function ModuleCard({ module, onClick, draggable, onDragStart }) {
   const statusColor = getModuleStatusColor(module.status);
+
+  // Format queue position display
+  const getQueueDisplay = () => {
+    if (module.queue_position === 0 || module.status === 'In Progress') {
+      return { text: 'Active', color: '#22c55e' };
+    } else if (module.queue_position > 0 || module.status === 'In Queue') {
+      return { text: `#${module.queue_position || '?'} in queue`, color: '#f59e0b' };
+    }
+    return null;
+  };
+  const queueInfo = getQueueDisplay();
 
   return (
     <div
@@ -531,17 +574,28 @@ function ModuleCard({ module, onClick, draggable, onDragStart }) {
         </div>
       </div>
       <div style={styles.moduleMeta}>
-        <div
-          style={{
-            ...styles.moduleStatus,
-            background: `${statusColor}20`,
-            color: statusColor
-          }}
-        >
-          {module.status}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+          <div
+            style={{
+              ...styles.moduleStatus,
+              background: `${statusColor}20`,
+              color: statusColor
+            }}
+          >
+            {module.status}
+          </div>
+          {queueInfo && (
+            <div style={{
+              fontSize: '0.6rem',
+              color: queueInfo.color,
+              fontWeight: '500'
+            }}>
+              {queueInfo.text}
+            </div>
+          )}
         </div>
         {module.current_station && (
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textAlign: 'right' }}>
             @ {module.current_station.name}
           </div>
         )}
@@ -802,17 +856,53 @@ export default function PlantManagerDashboard({ onNavigateToProject, initialView
     const inQueue = modules.filter(m => m.status === 'In Queue').length;
     const completed = modules.filter(m => m.status === 'Completed').length;
     const staged = modules.filter(m => m.status === 'Staged').length;
+    const notStarted = modules.filter(m => m.status === 'Not Started').length;
+    const qcHold = modules.filter(m => m.status === 'QC Hold').length;
+    const rework = modules.filter(m => m.status === 'Rework').length;
+
+    // Calculate bottleneck station (station with longest queue)
+    const stationQueues = stations.map(s => ({
+      station: s,
+      queueLength: modules.filter(m =>
+        m.current_station_id === s.id && m.queue_position > 0
+      ).length
+    })).filter(sq => sq.queueLength > 0);
+
+    const bottleneck = stationQueues.reduce((max, curr) =>
+      curr.queueLength > (max?.queueLength || 0) ? curr : max,
+      null
+    );
+
+    // Calculate average queue wait time (if station_entered_at is available)
+    const modulesInQueue = modules.filter(m =>
+      m.status === 'In Queue' && m.station_entered_at
+    );
+    let avgQueueMinutes = 0;
+    if (modulesInQueue.length > 0) {
+      const totalWaitMs = modulesInQueue.reduce((sum, m) => {
+        const entered = new Date(m.station_entered_at);
+        return sum + (Date.now() - entered.getTime());
+      }, 0);
+      avgQueueMinutes = Math.round((totalWaitMs / modulesInQueue.length) / 60000);
+    }
 
     return {
       activeModules: inProgress + inQueue,
       inProgress,
+      inQueue,
       completed,
       staged,
+      notStarted,
+      qcHold,
+      rework,
       activeProjects: projects.length,
       crewPresent: attendance.present,
-      crewTotal: attendance.total
+      crewTotal: attendance.total,
+      bottleneckStation: bottleneck?.station?.name || null,
+      bottleneckQueue: bottleneck?.queueLength || 0,
+      avgQueueMinutes
     };
-  }, [modules, projects, attendance]);
+  }, [modules, stations, projects, attendance]);
 
   // Handle station click - opens station detail modal
   const handleStationClick = (station) => {
@@ -1086,16 +1176,16 @@ export default function PlantManagerDashboard({ onNavigateToProject, initialView
       {/* Stats Grid - Always visible */}
       <div style={styles.statsGrid}>
         <StatCard
-          icon={Package}
-          value={stats.activeModules}
-          label="Active Modules"
-          color="#3b82f6"
-        />
-        <StatCard
           icon={Activity}
           value={stats.inProgress}
-          label="In Progress"
+          label="Working Now"
           color="#22c55e"
+        />
+        <StatCard
+          icon={Hourglass}
+          value={stats.inQueue}
+          label="In Queue"
+          color="#f59e0b"
         />
         <StatCard
           icon={Clock}
@@ -1106,7 +1196,7 @@ export default function PlantManagerDashboard({ onNavigateToProject, initialView
         <StatCard
           icon={Truck}
           value={stats.completed}
-          label="Completed Today"
+          label="Completed"
           color="#14b8a6"
         />
         <StatCard
@@ -1122,6 +1212,32 @@ export default function PlantManagerDashboard({ onNavigateToProject, initialView
           color="#ec4899"
         />
       </div>
+
+      {/* Bottleneck Alert - Show when queue is significant */}
+      {stats.bottleneckStation && stats.bottleneckQueue >= 3 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--space-md)',
+          padding: 'var(--space-md) var(--space-lg)',
+          background: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          borderRadius: 'var(--radius-md)',
+          marginBottom: 'var(--space-lg)',
+          color: '#ef4444'
+        }}>
+          <AlertTriangle size={20} />
+          <div>
+            <span style={{ fontWeight: '600' }}>Bottleneck Alert: </span>
+            <span>{stats.bottleneckStation} has {stats.bottleneckQueue} modules queued</span>
+            {stats.avgQueueMinutes > 30 && (
+              <span style={{ marginLeft: 'var(--space-sm)', fontSize: '0.875rem' }}>
+                (avg wait: {stats.avgQueueMinutes}min)
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Overview Tab */}
       {activeTab === 'overview' && (
@@ -1169,6 +1285,7 @@ export default function PlantManagerDashboard({ onNavigateToProject, initialView
                 <StationBox
                   key={station.id}
                   station={station}
+                  modules={modules}
                   onClick={handleStationClick}
                   onDragOver={isPlantManager ? handleDragOver : undefined}
                   onDrop={isPlantManager ? handleDrop : undefined}
@@ -1263,6 +1380,7 @@ export default function PlantManagerDashboard({ onNavigateToProject, initialView
               <StationBox
                 key={station.id}
                 station={station}
+                modules={modules}
                 onClick={handleStationClick}
                 onDragOver={isPlantManager ? handleDragOver : undefined}
                 onDrop={isPlantManager ? handleDrop : undefined}

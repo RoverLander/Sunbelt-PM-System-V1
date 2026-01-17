@@ -1619,6 +1619,125 @@ The Mobile Floor App PWA should be implemented as a **separate route group** (`/
 
 ---
 
-*Document Version: 1.2*
-*Last Updated: January 17, 2026 (Phase 1 Complete)*
-*Next Review: Before Phase 2 implementation*
+---
+
+## Manager Mobile App (PWA) - NEW Section
+
+**Created:** January 17, 2026
+**Status:** COMPLETE - All 6 Phases Implemented
+
+### Overview
+
+A companion Manager PWA has been implemented for management roles (PM, PC, VP, Director). This extends the existing floor worker PWA at the `/pwa/manager` route.
+
+### Architecture
+
+```
+src/pwa/manager/
+├── ManagerApp.jsx                    # Main entry point with routing
+├── pages/
+│   ├── ManagerLogin.jsx              # Supabase Auth login
+│   ├── ManagerDashboard.jsx          # Metrics dashboard
+│   ├── ProjectsList.jsx              # Filterable project list
+│   ├── ProjectDetail.jsx             # Project detail with tabs
+│   ├── TasksView.jsx                 # Tasks list with filters
+│   ├── RFIsView.jsx                  # RFIs list with filters
+│   ├── QCSummary.jsx                 # QC overview page
+│   └── MorePage.jsx                  # Settings & tools
+├── components/
+│   ├── ManagerShell.jsx              # App shell layout
+│   ├── ManagerNav.jsx                # Bottom navigation
+│   ├── CreateTaskSheet.jsx           # Task creation bottom sheet
+│   ├── CreateRFISheet.jsx            # RFI creation bottom sheet
+│   └── ManagerSyncIndicator.jsx      # Offline status indicator
+└── hooks/
+    └── useManagerOffline.js          # Offline caching hook
+```
+
+### Features Implemented
+
+| Phase | Feature | Status |
+|-------|---------|--------|
+| 1 | Foundation (Auth, Shell, Nav) | ✅ Complete |
+| 2 | Project Detail with tabs (Overview, Tasks, RFIs, Modules) | ✅ Complete |
+| 3 | Create Task bottom sheet | ✅ Complete |
+| 4 | Create RFI bottom sheet | ✅ Complete |
+| 5 | QC Summary view + More page enhancements | ✅ Complete |
+| 6 | Offline caching (localStorage-based) | ✅ Complete |
+
+### UI/UX Enhancements
+
+- **Sunbelt Dark Mode Theme**: All views use consistent dark mode colors (#0a1628 background, #FF6B35 accent)
+- **Pinch Zoom Disabled**: `touch-action: manipulation` prevents accidental zoom on lists
+- **Full-Width Layouts**: All page containers use `width: 100%` for proper mobile display
+- **Bottom Navigation**: Larger tap targets (56px min-height), generous safe-area padding for notched phones
+- **Input Font Size**: 16px minimum prevents iOS auto-zoom on input focus
+
+### Backup Jobs Toggle
+
+PMs can toggle whether to include backup jobs in their project views:
+- **Dashboard**: Toggle between greeting and stats grid
+- **Projects List**: Toggle at top of project list
+- When OFF, only shows projects where user is `owner_id` or `primary_pm_id`
+- When ON (default), also includes projects where user is `backup_pm_id`
+- Toggle only visible to non-admin users (admins see all projects)
+
+### Authentication
+
+- Uses **Supabase Auth** (email/password) - different from floor PWA PIN auth
+- Role validation: PM, PC, VP, Director, Admin, IT
+- Session persistence via localStorage
+- **Login screen features:**
+  - Revolving ring of 12 factory logos (same as desktop app)
+  - Central Sunbelt logo with pulsing glow effect
+  - Mobile-optimized layout: logo section top, form card bottom
+  - Convergence animation on successful login
+
+### Role-Based Access
+
+| Feature | PM | PC | VP | Director |
+|---------|----|----|-----|----------|
+| Dashboard | Own metrics | Factory metrics | All metrics | All metrics |
+| Projects | Assigned only | Factory only | All projects | All projects |
+| Create Task/RFI | Yes | Yes | Yes | Yes |
+| QC Summary | Own projects | Factory | All | All |
+
+### Offline Strategy
+
+The Manager PWA uses a **read-only offline cache** via localStorage:
+- Projects, Tasks, RFIs cached for 30 minutes
+- Dashboard metrics cached separately
+- Offline banner shows when disconnected
+- Sync indicator shows last sync time
+
+### Access URL
+
+- Production: `/pwa/manager`
+- Development: `http://localhost:5174/pwa/manager`
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `src/pwa/contexts/ManagerAuthContext.jsx` | Supabase auth wrapper for managers |
+| `src/pwa/manager/ManagerApp.jsx` | Main app with view routing |
+| `src/pwa/manager/components/ManagerShell.jsx` | App shell (header + content + nav) |
+| `src/pwa/manager/components/ManagerNav.jsx` | Bottom navigation (5 tabs) |
+| `src/pwa/manager/pages/ManagerLogin.jsx` | Mobile login with revolving factory logos |
+| `src/pwa/manager/pages/ManagerDashboard.jsx` | Metrics dashboard |
+| `src/pwa/manager/pages/ProjectsList.jsx` | Filterable project list |
+| `src/pwa/manager/pages/ProjectDetail.jsx` | Project detail with tabs |
+| `src/pwa/manager/pages/TasksView.jsx` | Tasks list with filters |
+| `src/pwa/manager/pages/RFIsView.jsx` | RFIs list with filters |
+| `src/pwa/manager/pages/QCSummary.jsx` | QC overview |
+| `src/pwa/manager/pages/MorePage.jsx` | Settings page |
+| `src/pwa/manager/components/CreateTaskSheet.jsx` | Task creation sheet |
+| `src/pwa/manager/components/CreateRFISheet.jsx` | RFI creation sheet |
+| `src/pwa/manager/components/ManagerSyncIndicator.jsx` | Sync status |
+| `src/pwa/manager/hooks/useManagerOffline.js` | Offline caching hook |
+
+---
+
+*Document Version: 1.5*
+*Last Updated: January 17, 2026 (Backup Jobs Toggle, Full-Width Fixes, Dark Mode Polish)*
+*Next Review: Production deployment
