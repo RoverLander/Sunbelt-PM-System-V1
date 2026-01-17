@@ -27,3 +27,4 @@ export { default as PWAHome } from './pages/PWAHome';
 export { default as ModuleLookup } from './pages/ModuleLookup';
 export { default as QCInspection } from './pages/QCInspection';
 export { default as StationMove } from './pages/StationMove';
+export { default as InventoryReceiving } from './pages/InventoryReceiving';

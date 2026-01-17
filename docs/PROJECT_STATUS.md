@@ -163,6 +163,41 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ## Recent Updates (January 2026)
 
+### January 17, 2026 (PWA Mobile Floor App - Phase 5 Inventory Receiving)
+
+- **Phase 5: Inventory Receiving - Complete**
+  - **InventoryReceiving Page Component:**
+    - `src/pwa/pages/InventoryReceiving.jsx` - 4-step workflow (~920 lines)
+    - Steps: Select PO → View Items → Receive Item → Complete
+  - **Features:**
+    - Pending PO list with status badges
+    - PO search by number (300ms debounce)
+    - Line items with remaining quantity display
+    - Quantity input with +/- controls
+    - Damage toggle with damaged qty and notes
+    - Photo capture with preview grid
+    - Receipt creation with status (Received/Partial/Damaged)
+    - Continue receiving or start over options
+  - **Sub-Components:**
+    - `POListItem` - PO card with vendor and item count
+    - `LineItemRow` - Line item with remaining/complete status
+    - `StepHeader` - Navigation header with back button
+  - **Integration:**
+    - Uses `getPendingPurchaseOrders()` from purchaseOrdersService.js
+    - Uses `searchPurchaseOrders()` for PO lookup
+    - Uses `createReceipt()` from inventoryReceiptsService.js
+    - Uses `uploadReceiptPhoto()` for photo storage
+    - Auto-updates PO line item received quantity
+
+- **Files Created:**
+  - `src/pwa/pages/InventoryReceiving.jsx`
+
+- **Files Modified:**
+  - `src/pwa/PWAApp.jsx` - Replaced placeholder with InventoryReceiving
+  - `src/pwa/index.js` - Added InventoryReceiving export
+
+---
+
 ### January 17, 2026 (PWA Mobile Floor App - Phase 4 Station Movement)
 
 - **Phase 4: Station Movement - Complete**

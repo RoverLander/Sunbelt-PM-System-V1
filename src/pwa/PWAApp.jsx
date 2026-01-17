@@ -15,15 +15,9 @@ import PWAHome from './pages/PWAHome';
 import ModuleLookup from './pages/ModuleLookup';
 import QCInspection from './pages/QCInspection';
 import StationMove from './pages/StationMove';
+import InventoryReceiving from './pages/InventoryReceiving';
 
-// Placeholder pages (to be implemented in Phase 5+)
-
-const InventoryPage = () => (
-  <div style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
-    <h2>Inventory Receiving</h2>
-    <p style={{ color: 'var(--text-secondary)' }}>Coming in Phase 5</p>
-  </div>
-);
+// Placeholder pages (to be implemented in Phase 6+)
 
 const MorePage = () => (
   <div style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
@@ -85,7 +79,7 @@ function PWAContent() {
       case 'qc':
         return <QCInspection />;
       case 'inventory':
-        return <InventoryPage />;
+        return <InventoryReceiving />;
       case 'more':
         return <MorePage />;
       default:

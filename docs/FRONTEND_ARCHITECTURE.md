@@ -92,7 +92,8 @@ src/
         ├── PWAHome.jsx            # Home dashboard page
         ├── ModuleLookup.jsx       # Module search with autocomplete
         ├── QCInspection.jsx       # QC inspection 5-step workflow
-        └── StationMove.jsx        # Station movement 3-step workflow
+        ├── StationMove.jsx        # Station movement 3-step workflow
+        └── InventoryReceiving.jsx # Inventory receiving 4-step workflow
 ```
 
 ---
@@ -1255,6 +1256,35 @@ Station movement workflow page with 3-step process.
 - `CrewItem` - Crew member checkbox item
 
 **Uses:** `moveModuleToStation()` from modulesService.js, `getStationTemplates()` from stationService.js, `getWorkersByStation()` from workersService.js
+
+---
+
+#### InventoryReceiving.jsx
+
+Inventory receiving workflow page with 4-step process.
+
+**Features:**
+- Pending PO list with status indicators
+- PO search by number with debounce
+- Line items with remaining quantity display
+- Quantity input with +/- controls (max = remaining)
+- Damage toggle with quantity and notes
+- Photo capture with preview grid
+- Receipt creation with auto-status
+- Continue receiving or start new options
+
+**Steps:**
+1. SELECT_PO - Search or select from pending deliveries
+2. VIEW_ITEMS - See line items with remaining quantities
+3. RECEIVE_ITEM - Enter quantity, damage info, photos
+4. COMPLETE - Success confirmation with summary
+
+**Components:**
+- `POListItem` - PO card with vendor and item count
+- `LineItemRow` - Line item with remaining/complete status
+- `StepHeader` - Navigation header with back button
+
+**Uses:** `getPendingPurchaseOrders()`, `searchPurchaseOrders()`, `getPurchaseOrderById()` from purchaseOrdersService.js; `createReceipt()`, `uploadReceiptPhoto()` from inventoryReceiptsService.js
 
 ---
 
