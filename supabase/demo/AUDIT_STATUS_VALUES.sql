@@ -65,9 +65,9 @@ FROM rfis
 GROUP BY status
 ORDER BY count DESC;
 
--- Check for invalid status values
+-- Check for invalid status values (RFIs use subject, not title)
 SELECT 'RFIs with potentially invalid status values:' AS info;
-SELECT id, title, status
+SELECT id, subject, status
 FROM rfis
 WHERE status NOT IN ('Draft', 'Open', 'Pending', 'Answered', 'Closed')
 LIMIT 20;
