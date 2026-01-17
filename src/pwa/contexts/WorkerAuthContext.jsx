@@ -41,8 +41,18 @@ export function WorkerAuthProvider({ children }) {
     const initializeAuth = async () => {
       try {
         const currentWorker = getCurrentWorker();
+        const token = localStorage.getItem('worker_session_token');
 
         if (currentWorker) {
+          // Dev bypass - skip verification for dev token
+          if (import.meta.env.DEV && token === 'dev-bypass-token') {
+            console.log('[WorkerAuth] Dev bypass session detected');
+            setWorker(currentWorker);
+            updateSessionTime();
+            setLoading(false);
+            return;
+          }
+
           // Verify session is still valid with server
           const { valid } = await verifySession();
 

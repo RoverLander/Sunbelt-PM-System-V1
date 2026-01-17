@@ -100,6 +100,8 @@ Main projects table with full Praxis integration.
 | roof_load_psf | INTEGER | YES | | |
 | occupancy_type | VARCHAR(10) | YES | | A, B, E, etc. |
 | set_type | VARCHAR(30) | YES | | PAD, PIERS, ABOVE GRADE SET |
+| **Project Type** |
+| is_pm_job | BOOLEAN | NO | false | TRUE = PM-managed (PM Dashboard), FALSE = PC/STOCK job (factory-managed) |
 | **Special Requirements** |
 | requires_ttp | BOOLEAN | NO | false | Toilet, Tissue & Paper |
 | sprinkler_type | VARCHAR(20) | YES | | N/A, Wet, Dry |
@@ -1383,3 +1385,43 @@ Receipt tracking when materials arrive at factory. Linked to purchase orders for
 4. **Generated Columns**: `full_name` columns are auto-generated from first_name + last_name
 5. **Case Sensitivity**: Role values use mixed case (VP, Director, PM, etc.)
 6. **RLS Audit (January 16, 2026)**: All PGM tables verified to have proper RLS policies enabled (modules, station_templates, station_assignments, workers, worker_shifts, qc_records)
+
+---
+
+## Schema Compatibility Notes (January 17, 2026)
+
+When running demo data SQL against an existing Supabase database, some tables may have **legacy column names** that differ from the documented schema above. The COMPREHENSIVE_DEMO_DATA.sql file handles these automatically.
+
+### Known Schema Variations
+
+| Table | Legacy Column | New Column | Notes |
+|-------|---------------|------------|-------|
+| `announcements` | `message` (NOT NULL) | `content` | Demo SQL includes both columns with same value |
+| `feature_flags` | `key` (NOT NULL) | `flag_key` | Demo SQL includes both columns with same value |
+| `workflow_stations` | `station_name` | `name` | Both supported |
+
+### Pattern for Schema Compatibility
+
+When inserting into tables that may have legacy constraints:
+
+```sql
+-- 1. Drop NOT NULL constraints on legacy columns (allows new schema)
+ALTER TABLE table_name ALTER COLUMN legacy_col DROP NOT NULL;
+
+-- 2. Add new column if it doesn't exist
+ALTER TABLE table_name ADD COLUMN IF NOT EXISTS new_col TYPE;
+
+-- 3. INSERT includes BOTH columns with same value
+INSERT INTO table_name (legacy_col, new_col, other_cols)
+VALUES ('value', 'value', ...);
+```
+
+### Unique Constraint Considerations
+
+Some tables have unique constraints that must be respected:
+
+- `color_selections`: UNIQUE(project_id, category) - each project can only have one entry per category
+- `project_workflow_status`: UNIQUE(project_id, station_key) - one status per station per project
+- `dealers`: UNIQUE(code, branch_code) - unique dealer/branch combination
+
+Use `ON CONFLICT DO NOTHING` to gracefully handle duplicate key situations.

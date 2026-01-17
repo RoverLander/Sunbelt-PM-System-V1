@@ -2,9 +2,50 @@
 
 Run these SQL scripts **in order** to reset and populate demo data.
 
-## Quick Start
+## Quick Start (NEW - Comprehensive Demo)
 
-Run all scripts in Supabase SQL Editor in this order:
+For the full demo experience including Plant Manager Dashboard and PWA features:
+
+### Step 1: Verify Migrations Applied
+
+Before running demo data, ensure these migrations have been applied in Supabase:
+
+| Migration | Creates | Required For |
+|-----------|---------|--------------|
+| `20260115_plant_manager_system.sql` | modules, station_templates, workers, worker_shifts, qc_records, station_assignments | Plant Manager Dashboard |
+| `20260115_ross_parks_plant_gm.sql` | Plant_GM user for NWBS | PGM demo |
+| `20260115_pgm_demo_data.sql` | Initial PGM demo data | Basic PGM testing |
+| `20260116_pwa_schema_remediation.sql` | worker_sessions, purchase_orders, inventory_receipts | PWA Mobile Floor App |
+| `20260116_pwa_schema_remediation_fix.sql` | Fixes partial migration issues | PWA (run if first failed) |
+| `20260117_add_is_pm_job_column.sql` | projects.is_pm_job column | PM vs PC job filtering |
+
+**Verification Query:**
+```sql
+-- Check all required tables exist
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public'
+AND table_name IN ('modules', 'station_templates', 'workers', 'worker_shifts',
+                   'qc_records', 'station_assignments', 'worker_sessions',
+                   'purchase_orders', 'inventory_receipts')
+ORDER BY table_name;
+```
+
+### Step 2: Run Comprehensive Demo SQL
+
+```
+COMPREHENSIVE_DEMO_DATA.sql  → Complete demo for PM System + PGM + PWA
+```
+
+This single file creates all demo data for demonstrating:
+- PM Software (Projects, Workflow, Sales, Directory)
+- Plant Manager Dashboard (Stations, Modules, Crews, QC)
+- PWA Mobile Floor App (Worker Auth, Module Lookup, QC, Inventory)
+
+---
+
+## Legacy Scripts (Individual Files)
+
+For granular control, run these in order:
 
 ```
 01_CLEAR_DATA.sql          → Clears existing project data
@@ -119,6 +160,39 @@ If PMs aren't assigned, ensure these users exist in Supabase Auth:
 ### Sales quotes not showing
 Ensure `sales_quotes` table exists and has the Praxis fields from migration.
 
+### Schema Mismatch Errors
+
+If you see errors like `null value in column "X" violates not-null constraint`:
+
+1. The database has legacy columns with NOT NULL constraints
+2. COMPREHENSIVE_DEMO_DATA.sql handles these automatically by:
+   - Dropping NOT NULL constraints on legacy columns
+   - Including both legacy and new column names in INSERTs
+
+**Known legacy columns handled:**
+- `announcements.message` → now uses `content` (both included)
+- `feature_flags.key` → now uses `flag_key` (both included)
+
+### Duplicate Key Errors
+
+If you see `duplicate key value violates unique constraint`:
+
+1. Data already exists from a previous run
+2. Solutions:
+   - Run 01_CLEAR_DATA.sql first (for legacy scripts)
+   - COMPREHENSIVE_DEMO_DATA.sql uses `ON CONFLICT DO NOTHING`
+
+---
+
+## PWA Demo Credentials
+
+| Employee ID | PIN | Role | Factory |
+|-------------|-----|------|---------|
+| TEST | 1234 | Dev Bypass | NWBS |
+| EMP001 | 1234 | Station Lead | NWBS |
+| EMP002-006 | 1234 | Leads/Workers | NWBS |
+
 ---
 
 *Created: January 13, 2026*
+*Updated: January 17, 2026 - Added COMPREHENSIVE_DEMO_DATA.sql reference and troubleshooting*
