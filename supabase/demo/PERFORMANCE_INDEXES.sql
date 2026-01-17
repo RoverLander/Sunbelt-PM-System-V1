@@ -39,8 +39,9 @@ ON tasks(project_id, status);
 CREATE INDEX IF NOT EXISTS idx_tasks_workflow_station
 ON tasks(workflow_station_key) WHERE workflow_station_key IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to
-ON tasks(assigned_to) WHERE assigned_to IS NOT NULL;
+-- Note: tasks table uses assigned_by, not assigned_to
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned_by
+ON tasks(assigned_by) WHERE assigned_by IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_tasks_due_date
 ON tasks(due_date) WHERE due_date IS NOT NULL;
