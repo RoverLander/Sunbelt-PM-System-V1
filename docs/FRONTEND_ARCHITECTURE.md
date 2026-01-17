@@ -91,7 +91,8 @@ src/
     └── pages/
         ├── PWAHome.jsx            # Home dashboard page
         ├── ModuleLookup.jsx       # Module search with autocomplete
-        └── QCInspection.jsx       # QC inspection 5-step workflow
+        ├── QCInspection.jsx       # QC inspection 5-step workflow
+        └── StationMove.jsx        # Station movement 3-step workflow
 ```
 
 ---
@@ -1229,6 +1230,34 @@ QC inspection workflow page with 5-step process.
 
 ---
 
+#### StationMove.jsx
+
+Station movement workflow page with 3-step process.
+
+**Features:**
+- Module search with current station display
+- Auto-calculate next station from production line order
+- Crew selection with checkbox interface
+- Lead auto-selected from current worker
+- QC gate warning if inspection required
+- Station flow visualization (From → To)
+- Confirmation summary before move
+- Validation via moveModuleToStation()
+
+**Steps:**
+1. SELECT_MODULE - Search and select module
+2. SELECT_CREW - Choose crew members for move
+3. CONFIRM - Review and confirm move
+
+**Components:**
+- `ModuleListItem` - Module card with station badge
+- `StepHeader` - Step navigation header
+- `CrewItem` - Crew member checkbox item
+
+**Uses:** `moveModuleToStation()` from modulesService.js, `getStationTemplates()` from stationService.js, `getWorkersByStation()` from workersService.js
+
+---
+
 ### PWA Services
 
 The PWA uses dedicated services for worker-specific functionality:
@@ -1236,7 +1265,9 @@ The PWA uses dedicated services for worker-specific functionality:
 | Service | File | Purpose |
 |---------|------|---------|
 | workerAuthService | `src/services/workerAuthService.js` | PIN login, session management |
-| modulesService | `src/services/modulesService.js` | Module search, lookup, status |
+| modulesService | `src/services/modulesService.js` | Module search, lookup, status, move |
+| stationService | `src/services/stationService.js` | Station templates, order, checklists |
+| workersService | `src/services/workersService.js` | Worker data, crew by station |
 | qcService | `src/services/qcService.js` | QC records, inspections, defects |
 | purchaseOrdersService | `src/services/purchaseOrdersService.js` | PO lookup for inventory receiving |
 | inventoryReceiptsService | `src/services/inventoryReceiptsService.js` | Receipt tracking with photos |

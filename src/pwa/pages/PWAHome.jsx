@@ -17,7 +17,8 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
-  Factory
+  Factory,
+  MoveRight
 } from 'lucide-react';
 
 // ============================================================================
@@ -214,6 +215,12 @@ export default function PWAHome({ onNavigate }) {
       desc: 'Lookup by serial',
       primary: true
     },
+    ...(isLead ? [{
+      id: 'stationmove',
+      icon: MoveRight,
+      label: 'Move Module',
+      desc: 'To next station'
+    }] : []),
     ...(isLead ? [{
       id: 'qc',
       icon: ClipboardCheck,

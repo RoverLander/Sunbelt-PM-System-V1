@@ -14,8 +14,9 @@ import PWAShell from './components/layout/PWAShell';
 import PWAHome from './pages/PWAHome';
 import ModuleLookup from './pages/ModuleLookup';
 import QCInspection from './pages/QCInspection';
+import StationMove from './pages/StationMove';
 
-// Placeholder pages (to be implemented in Phase 4+)
+// Placeholder pages (to be implemented in Phase 5+)
 
 const InventoryPage = () => (
   <div style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
@@ -38,6 +39,7 @@ const MorePage = () => (
 const PAGE_TITLES = {
   home: 'Floor App',
   modules: 'Find Module',
+  stationmove: 'Move Module',
   qc: 'QC Inspection',
   inventory: 'Inventory',
   more: 'More'
@@ -78,6 +80,8 @@ function PWAContent() {
         return <PWAHome onNavigate={setCurrentView} />;
       case 'modules':
         return <ModuleLookup />;
+      case 'stationmove':
+        return <StationMove />;
       case 'qc':
         return <QCInspection />;
       case 'inventory':

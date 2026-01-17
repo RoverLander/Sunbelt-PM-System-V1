@@ -163,6 +163,41 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 
 ## Recent Updates (January 2026)
 
+### January 17, 2026 (PWA Mobile Floor App - Phase 4 Station Movement)
+
+- **Phase 4: Station Movement - Complete**
+  - **StationMove Page Component:**
+    - `src/pwa/pages/StationMove.jsx` - 3-step workflow (~820 lines)
+    - Steps: Select Module → Select Crew → Confirm Move
+  - **Features:**
+    - Module search with current station display
+    - Auto-calculate next station from production line order
+    - Crew selection with checkbox interface
+    - Lead auto-selected from current worker
+    - QC gate warning if inspection required
+    - Station flow visualization (From → To)
+    - Confirmation summary before move
+    - Success state with "Move Another" option
+  - **Sub-Components:**
+    - `ModuleListItem` - Module card with station badge
+    - `StepHeader` - Step navigation header
+    - `CrewItem` - Crew member checkbox item
+  - **Integration:**
+    - Uses `moveModuleToStation()` from modulesService.js
+    - Uses `getStationTemplates()` from stationService.js
+    - Uses `getWorkersByStation()` from workersService.js
+    - Creates station_assignments record on move
+
+- **Files Created:**
+  - `src/pwa/pages/StationMove.jsx`
+
+- **Files Modified:**
+  - `src/pwa/PWAApp.jsx` - Added StationMove route
+  - `src/pwa/pages/PWAHome.jsx` - Added "Move Module" quick action
+  - `src/pwa/index.js` - Added StationMove export
+
+---
+
 ### January 17, 2026 (PWA Mobile Floor App - Phase 3 QC Inspection)
 
 - **Phase 3: QC Inspection Workflow - Complete**
