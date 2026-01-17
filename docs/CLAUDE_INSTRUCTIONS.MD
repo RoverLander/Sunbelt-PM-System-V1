@@ -135,6 +135,8 @@ DATABASE SCHEMA NOTES:
 • `users` table has `name` column (NOT `full_name`)
 • `workers` table has `full_name` as a generated column (first_name || ' ' || last_name)
 • `projects` table has `factory` as VARCHAR (factory code like 'NWBS'), NOT a FK to factories
+• `projects` table uses `delivery_date` (NOT `target_completion` or `end_date`)
+• `modules` table uses `module_width`, `module_length`, `module_height` (NOT `width_ft`, `length_ft`)
 • `kaizen_suggestions` has multiple FKs to users (user_id, reviewed_by) - ALWAYS use explicit FK hints
 • `sales_quotes.assigned_to` needs FK constraint to users table
 

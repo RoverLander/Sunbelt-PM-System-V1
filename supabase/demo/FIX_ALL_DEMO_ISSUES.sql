@@ -550,7 +550,7 @@ BEGIN
   -- Create PC-managed stock/fleet projects
   INSERT INTO projects (
     project_number, name, client_name, status, factory, is_pm_job, owner_id, created_by,
-    start_date, target_completion, module_count, square_footage, contract_value
+    start_date, delivery_date, module_count, square_footage, contract_value
   ) VALUES
     -- Stock units - simple, standardized modules kept in inventory
     ('NWBS-26-S01', '12x60 Office Stock Unit', 'NWBS Stock Inventory', 'Production', 'NWBS', false, v_pc_user_id, v_pc_user_id,
