@@ -64,12 +64,12 @@ export async function getFactoryMetrics(factoryId) {
       shiftsResult,
       qcResult
     ] = await Promise.all([
-      // Active modules
+      // Active modules (using correct module statuses per CLAUDE_INSTRUCTIONS.MD)
       supabase
         .from('modules')
         .select('id, status, current_station_id', { count: 'exact' })
         .eq('factory_id', factoryId)
-        .in('status', ['In Progress', 'Scheduled', 'On Hold']),
+        .in('status', ['In Progress', 'In Queue', 'QC Hold', 'Rework']),
 
       // Active projects
       supabase
@@ -125,8 +125,8 @@ export async function getFactoryMetrics(factoryId) {
         qcPassRate,
         oee,
         modulesInProgress: modules.filter(m => m.status === 'In Progress').length,
-        modulesScheduled: modules.filter(m => m.status === 'Scheduled').length,
-        modulesOnHold: modules.filter(m => m.status === 'On Hold').length
+        modulesInQueue: modules.filter(m => m.status === 'In Queue').length,
+        modulesQCHold: modules.filter(m => m.status === 'QC Hold').length
       },
       error: null
     };

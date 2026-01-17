@@ -615,12 +615,16 @@ export default function ProjectDetail({ project, onBack, onCreateTask, onCreateR
       );
     }
 
+    // Module statuses per CLAUDE_INSTRUCTIONS.MD
     const MODULE_STATUS_COLORS = {
-      'Not Started': '#6b7280',
+      'Not Started': '#64748b',
+      'In Queue': '#eab308',
       'In Progress': '#3b82f6',
+      'QC Hold': '#f97316',
+      'Rework': '#ef4444',
       'Completed': '#22c55e',
-      'Complete': '#22c55e',
-      'On Hold': '#f59e0b'
+      'Staged': '#8b5cf6',
+      'Shipped': '#14b8a6'
     };
 
     return (

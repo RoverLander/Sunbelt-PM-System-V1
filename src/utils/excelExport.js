@@ -587,7 +587,7 @@ export const exportTaskLog = async (tasks, projectInfo) => {
   const totalTasks = tasks.length;
   const notStarted = tasks.filter(t => t.status === 'Not Started').length;
   const inProgress = tasks.filter(t => t.status === 'In Progress').length;
-  const awaitingResponse = tasks.filter(t => t.status === 'Awaiting Response' || t.status === 'On Hold').length;
+  const awaitingResponse = tasks.filter(t => t.status === 'Awaiting Response').length;
   const completed = tasks.filter(t => t.status === 'Completed').length;
   const cancelled = tasks.filter(t => t.status === 'Cancelled').length;
   const overdueTasks = tasks.filter(t =>

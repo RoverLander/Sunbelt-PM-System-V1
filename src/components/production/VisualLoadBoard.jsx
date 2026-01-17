@@ -576,7 +576,7 @@ export default function VisualLoadBoard({
                 </div>
                 <div>
                   <div style={styles.statValue}>{loadData.totalOnHold}</div>
-                  <div style={styles.statLabel}>On Hold</div>
+                  <div style={styles.statLabel}>QC Hold</div>
                 </div>
               </div>
               <div style={styles.statCard}>
