@@ -103,9 +103,9 @@ ON qc_records(module_id) WHERE module_id IS NOT NULL;
 -- 3. FULL-TEXT SEARCH INDEXES (for search functionality)
 -- ============================================================================
 
--- Projects search
+-- Projects search (using po_number, not job_number)
 CREATE INDEX IF NOT EXISTS idx_projects_search
-ON projects USING gin(to_tsvector('english', coalesce(name, '') || ' ' || coalesce(job_number, '')));
+ON projects USING gin(to_tsvector('english', coalesce(name, '') || ' ' || coalesce(po_number, '')));
 
 -- Tasks search
 CREATE INDEX IF NOT EXISTS idx_tasks_search
