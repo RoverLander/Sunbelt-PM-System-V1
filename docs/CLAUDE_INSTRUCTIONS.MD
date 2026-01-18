@@ -122,7 +122,45 @@ Now read the architecture and help me build. If anything is unclear, ask before 
 
 ---
 
-RECENT FIXES & CHANGES (January 17, 2026):
+RECENT FIXES & CHANGES (January 18, 2026):
+
+BUILDING SPECS & PM FLAG FEATURES:
+• QuoteForm.jsx - Added Building Specifications section with:
+  - Building Type (CUSTOM, GOVERNMENT, EDUCATION, etc.)
+  - Building Width/Length (in feet)
+  - Module Count (can be TBD)
+  - Module Width dropdown (10', 12', 14', Custom)
+  - Occupancy classification (A-U)
+  - Special Materials checkboxes (TT&P, Sprinklers, Plumbing)
+• VPDashboard.jsx - Added PM Flag functionality:
+  - Active Pipeline Quotes section with flag icons
+  - Flag modal with optional notes
+  - Unflag capability on already-flagged quotes
+  - Notifies Director and VP when flagged
+• DirectorDashboard.jsx - Added PM Assignment Queue:
+  - List view with dropdown PM assignment
+  - Kanban view with drag-drop columns (Unassigned + PM columns)
+  - Projects with is_pm_job=true AND assigned_pm_id=null appear here
+• QuoteDetail.jsx - Updated quote-to-project conversion:
+  - Transfers building specs (building_width, building_length, module_count, mod_width, occupancy, special_materials)
+  - Transfers PM flag (is_pm_flagged → is_pm_job, pm_flagged_from_quote)
+• OverviewTab.jsx - Enhanced ProjectInfoCard with Building Specifications section
+• ModuleDetailModal.jsx - Shows project building specs when viewing modules
+
+DATABASE MIGRATION (20260118_building_specs_and_pm_flag.sql):
+• sales_quotes: building_width, building_length, mod_width, module_count, occupancy, special_materials, is_pm_flagged, pm_flagged_at, pm_flagged_by, pm_flag_notes
+• projects: building_width, building_length, mod_width, occupancy, special_materials, pm_flagged_from_quote, assigned_pm_id, pm_assigned_at, pm_assigned_by
+
+DEMO DATA MIGRATION (20260118_building_specs_demo_data.sql):
+• Updates existing demo quotes with building specs and PM flags
+• Updates existing projects with building specs
+• Creates unassigned PM projects for Director assignment queue
+• Uses subquery pattern for PostgreSQL LIMIT compatibility (LIMIT in subquery, not UPDATE)
+• Verification block outputs counts of updated records
+
+---
+
+PREVIOUS CHANGES (January 17, 2026):
 
 SERVICE LAYER FIXES:
 • qcService.js - Changed users table queries from `full_name` to `name`

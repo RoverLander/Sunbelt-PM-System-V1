@@ -1,0 +1,289 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#3b82f6', 'lineColor': '#64748b'}}}%%
+
+graph TB
+    %% ============================================================================
+    %% SUNBELT PM SYSTEM - FULL COMPONENT DEPENDENCY DIAGRAM
+    %% 148 Components | Color-Coded by Domain
+    %% ============================================================================
+
+    subgraph ENTRY["🚀 Entry Points"]
+        App["App.jsx<br/>Main Router"]
+        PWAApp["PWAApp.jsx<br/>Floor Worker Entry"]
+        ManagerApp["ManagerApp.jsx<br/>Manager Mobile Entry"]
+    end
+
+    subgraph AUTH["🔐 Authentication"]
+        AuthProvider["AuthProvider.jsx"]
+        WorkerAuthContext["WorkerAuthContext.jsx<br/>PIN-based Auth"]
+        ManagerAuthContext["ManagerAuthContext.jsx<br/>Email/Password Auth"]
+        Login["Login.jsx"]
+        WorkerPinLogin["WorkerPinLogin.jsx"]
+    end
+
+    subgraph DASHBOARDS["📊 Dashboards"]
+        direction TB
+        VPDashboard["VPDashboard.jsx<br/>VP Production View"]
+        DirectorDashboard["DirectorDashboard.jsx<br/>Director PM Queue"]
+        PMDashboard["PMDashboard.jsx<br/>Project Manager View"]
+        PlantManagerDash["PlantManagerDashboard.jsx<br/>Factory Operations"]
+        SalesDashboard["SalesDashboard.jsx<br/>Sales Rep View"]
+        SalesManagerDash["SalesManagerDashboard.jsx<br/>Sales Manager View"]
+    end
+
+    subgraph SALES["💰 Sales Components"]
+        direction TB
+        QuoteList["QuoteList.jsx"]
+        QuoteForm["QuoteForm.jsx<br/>+ Building Specs"]
+        QuoteDetail["QuoteDetail.jsx<br/>+ PM Flag Transfer"]
+        CustomerList["CustomerList.jsx"]
+        CustomerForm["CustomerForm.jsx"]
+        CustomerDetail["CustomerDetail.jsx"]
+        DealerList["DealerList.jsx"]
+        DealerForm["DealerForm.jsx"]
+        SalesPipeline["SalesPipeline.jsx"]
+    end
+
+    subgraph PROJECTS["📁 Project Components"]
+        direction TB
+        ProjectsList["ProjectsList.jsx"]
+        ProjectDetails["ProjectDetails.jsx"]
+        ProjectForm["ProjectForm.jsx"]
+
+        subgraph PROJECT_TABS["Project Detail Tabs"]
+            OverviewTab["OverviewTab.jsx<br/>+ Building Specs Display"]
+            TasksView["TasksView.jsx"]
+            MilestonesView["MilestonesView.jsx"]
+            RFIsView["RFIsView.jsx"]
+            SubmittalsView["SubmittalsView.jsx"]
+            ChangeOrdersView["ChangeOrdersView.jsx"]
+            LogsView["LogsView.jsx"]
+            ColorSelectionsView["ColorSelectionsView.jsx"]
+        end
+
+        KanbanBoard["KanbanBoard.jsx"]
+        WorkflowCanvas["WorkflowCanvas.jsx"]
+    end
+
+    subgraph PRODUCTION["🏭 Production Components"]
+        direction TB
+        ProductionLine["ProductionLine.jsx"]
+        StationBox["StationBox.jsx"]
+        ModuleCard["ModuleCard.jsx"]
+
+        subgraph MODALS["Production Modals"]
+            StationDetailModal["StationDetailModal.jsx"]
+            ModuleDetailModal["ModuleDetailModal.jsx<br/>+ Building Specs"]
+            QCInspectionModal["QCInspectionModal.jsx"]
+        end
+
+        subgraph EFFICIENCY["Efficiency Components"]
+            TaktTimeTracker["TaktTimeTracker.jsx"]
+            QueueTimeMonitor["QueueTimeMonitor.jsx"]
+            OEECalculator["OEECalculator.jsx"]
+            KaizenBoard["KaizenBoard.jsx"]
+            DefectTimer["DefectTimer.jsx"]
+            CrewUtilizationHeatmap["CrewUtilizationHeatmap.jsx"]
+            CrossTrainingMatrix["CrossTrainingMatrix.jsx"]
+            VisualLoadBoard["VisualLoadBoard.jsx"]
+        end
+
+        subgraph CREW["Crew Components"]
+            AttendanceDashboard["AttendanceDashboard.jsx"]
+            CrewScheduleView["CrewScheduleView.jsx"]
+        end
+    end
+
+    subgraph PWA_FLOOR["📱 PWA Floor App"]
+        direction TB
+        PWAShell["PWAShell.jsx"]
+        PWAHome["PWAHome.jsx"]
+        ModuleLookup["ModuleLookup.jsx"]
+        QCInspection["QCInspection.jsx"]
+        StationMove["StationMove.jsx"]
+        InventoryReceiving["InventoryReceiving.jsx"]
+        PWAProfile["PWAProfile.jsx"]
+    end
+
+    subgraph PWA_MANAGER["📱 PWA Manager App"]
+        direction TB
+        ManagerShell["ManagerShell.jsx"]
+        ManagerDashboard["ManagerDashboard.jsx"]
+        ManagerProjectsList["ProjectsList.jsx<br/>(Manager)"]
+        ManagerProjectDetail["ProjectDetail.jsx<br/>(Manager)"]
+        ManagerTasksView["TasksView.jsx<br/>(Manager)"]
+        ManagerRFIsView["RFIsView.jsx<br/>(Manager)"]
+    end
+
+    subgraph INVENTORY["📦 Inventory Components"]
+        direction TB
+        PurchaseOrderList["PurchaseOrderList.jsx"]
+        PurchaseOrderForm["PurchaseOrderForm.jsx"]
+        InventoryReceiptList["InventoryReceiptList.jsx"]
+        LongLeadItems["LongLeadItems.jsx"]
+    end
+
+    subgraph SHARED["🔧 Shared Components"]
+        direction TB
+        PageHeader["PageHeader.jsx"]
+        DataTable["DataTable.jsx"]
+        Modal["Modal.jsx"]
+        FormField["FormField.jsx"]
+        StatusBadge["StatusBadge.jsx"]
+        LoadingSpinner["LoadingSpinner.jsx"]
+        EmptyState["EmptyState.jsx"]
+        Tabs["Tabs.jsx"]
+        Card["Card.jsx"]
+    end
+
+    subgraph SERVICES["⚙️ Service Layer"]
+        direction TB
+        stationService["stationService.js"]
+        modulesService["modulesService.js"]
+        workersService["workersService.js"]
+        qcService["qcService.js"]
+        efficiencyService["efficiencyService.js"]
+        vpService["vpService.js"]
+        purchaseOrdersService["purchaseOrdersService.js"]
+        inventoryReceiptsService["inventoryReceiptsService.js"]
+        validationService["validationService.js"]
+        workerAuthService["workerAuthService.js"]
+    end
+
+    subgraph SUPABASE["🗄️ Supabase Client"]
+        supabaseClient["supabaseClient.js"]
+    end
+
+    %% ==================== RELATIONSHIPS ====================
+
+    %% Entry Points
+    App --> AuthProvider
+    App --> DASHBOARDS
+    App --> SALES
+    App --> PROJECTS
+    App --> PRODUCTION
+    App --> INVENTORY
+
+    PWAApp --> WorkerAuthContext
+    PWAApp --> PWA_FLOOR
+
+    ManagerApp --> ManagerAuthContext
+    ManagerApp --> PWA_MANAGER
+
+    %% Auth Flow
+    AuthProvider --> Login
+    WorkerAuthContext --> WorkerPinLogin
+    WorkerAuthContext --> workerAuthService
+
+    %% Dashboard Dependencies
+    VPDashboard --> vpService
+    VPDashboard --> QuoteDetail
+    VPDashboard --> ProductionLine
+
+    DirectorDashboard --> ProjectsList
+    DirectorDashboard --> KanbanBoard
+
+    PMDashboard --> ProjectDetails
+    PMDashboard --> WorkflowCanvas
+    PMDashboard --> TasksView
+
+    PlantManagerDash --> ProductionLine
+    PlantManagerDash --> TaktTimeTracker
+    PlantManagerDash --> QueueTimeMonitor
+    PlantManagerDash --> AttendanceDashboard
+    PlantManagerDash --> CrewScheduleView
+    PlantManagerDash --> QCInspectionModal
+
+    SalesDashboard --> QuoteList
+    SalesDashboard --> SalesPipeline
+
+    SalesManagerDash --> SalesPipeline
+    SalesManagerDash --> QuoteList
+
+    %% Sales Component Flow
+    QuoteList --> QuoteDetail
+    QuoteList --> QuoteForm
+    QuoteDetail --> QuoteForm
+    QuoteDetail --> ProjectForm
+    CustomerList --> CustomerForm
+    CustomerList --> CustomerDetail
+    DealerList --> DealerForm
+
+    %% Project Component Flow
+    ProjectsList --> ProjectDetails
+    ProjectDetails --> PROJECT_TABS
+    ProjectDetails --> KanbanBoard
+    ProjectDetails --> WorkflowCanvas
+    OverviewTab --> ModuleDetailModal
+
+    %% Production Component Flow
+    ProductionLine --> StationBox
+    StationBox --> ModuleCard
+    StationBox --> StationDetailModal
+    ModuleCard --> ModuleDetailModal
+    StationDetailModal --> QCInspectionModal
+    ModuleDetailModal --> QCInspectionModal
+
+    %% PWA Floor App Flow
+    PWAShell --> PWAHome
+    PWAHome --> ModuleLookup
+    PWAHome --> QCInspection
+    PWAHome --> StationMove
+    PWAHome --> InventoryReceiving
+    ModuleLookup --> modulesService
+    QCInspection --> qcService
+    StationMove --> stationService
+    InventoryReceiving --> inventoryReceiptsService
+
+    %% PWA Manager App Flow
+    ManagerShell --> ManagerDashboard
+    ManagerDashboard --> ManagerProjectsList
+    ManagerProjectsList --> ManagerProjectDetail
+    ManagerProjectDetail --> ManagerTasksView
+    ManagerProjectDetail --> ManagerRFIsView
+
+    %% Service Dependencies
+    stationService --> supabaseClient
+    modulesService --> supabaseClient
+    workersService --> supabaseClient
+    qcService --> supabaseClient
+    efficiencyService --> supabaseClient
+    vpService --> supabaseClient
+    purchaseOrdersService --> supabaseClient
+    inventoryReceiptsService --> supabaseClient
+    workerAuthService --> supabaseClient
+
+    %% Production to Services
+    TaktTimeTracker --> efficiencyService
+    QueueTimeMonitor --> modulesService
+    OEECalculator --> efficiencyService
+    KaizenBoard --> efficiencyService
+    AttendanceDashboard --> workersService
+    CrewScheduleView --> workersService
+    CrossTrainingMatrix --> workersService
+
+    %% Inventory to Services
+    PurchaseOrderList --> purchaseOrdersService
+    InventoryReceiptList --> inventoryReceiptsService
+
+    %% Styling
+    classDef entry fill:#10b981,stroke:#059669,color:#fff
+    classDef auth fill:#a855f7,stroke:#7c3aed,color:#fff
+    classDef dashboard fill:#3b82f6,stroke:#1d4ed8,color:#fff
+    classDef sales fill:#3b82f6,stroke:#1d4ed8,color:#fff
+    classDef project fill:#22c55e,stroke:#16a34a,color:#fff
+    classDef production fill:#f97316,stroke:#ea580c,color:#fff
+    classDef pwa fill:#06b6d4,stroke:#0891b2,color:#fff
+    classDef inventory fill:#eab308,stroke:#ca8a04,color:#000
+    classDef service fill:#64748b,stroke:#475569,color:#fff
+    classDef shared fill:#94a3b8,stroke:#64748b,color:#000
+
+    class App,PWAApp,ManagerApp entry
+    class AuthProvider,WorkerAuthContext,ManagerAuthContext,Login,WorkerPinLogin auth
+    class VPDashboard,DirectorDashboard,PMDashboard,PlantManagerDash,SalesDashboard,SalesManagerDash dashboard
+    class QuoteList,QuoteForm,QuoteDetail,CustomerList,CustomerForm,CustomerDetail,DealerList,DealerForm,SalesPipeline sales
+    class ProjectsList,ProjectDetails,ProjectForm,OverviewTab,TasksView,MilestonesView,RFIsView,SubmittalsView,ChangeOrdersView,LogsView,ColorSelectionsView,KanbanBoard,WorkflowCanvas project
+    class ProductionLine,StationBox,ModuleCard,StationDetailModal,ModuleDetailModal,QCInspectionModal,TaktTimeTracker,QueueTimeMonitor,OEECalculator,KaizenBoard,DefectTimer,CrewUtilizationHeatmap,CrossTrainingMatrix,VisualLoadBoard,AttendanceDashboard,CrewScheduleView production
+    class PWAShell,PWAHome,ModuleLookup,QCInspection,StationMove,InventoryReceiving,PWAProfile,ManagerShell,ManagerDashboard,ManagerProjectsList,ManagerProjectDetail,ManagerTasksView,ManagerRFIsView pwa
+    class PurchaseOrderList,PurchaseOrderForm,InventoryReceiptList,LongLeadItems inventory
+    class stationService,modulesService,workersService,qcService,efficiencyService,vpService,purchaseOrdersService,inventoryReceiptsService,validationService,workerAuthService,supabaseClient service
+    class PageHeader,DataTable,Modal,FormField,StatusBadge,LoadingSpinner,EmptyState,Tabs,Card shared

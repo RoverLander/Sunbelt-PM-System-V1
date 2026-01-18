@@ -98,7 +98,7 @@ const getDaysUntil = (dateString) => {
 // MAIN COMPONENT
 // ============================================================================
 function VPDashboard() {
-  const { user: _user } = useAuth();
+  const { user } = useAuth();
 
   // ==========================================================================
   // STATE
@@ -117,6 +117,9 @@ function VPDashboard() {
   const [showPraxisImport, setShowPraxisImport] = useState(false);
   const [showNewDropdown, setShowNewDropdown] = useState(false);
   const [toast, setToast] = useState(null);
+  const [flaggingQuote, setFlaggingQuote] = useState(null); // Quote being flagged
+  const [flagNotes, setFlagNotes] = useState('');
+  const [flagging, setFlagging] = useState(false);
 
   // ==========================================================================
   // FETCH DATA
@@ -155,6 +158,74 @@ function VPDashboard() {
       console.error('Error fetching VP data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ==========================================================================
+  // FLAG QUOTE FOR PM HANDLER
+  // ==========================================================================
+  const handleFlagForPM = async (quote, unflag = false) => {
+    if (!quote) return;
+
+    setFlagging(true);
+    try {
+      const updates = unflag ? {
+        is_pm_flagged: false,
+        pm_flagged_at: null,
+        pm_flagged_by: null,
+        pm_flag_notes: null
+      } : {
+        is_pm_flagged: true,
+        pm_flagged_at: new Date().toISOString(),
+        pm_flagged_by: user?.id,
+        pm_flag_notes: flagNotes.trim() || null
+      };
+
+      const { error } = await supabase
+        .from('sales_quotes')
+        .update(updates)
+        .eq('id', quote.id);
+
+      if (error) throw error;
+
+      // Create notification for PM team (Director and VP)
+      if (!unflag) {
+        const pmTeam = users.filter(u => ['Director', 'VP'].includes(u.role));
+        const notifications = pmTeam.map(pm => ({
+          user_id: pm.id,
+          type: 'pm_flag',
+          title: 'Quote Flagged for PM Review',
+          message: `Quote ${quote.quote_number || quote.project_name} has been flagged as a PM project${flagNotes ? ': ' + flagNotes : ''}`,
+          related_type: 'quote',
+          related_id: quote.id,
+          created_by: user?.id
+        }));
+
+        if (notifications.length > 0) {
+          await supabase.from('notifications').insert(notifications).catch(err => {
+            console.warn('Could not create notifications:', err);
+          });
+        }
+      }
+
+      setToast({
+        message: unflag
+          ? `Quote unflagged from PM review`
+          : `Quote flagged for PM review`,
+        type: 'success'
+      });
+      setTimeout(() => setToast(null), 3000);
+
+      // Refresh data
+      fetchAllData();
+    } catch (error) {
+      console.error('Error flagging quote:', error);
+      setToast({ message: 'Failed to update quote flag', type: 'error' });
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setFlagging(false);
+      setFlaggingQuote(null);
+      setFlagNotes('');
     }
   };
 
@@ -337,7 +408,7 @@ function VPDashboard() {
     const activeQuotes = quotes.filter(q => ACTIVE_STATUSES.includes(q.status));
     const wonQuotes = quotes.filter(q => q.status === 'won');
     const lostQuotes = quotes.filter(q => q.status === 'lost');
-    const pmFlaggedQuotes = quotes.filter(q => q.pm_flagged && ACTIVE_STATUSES.includes(q.status));
+    const pmFlaggedQuotes = quotes.filter(q => q.is_pm_flagged && ACTIVE_STATUSES.includes(q.status));
 
     // Raw pipeline value
     const pipelineValue = activeQuotes.reduce((sum, q) => sum + (q.total_price || 0), 0);
@@ -403,6 +474,7 @@ function VPDashboard() {
       pipelineValue,
       weightedPipelineValue,
       pipelineCount: activeQuotes.length,
+      activeQuotes, // All active quotes for pipeline view with flag buttons
       wonValue,
       wonCount: wonQuotes.length,
       winRate,
@@ -846,6 +918,124 @@ function VPDashboard() {
       </div>
 
       {/* ================================================================== */}
+      {/* PIPELINE QUOTES WITH FLAG ACTIONS                                 */}
+      {/* ================================================================== */}
+      <div style={{
+        background: 'var(--bg-secondary)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '20px',
+        border: '1px solid var(--border-color)',
+        marginBottom: 'var(--space-lg)'
+      }}>
+        <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Package size={18} style={{ color: '#3b82f6' }} />
+          Active Pipeline Quotes ({salesPipelineMetrics.pipelineCount})
+          <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--text-tertiary)', marginLeft: 'auto' }}>
+            Click flag icon to mark as PM project
+          </span>
+        </h3>
+
+        {salesPipelineMetrics.activeQuotes?.length === 0 ? (
+          <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>No active quotes in pipeline</p>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px' }}>
+            {salesPipelineMetrics.activeQuotes?.slice(0, 12).map(quote => (
+              <div
+                key={quote.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  padding: '14px',
+                  background: quote.is_pm_flagged ? 'rgba(139, 92, 246, 0.1)' : 'var(--bg-primary)',
+                  borderRadius: 'var(--radius-md)',
+                  border: quote.is_pm_flagged ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid var(--border-color)'
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                      {quote.project_name || quote.quote_number}
+                    </div>
+                    {quote.is_pm_flagged && (
+                      <span style={{
+                        background: '#8b5cf6',
+                        color: 'white',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontSize: '0.625rem',
+                        fontWeight: '600'
+                      }}>
+                        PM
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                    {quote.factory} • {quote.dealer?.name || quote.customer?.company_name || 'Unknown'}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                    <span style={{ fontWeight: '700', color: 'var(--sunbelt-orange)', fontSize: '0.875rem' }}>
+                      {formatCurrency(quote.total_price)}
+                    </span>
+                    {quote.building_type && (
+                      <span style={{
+                        background: 'var(--bg-tertiary)',
+                        color: 'var(--text-secondary)',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontSize: '0.625rem'
+                      }}>
+                        {quote.building_type}
+                      </span>
+                    )}
+                    {quote.module_count && (
+                      <span style={{
+                        background: 'var(--bg-tertiary)',
+                        color: 'var(--text-secondary)',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontSize: '0.625rem'
+                      }}>
+                        {quote.module_count} modules
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {/* Flag Button */}
+                <button
+                  onClick={() => {
+                    if (quote.is_pm_flagged) {
+                      handleFlagForPM(quote, true); // Unflag
+                    } else {
+                      setFlaggingQuote(quote);
+                    }
+                  }}
+                  title={quote.is_pm_flagged ? 'Remove PM flag' : 'Flag as PM project'}
+                  style={{
+                    background: quote.is_pm_flagged ? '#8b5cf6' : 'var(--bg-tertiary)',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginLeft: '10px'
+                  }}
+                >
+                  <Flag
+                    size={16}
+                    fill={quote.is_pm_flagged ? 'white' : 'none'}
+                    color={quote.is_pm_flagged ? 'white' : 'var(--text-secondary)'}
+                  />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ================================================================== */}
       {/* PM FLAGGED & RECENTLY CONVERTED ROW                               */}
       {/* ================================================================== */}
       <div style={{
@@ -883,28 +1073,47 @@ function VPDashboard() {
                     border: '1px solid var(--border-color)'
                   }}
                 >
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
                       {quote.project_name || quote.quote_number}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
                       {quote.dealer?.name || quote.customer?.company_name || 'Unknown'}
                     </div>
-                    {quote.pm_flagged_reason && (
+                    {quote.pm_flag_notes && (
                       <div style={{ fontSize: '0.75rem', color: '#8b5cf6', marginTop: '4px', fontStyle: 'italic' }}>
-                        "{quote.pm_flagged_reason}"
+                        "{quote.pm_flag_notes}"
                       </div>
                     )}
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: '700', color: 'var(--sunbelt-orange)', fontSize: '0.9rem' }}>
-                      {formatCurrency(quote.total_price)}
-                    </div>
-                    {quote.pm_flagged_at && (
-                      <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
-                        {Math.floor((new Date() - new Date(quote.pm_flagged_at)) / (1000 * 60 * 60 * 24))}d ago
+                  <div style={{ textAlign: 'right', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                    <div>
+                      <div style={{ fontWeight: '700', color: 'var(--sunbelt-orange)', fontSize: '0.9rem' }}>
+                        {formatCurrency(quote.total_price)}
                       </div>
-                    )}
+                      {quote.pm_flagged_at && (
+                        <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                          {Math.floor((new Date() - new Date(quote.pm_flagged_at)) / (1000 * 60 * 60 * 24))}d ago
+                        </div>
+                      )}
+                    </div>
+                    {/* Unflag Button */}
+                    <button
+                      onClick={() => handleFlagForPM(quote, true)}
+                      title="Remove PM flag"
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '4px 6px',
+                        cursor: 'pointer',
+                        fontSize: '0.625rem',
+                        color: '#ef4444',
+                        fontWeight: '600'
+                      }}
+                    >
+                      Unflag
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1210,6 +1419,115 @@ function VPDashboard() {
             setTimeout(() => setToast(null), 3000);
           }}
         />
+      )}
+
+      {/* PM Flag Modal */}
+      {flaggingQuote && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+          onClick={() => { setFlaggingQuote(null); setFlagNotes(''); }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-primary)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '24px',
+              width: '100%',
+              maxWidth: '450px',
+              border: '1px solid var(--border-color)'
+            }}
+          >
+            <h3 style={{ margin: '0 0 16px 0', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Flag size={20} style={{ color: '#8b5cf6' }} />
+              Flag as PM Project
+            </h3>
+
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.9375rem' }}>
+                {flaggingQuote.project_name || flaggingQuote.quote_number}
+              </div>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: '0.8125rem', marginTop: '4px' }}>
+                {flaggingQuote.factory} • {formatCurrency(flaggingQuote.total_price)}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                Notes (optional)
+              </label>
+              <textarea
+                value={flagNotes}
+                onChange={(e) => setFlagNotes(e.target.value)}
+                placeholder="Why is this a PM project? Any special requirements..."
+                rows={3}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.9rem',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', marginBottom: '20px' }}>
+              Flagging this quote will notify the PM team (Director and VP) and mark it for PM review.
+              When converted to a project, it will appear in the Director's assignment queue.
+            </p>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setFlaggingQuote(null); setFlagNotes(''); }}
+                style={{
+                  padding: '10px 16px',
+                  background: 'transparent',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleFlagForPM(flaggingQuote)}
+                disabled={flagging}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '10px 20px',
+                  background: '#8b5cf6',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontWeight: '600',
+                  cursor: flagging ? 'not-allowed' : 'pointer',
+                  opacity: flagging ? 0.7 : 1
+                }}
+              >
+                <Flag size={16} />
+                {flagging ? 'Flagging...' : 'Flag for PM'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ================================================================== */}

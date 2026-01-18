@@ -1,0 +1,305 @@
+================================================================================
+                SUNBELT PM SYSTEM - CORE COMPONENT FLOW DIAGRAM
+                        Essential Business Flow | ASCII
+================================================================================
+
+Legend:
+  [ENTRY]      Entry Points (Green)       [AUTH]       Authentication (Purple)
+  [DASHBOARD]  Dashboards (Blue)          [SALES]      Sales Components (Blue)
+  [PROJECT]    Project Components (Green) [PRODUCTION] Production (Orange)
+  [PWA]        PWA Apps (Cyan)            [SERVICE]    Service Layer (Gray)
+
+  ═══► = Primary Flow    ───► = Secondary Flow    ...► = Data Reference
+
+================================================================================
+                            APPLICATION ENTRY POINTS
+================================================================================
+
+                    ┌─────────────────────────────────────────┐
+                    │            THREE ENTRY POINTS            │
+                    └─────────────────────────────────────────┘
+
+    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+    │     App.jsx     │    │   PWAApp.jsx    │    │  ManagerApp.jsx │
+    │   Main Router   │    │  Floor Workers  │    │ Mobile Managers │
+    │                 │    │   (PIN Auth)    │    │ (Email/Pass)    │
+    └────────┬────────┘    └────────┬────────┘    └────────┬────────┘
+             │                      │                      │
+             ▼                      ▼                      ▼
+    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+    │  AuthProvider   │    │WorkerAuthContext│    │  AuthProvider   │
+    │ Email/Password  │    │   PIN-based     │    │ Email/Password  │
+    └────────┬────────┘    └────────┬────────┘    └────────┬────────┘
+             │                      │                      │
+             ▼                      ▼                      ▼
+        DASHBOARDS              PWA FLOOR             PWA MANAGER
+
+
+================================================================================
+                         CORE BUSINESS FLOW DIAGRAM
+================================================================================
+
+
+    ┌──────────────────────────────────────────────────────────────────────────┐
+    │                                                                          │
+    │  ╔════════════════════════════════════════════════════════════════════╗  │
+    │  ║                        SALES PHASE [BLUE]                          ║  │
+    │  ╠════════════════════════════════════════════════════════════════════╣  │
+    │  ║                                                                    ║  │
+    │  ║   VPDashboard                                                      ║  │
+    │  ║   ┌────────────────────────────────────────────────────────────┐   ║  │
+    │  ║   │  • View Sales Pipeline                                     │   ║  │
+    │  ║   │  • PM Flag Quotes for Complex Projects                     │   ║  │
+    │  ║   │  • Monitor Production Stats                                │   ║  │
+    │  ║   └────────────────────────────┬───────────────────────────────┘   ║  │
+    │  ║                                │                                   ║  │
+    │  ║                                ▼                                   ║  │
+    │  ║   QuoteForm ──────────────► QuoteDetail                           ║  │
+    │  ║   ┌──────────────────┐      ┌──────────────────────────────────┐  ║  │
+    │  ║   │ Building Specs:  │      │ • View Quote Details             │  ║  │
+    │  ║   │ • Building Type  │      │ • Building Specifications        │  ║  │
+    │  ║   │ • Width/Length   │─────►│ • PM Flag (is_pm_flagged)        │  ║  │
+    │  ║   │ • Module Width   │      │ • Flag Notes                     │  ║  │
+    │  ║   │ • Module Count   │      │                                  │  ║  │
+    │  ║   │ • Occupancy      │      │ [Convert to Project] ────────────┼──╬──┐
+    │  ║   │ • Special Mats   │      │                                  │  ║  │
+    │  ║   └──────────────────┘      └──────────────────────────────────┘  ║  │
+    │  ║                                                                    ║  │
+    │  ╚════════════════════════════════════════════════════════════════════╝  │
+    │                                                                          │
+    │                                         │                                │
+    │                                         │ Specs + PM Flag Transfer       │
+    │                                         ▼                                │
+    │  ╔════════════════════════════════════════════════════════════════════╗  │
+    │  ║                      PROJECT PHASE [GREEN]                         ║  │
+    │  ╠════════════════════════════════════════════════════════════════════╣  │
+    │  ║                                                                    ║  │
+    │  ║   DirectorDashboard ───────────────────────────────────────────┐   ║  │
+    │  ║   ┌──────────────────────────────────────────────────────────┐ │   ║  │
+    │  ║   │  PM Assignment Queue                                     │ │   ║  │
+    │  ║   │  • Projects with is_pm_job=true AND assigned_pm_id=NULL  │ │   ║  │
+    │  ║   │  • Drag-drop PM assignment (Kanban)                      │ │   ║  │
+    │  ║   │  • Dropdown PM selection (List)                          │ │   ║  │
+    │  ║   └────────────────────────────────────────────┬─────────────┘ │   ║  │
+    │  ║                                                │               │   ║  │
+    │  ║                                                ▼               │   ║  │
+    │  ║   PMDashboard ─────────────────────────► ProjectDetails ◄─────┘   ║  │
+    │  ║   ┌──────────────────────────────────┐  ┌───────────────────────┐ ║  │
+    │  ║   │  • My Assigned Projects          │  │ • Project Overview    │ ║  │
+    │  ║   │  • Task Management               │  │ • Building Specs      │ ║  │
+    │  ║   │  • Workflow Progress             │  │ • Modules List        │ ║  │
+    │  ║   └──────────────────────────────────┘  │ • PM Assignment Info  │ ║  │
+    │  ║                                         └───────────┬───────────┘ ║  │
+    │  ║                                                     │             ║  │
+    │  ║                         ┌───────────────────────────┼─────────┐   ║  │
+    │  ║                         │                           │         │   ║  │
+    │  ║                         ▼                           ▼         │   ║  │
+    │  ║                  WorkflowCanvas              TasksView        │   ║  │
+    │  ║                  ┌──────────────┐          ┌──────────────┐   │   ║  │
+    │  ║                  │ 19 PM Stages │          │ Task List    │   │   ║  │
+    │  ║                  │ Visual Flow  │          │ Kanban View  │   │   ║  │
+    │  ║                  └──────────────┘          └──────────────┘   │   ║  │
+    │  ║                                                               │   ║  │
+    │  ╚═══════════════════════════════════════════════════════════════╬═══╝  │
+    │                                                                  │      │
+    │                                                Creates Modules   │      │
+    │                                                                  ▼      │
+    │  ╔════════════════════════════════════════════════════════════════════╗  │
+    │  ║                     PRODUCTION PHASE [ORANGE]                      ║  │
+    │  ╠════════════════════════════════════════════════════════════════════╣  │
+    │  ║                                                                    ║  │
+    │  ║   PlantManagerDashboard                                            ║  │
+    │  ║   ┌────────────────────────────────────────────────────────────┐   ║  │
+    │  ║   │  • Production Line Overview                                │   ║  │
+    │  ║   │  • Takt Time Tracking                                      │   ║  │
+    │  ║   │  • Queue Time Monitoring                                   │   ║  │
+    │  ║   │  • Crew Attendance & Schedule                              │   ║  │
+    │  ║   │  • Quality Control                                         │   ║  │
+    │  ║   └────────────────────────────────┬───────────────────────────┘   ║  │
+    │  ║                                    │                               ║  │
+    │  ║                                    ▼                               ║  │
+    │  ║   ProductionLine                                                   ║  │
+    │  ║   ┌────────────────────────────────────────────────────────────┐   ║  │
+    │  ║   │  12 SEQUENTIAL STATIONS                                    │   ║  │
+    │  ║   │                                                            │   ║  │
+    │  ║   │  [Frame] → [Rough] → [Ext.] → [Int.] → [Elec.] → [Plumb.] │   ║  │
+    │  ║   │     ↓                                                      │   ║  │
+    │  ║   │  [HVAC] → [Insp.] → [Finish] → [Final] → [Stage] → [Ship] │   ║  │
+    │  ║   │                                                            │   ║  │
+    │  ║   └────────────────────────────────┬───────────────────────────┘   ║  │
+    │  ║                                    │                               ║  │
+    │  ║                                    ▼                               ║  │
+    │  ║   ModuleDetailModal ───────────► QCInspectionModal                ║  │
+    │  ║   ┌─────────────────────────┐   ┌─────────────────────────────┐   ║  │
+    │  ║   │ • Module Info           │   │ • Inspection Checklist      │   ║  │
+    │  ║   │ • Building Specs        │──►│ • Pass/Fail                 │   ║  │
+    │  ║   │   (from project)        │   │ • Notes & Photos            │   ║  │
+    │  ║   │ • Station History       │   │ • QC Record Creation        │   ║  │
+    │  ║   │ • Move Actions          │   │                             │   ║  │
+    │  ║   └─────────────────────────┘   └─────────────────────────────┘   ║  │
+    │  ║                                                                    ║  │
+    │  ╚════════════════════════════════════════════════════════════════════╝  │
+    │                                                                          │
+    └──────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                             MOBILE PWA APPS [CYAN]
+================================================================================
+
+
+    ┌─────────────────────────────────────┐    ┌─────────────────────────────────┐
+    │         PWA FLOOR APP               │    │        PWA MANAGER APP          │
+    │        (Floor Workers)              │    │       (Project Managers)        │
+    │                                     │    │                                 │
+    │  ┌──────────────────────────────┐   │    │  ┌──────────────────────────┐   │
+    │  │         PWAHome              │   │    │  │    ManagerDashboard     │   │
+    │  │  • Quick Actions Menu        │   │    │  │  • My Projects Count    │   │
+    │  │  • Today's Stats             │   │    │  │  • Task Summary         │   │
+    │  └──────────────┬───────────────┘   │    │  └────────────┬────────────┘   │
+    │                 │                   │    │               │                │
+    │    ┌────────────┼────────────┐      │    │               ▼                │
+    │    │            │            │      │    │  ┌──────────────────────────┐   │
+    │    ▼            ▼            ▼      │    │  │    ProjectDetail        │   │
+    │ ┌────────┐ ┌────────┐ ┌────────┐    │    │  │  + Building Specs       │◄──│── TO BE ADDED
+    │ │Module  │ │  QC    │ │Station │    │    │  │  + PM Assignment        │   │
+    │ │Lookup  │ │Inspect │ │Move    │    │    │  └────────────┬────────────┘   │
+    │ ├────────┤ ├────────┤ ├────────┤    │    │               │                │
+    │ │• Scan  │ │• Check │ │• Move  │    │    │    ┌──────────┼──────────┐     │
+    │ │• View  │ │  list  │ │  module│    │    │    │          │          │     │
+    │ │  specs │ │• Pass/ │ │• Update│    │    │    ▼          ▼          ▼     │
+    │ │        │ │  Fail  │ │  queue │    │    │ ┌──────┐ ┌──────┐ ┌──────┐    │
+    │ └────────┘ └────────┘ └────────┘    │    │ │Tasks │ │RFIs  │ │Submit│    │
+    │                                     │    │ │View  │ │View  │ │tals  │    │
+    │ ┌──────────────────────────────┐    │    │ └──────┘ └──────┘ └──────┘    │
+    │ │     InventoryReceiving       │    │    │                                │
+    │ │  • Receive PO items          │    │    └────────────────────────────────┘
+    │ │  • Verify quantities         │    │
+    │ └──────────────────────────────┘    │
+    │                                     │
+    └─────────────────────────────────────┘
+
+
+================================================================================
+                          SERVICE LAYER [SERVICE]
+================================================================================
+
+
+    ┌──────────────────────────────────────────────────────────────────────────┐
+    │                       CORE SERVICE DEPENDENCIES                           │
+    │                                                                           │
+    │                                                                           │
+    │   Component                     Service                     Tables        │
+    │   ─────────────────────────────────────────────────────────────────────   │
+    │                                                                           │
+    │   VPDashboard ─────────────► vpService ─────────────► factories          │
+    │   SalesDashboard                                       modules            │
+    │                                                        projects           │
+    │                                                        workers            │
+    │                                                        qc_records         │
+    │                                                                           │
+    │   ProductionLine ──────────► modulesService ────────► modules            │
+    │   ModuleLookup                                        projects            │
+    │   ModuleDetailModal                                   factories           │
+    │                                                       station_templates   │
+    │                                                                           │
+    │   QCInspection ────────────► qcService ─────────────► qc_records         │
+    │   QCInspectionModal                                   modules             │
+    │                                                       station_templates   │
+    │                                                       workers             │
+    │                                                                           │
+    │   AttendanceDashboard ─────► workersService ────────► workers            │
+    │   CrewScheduleView                                    worker_shifts       │
+    │   CrossTrainingMatrix                                 cross_training      │
+    │                                                                           │
+    │                                                                           │
+    │                                     │                                     │
+    │                                     ▼                                     │
+    │                           ┌─────────────────┐                            │
+    │                           │  supabaseClient │                            │
+    │                           └────────┬────────┘                            │
+    │                                    │                                     │
+    │                                    ▼                                     │
+    │                           ┌─────────────────┐                            │
+    │                           │    SUPABASE     │                            │
+    │                           │   PostgreSQL    │                            │
+    │                           └─────────────────┘                            │
+    │                                                                           │
+    └──────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                       BUILDING SPECS DATA FLOW
+================================================================================
+
+
+    ┌──────────────────────────────────────────────────────────────────────────┐
+    │              BUILDING SPECS FLOW THROUGH THE SYSTEM                       │
+    │                                                                           │
+    │                                                                           │
+    │   QuoteForm                       sales_quotes                            │
+    │   ┌────────────────────┐         ┌────────────────────────────────┐      │
+    │   │ Building Type      │────────►│ building_type                  │      │
+    │   │ Building Width     │────────►│ building_width                 │      │
+    │   │ Building Length    │────────►│ building_length                │      │
+    │   │ Module Width       │────────►│ mod_width                      │      │
+    │   │ Module Count       │────────►│ module_count                   │      │
+    │   │ Occupancy          │────────►│ occupancy                      │      │
+    │   │ Special Materials  │────────►│ special_materials (jsonb)      │      │
+    │   │                    │         │                                │      │
+    │   │ [PM Flag Toggle]   │────────►│ is_pm_flagged                  │      │
+    │   │ [Flag Notes]       │────────►│ pm_flag_notes                  │      │
+    │   └────────────────────┘         └───────────────┬────────────────┘      │
+    │                                                  │                        │
+    │                                     Convert to Project                    │
+    │                                                  │                        │
+    │                                                  ▼                        │
+    │   ProjectDetails                   projects                               │
+    │   ┌────────────────────┐         ┌────────────────────────────────┐      │
+    │   │ Building Specs     │◄────────│ building_type                  │      │
+    │   │ Section in         │◄────────│ building_width                 │      │
+    │   │ OverviewTab        │◄────────│ building_length                │      │
+    │   │                    │◄────────│ mod_width                      │      │
+    │   │                    │◄────────│ occupancy                      │      │
+    │   │                    │◄────────│ special_materials              │      │
+    │   │                    │         │                                │      │
+    │   │ PM Assignment Info │◄────────│ is_pm_job                      │      │
+    │   │                    │◄────────│ pm_flagged_from_quote          │      │
+    │   │                    │◄────────│ assigned_pm_id                 │      │
+    │   └────────────────────┘         └───────────────┬────────────────┘      │
+    │                                                  │                        │
+    │                                        modules.project_id                 │
+    │                                                  │                        │
+    │                                                  ▼                        │
+    │   ModuleDetailModal                modules (via project join)             │
+    │   ┌────────────────────┐         ┌────────────────────────────────┐      │
+    │   │ Shows Building     │◄────────│ project.building_type          │      │
+    │   │ Specs from linked  │◄────────│ project.building_width         │      │
+    │   │ project            │◄────────│ project.building_length        │      │
+    │   │                    │◄────────│ project.mod_width              │      │
+    │   │                    │◄────────│ project.occupancy              │      │
+    │   │                    │◄────────│ project.special_materials      │      │
+    │   └────────────────────┘         └────────────────────────────────┘      │
+    │                                                                           │
+    └──────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                         CORE COMPONENT COUNT
+================================================================================
+
+    Category              │ Count │ Components
+    ──────────────────────┼───────┼────────────────────────────────────────────
+    Entry Points          │   3   │ App, PWAApp, ManagerApp
+    Authentication        │   2   │ AuthProvider, WorkerAuthContext
+    Core Dashboards       │   4   │ VP, Director, PM, PlantManager
+    Sales Flow            │   2   │ QuoteForm, QuoteDetail
+    Project Management    │   3   │ ProjectDetails, WorkflowCanvas, TasksView
+    Production Line       │   3   │ ProductionLine, ModuleModal, QCModal
+    PWA Floor             │   4   │ PWAHome, ModuleLookup, QCInspection, etc.
+    PWA Manager           │   1   │ ProjectDetail (Manager)
+    Core Services         │   4   │ vpService, modulesService, qcService, etc.
+    ──────────────────────┼───────┼────────────────────────────────────────────
+    TOTAL                 │  26   │ Core components in business flow
+
+================================================================================

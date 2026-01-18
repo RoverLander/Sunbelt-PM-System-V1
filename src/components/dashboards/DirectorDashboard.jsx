@@ -37,7 +37,12 @@ import {
   Star,
   Truck,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  UserPlus,
+  List,
+  LayoutGrid,
+  GripVertical,
+  User
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -120,7 +125,7 @@ const BUILDING_TYPE_COLORS = {
 // MAIN COMPONENT
 // ============================================================================
 function DirectorDashboard() {
-  const { user: _user } = useAuth();
+  const { user } = useAuth();
 
   // ==========================================================================
   // STATE
@@ -146,6 +151,10 @@ function DirectorDashboard() {
   const [expandedSection, setExpandedSection] = useState('timeline');
   const [useWeightedWorkload, setUseWeightedWorkload] = useState(false); // Toggle for workload calculation
   const [toast, setToast] = useState(null);
+  // Assignment Queue State
+  const [assignmentViewMode, setAssignmentViewMode] = useState('kanban'); // 'list' or 'kanban'
+  const [assigningProject, setAssigningProject] = useState(null);
+  const [draggingProject, setDraggingProject] = useState(null);
 
   const [riskSettings, setRiskSettings] = useState(() => {
     const saved = localStorage.getItem('directorRiskSettings');
@@ -324,8 +333,10 @@ function DirectorDashboard() {
   // ==========================================================================
   const pmWorkloadStats = useMemo(() => {
     const activeStatuses = ['Planning', 'Pre-PM', 'PM Handoff', 'In Progress'];
-    // Roles: 'PM', 'Director' (not 'Project Manager')
-    const pms = users.filter(u => ['PM', 'Director'].includes(u.role));
+    // PM roles: PM, Project_Manager, Project Manager, Director
+    const pms = users.filter(u =>
+      ['PM', 'Project_Manager', 'Project Manager', 'Director'].includes(u.role)
+    );
 
     return pms.map(pm => {
       const pmProjects = projects.filter(p =>
@@ -364,6 +375,100 @@ function DirectorDashboard() {
   }, [users, projects, useWeightedWorkload]);
 
   // ==========================================================================
+  // ASSIGNMENT QUEUE METRICS
+  // ==========================================================================
+  const assignmentQueueData = useMemo(() => {
+    // Get all PMs (various role formats: PM, Project_Manager, Project Manager, Director)
+    const pmUsers = users.filter(u =>
+      ['PM', 'Project_Manager', 'Project Manager', 'Director'].includes(u.role)
+    );
+
+    // Projects needing assignment: is_pm_job=true AND assigned_pm_id is null
+    const unassignedProjects = projects.filter(p =>
+      p.is_pm_job === true &&
+      !p.assigned_pm_id &&
+      !['Completed', 'Cancelled', 'Archived'].includes(p.status)
+    );
+
+    // Group projects by assigned PM (for kanban columns)
+    const projectsByPM = {};
+
+    // Unassigned column
+    projectsByPM['unassigned'] = unassignedProjects;
+
+    // PM columns
+    pmUsers.forEach(pm => {
+      projectsByPM[pm.id] = projects.filter(p =>
+        p.assigned_pm_id === pm.id &&
+        !['Completed', 'Cancelled', 'Archived'].includes(p.status)
+      );
+    });
+
+    return {
+      pmUsers,
+      unassignedProjects,
+      unassignedCount: unassignedProjects.length,
+      projectsByPM
+    };
+  }, [projects, users]);
+
+  // ==========================================================================
+  // ASSIGNMENT HANDLER
+  // ==========================================================================
+  const handleAssignPM = async (projectId, pmId) => {
+    try {
+      const updates = {
+        assigned_pm_id: pmId,
+        pm_assigned_at: new Date().toISOString(),
+        pm_assigned_by: user?.id
+      };
+
+      const { error } = await supabase
+        .from('projects')
+        .update(updates)
+        .eq('id', projectId);
+
+      if (error) throw error;
+
+      // Also assign as primary_pm_id if not set
+      const project = projects.find(p => p.id === projectId);
+      if (project && !project.primary_pm_id) {
+        await supabase
+          .from('projects')
+          .update({ primary_pm_id: pmId })
+          .eq('id', projectId);
+      }
+
+      showToast('Project assigned successfully');
+      fetchDashboardData();
+      setAssigningProject(null);
+    } catch (error) {
+      console.error('Error assigning PM:', error);
+      showToast('Failed to assign PM', 'error');
+    }
+  };
+
+  const handleDragStart = (e, project) => {
+    setDraggingProject(project);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', project.id);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, pmId) => {
+    e.preventDefault();
+    if (draggingProject) {
+      // pmId can be 'unassigned' or actual PM id
+      handleAssignPM(draggingProject.id, pmId === 'unassigned' ? null : pmId);
+    }
+    setDraggingProject(null);
+  };
+
+  // ==========================================================================
   // HELPERS
   // ==========================================================================
   const showToast = (message, type = 'success') => {
@@ -386,7 +491,9 @@ function DirectorDashboard() {
   };
 
   const uniqueFactories = [...new Set(projects.map(p => p.factory).filter(Boolean))];
-  const uniquePMs = users.filter(u => ['Project Manager', 'Director', 'Admin'].includes(u.role));
+  const uniquePMs = users.filter(u =>
+    ['PM', 'Project_Manager', 'Project Manager', 'Director', 'Admin'].includes(u.role)
+  );
 
   // ==========================================================================
   // RENDER - PROJECT DETAILS
@@ -671,6 +778,286 @@ function DirectorDashboard() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ================================================================== */}
+      {/* PM ASSIGNMENT QUEUE                                               */}
+      {/* ================================================================== */}
+      {assignmentQueueData.unassignedCount > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.1))',
+          border: '1px solid rgba(139, 92, 246, 0.3)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '20px',
+          marginBottom: 'var(--space-lg)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <UserPlus size={18} style={{ color: '#8b5cf6' }} />
+              PM Assignment Queue ({assignmentQueueData.unassignedCount} unassigned)
+            </h3>
+            <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', padding: '4px' }}>
+              <button
+                onClick={() => setAssignmentViewMode('list')}
+                style={{
+                  padding: '6px 12px',
+                  background: assignmentViewMode === 'list' ? 'var(--bg-primary)' : 'transparent',
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  color: assignmentViewMode === 'list' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.8125rem'
+                }}
+              >
+                <List size={14} />
+                List
+              </button>
+              <button
+                onClick={() => setAssignmentViewMode('kanban')}
+                style={{
+                  padding: '6px 12px',
+                  background: assignmentViewMode === 'kanban' ? 'var(--bg-primary)' : 'transparent',
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  color: assignmentViewMode === 'kanban' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.8125rem'
+                }}
+              >
+                <LayoutGrid size={14} />
+                Kanban
+              </button>
+            </div>
+          </div>
+
+          {/* LIST VIEW */}
+          {assignmentViewMode === 'list' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {assignmentQueueData.unassignedProjects.map(project => (
+                <div
+                  key={project.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '14px',
+                    background: 'var(--bg-secondary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)'
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                        {project.project_number || 'New Project'}
+                      </span>
+                      {project.pm_flagged_from_quote && (
+                        <span style={{
+                          background: '#8b5cf6',
+                          color: 'white',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontSize: '0.625rem',
+                          fontWeight: '600'
+                        }}>
+                          PM Flagged
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
+                      {project.name || project.project_name}
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                      <span>{project.factory}</span>
+                      {project.contract_value && <span>{formatCurrency(project.contract_value)}</span>}
+                      {project.module_count && <span>{project.module_count} modules</span>}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <select
+                      onChange={(e) => e.target.value && handleAssignPM(project.id, e.target.value)}
+                      defaultValue=""
+                      style={{
+                        padding: '8px 12px',
+                        background: 'var(--bg-primary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-md)',
+                        color: 'var(--text-primary)',
+                        fontSize: '0.8125rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="">Assign to PM...</option>
+                      {assignmentQueueData.pmUsers.map(pm => (
+                        <option key={pm.id} value={pm.id}>
+                          {pm.name} ({pm.role})
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => setSelectedProject(project)}
+                      style={{
+                        padding: '8px 12px',
+                        background: 'transparent',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-md)',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        fontSize: '0.8125rem'
+                      }}
+                    >
+                      View
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* KANBAN VIEW */}
+          {assignmentViewMode === 'kanban' && (
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              overflowX: 'auto',
+              paddingBottom: '8px'
+            }}>
+              {/* Unassigned Column */}
+              <div
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, 'unassigned')}
+                style={{
+                  minWidth: '280px',
+                  background: 'rgba(139, 92, 246, 0.1)',
+                  borderRadius: 'var(--radius-md)',
+                  border: draggingProject ? '2px dashed #8b5cf6' : '1px solid rgba(139, 92, 246, 0.3)',
+                  overflow: 'hidden'
+                }}
+              >
+                <div style={{ padding: '12px', background: 'rgba(139, 92, 246, 0.2)', borderBottom: '1px solid rgba(139, 92, 246, 0.3)' }}>
+                  <div style={{ fontWeight: '600', color: '#8b5cf6', fontSize: '0.875rem' }}>
+                    Unassigned ({assignmentQueueData.projectsByPM['unassigned']?.length || 0})
+                  </div>
+                </div>
+                <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+                  {(assignmentQueueData.projectsByPM['unassigned'] || []).map(project => (
+                    <div
+                      key={project.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, project)}
+                      onClick={() => setSelectedProject(project)}
+                      style={{
+                        padding: '12px',
+                        background: 'var(--bg-secondary)',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--border-color)',
+                        cursor: 'grab'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                        <GripVertical size={12} style={{ color: 'var(--text-tertiary)' }} />
+                        <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.8125rem' }}>
+                          {project.project_number || 'New'}
+                        </span>
+                        {project.pm_flagged_from_quote && (
+                          <span style={{ background: '#8b5cf6', color: 'white', padding: '1px 4px', borderRadius: '2px', fontSize: '0.5625rem' }}>PM</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                        {project.name || project.project_name}
+                      </div>
+                      <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
+                        {project.factory} {project.contract_value && `• ${formatCurrency(project.contract_value)}`}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* PM Columns */}
+              {assignmentQueueData.pmUsers.map(pm => (
+                <div
+                  key={pm.id}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, pm.id)}
+                  style={{
+                    minWidth: '280px',
+                    background: 'var(--bg-secondary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: draggingProject ? '2px dashed var(--border-color)' : '1px solid var(--border-color)',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <div style={{ padding: '12px', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '50%',
+                      background: 'var(--sunbelt-orange)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: '0.75rem',
+                      fontWeight: '600'
+                    }}>
+                      {pm.name?.charAt(0) || 'P'}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                        {pm.name}
+                      </div>
+                      <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
+                        {pm.role} • {assignmentQueueData.projectsByPM[pm.id]?.length || 0} assigned
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+                    {(assignmentQueueData.projectsByPM[pm.id] || []).map(project => (
+                      <div
+                        key={project.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, project)}
+                        onClick={() => setSelectedProject(project)}
+                        style={{
+                          padding: '12px',
+                          background: 'var(--bg-primary)',
+                          borderRadius: 'var(--radius-sm)',
+                          border: '1px solid var(--border-color)',
+                          cursor: 'grab'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                          <GripVertical size={12} style={{ color: 'var(--text-tertiary)' }} />
+                          <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.8125rem' }}>
+                            {project.project_number || 'New'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                          {project.name || project.project_name}
+                        </div>
+                        <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
+                          {project.factory} {project.contract_value && `• ${formatCurrency(project.contract_value)}`}
+                        </div>
+                      </div>
+                    ))}
+                    {(assignmentQueueData.projectsByPM[pm.id] || []).length === 0 && (
+                      <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>
+                        Drop projects here
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

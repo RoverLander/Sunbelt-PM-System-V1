@@ -34,15 +34,16 @@ WHERE employee_id = 'EMP001';
 -- Verify the update
 SELECT
   'SHIFT LEAD TEST LOGIN' AS type,
-  employee_id,
-  first_name || ' ' || last_name AS name,
-  factory,
-  department,
-  is_lead,
+  w.employee_id,
+  w.first_name || ' ' || w.last_name AS name,
+  f.code AS factory,
+  w.title,
+  w.is_lead,
   '1234' AS test_pin,
-  CASE WHEN pin_hash IS NOT NULL THEN 'SET' ELSE 'MISSING' END AS pin_status
-FROM workers
-WHERE employee_id = 'EMP001';
+  CASE WHEN w.pin_hash IS NOT NULL THEN 'SET' ELSE 'MISSING' END AS pin_status
+FROM workers w
+LEFT JOIN factories f ON w.factory_id = f.id
+WHERE w.employee_id = 'EMP001';
 
 -- ============================================================================
 -- UPDATE REGULAR WORKER: Sarah Williams (EMP007) - PIN: 5678
@@ -60,15 +61,16 @@ WHERE employee_id = 'EMP007';
 -- Verify the update
 SELECT
   'WORKER TEST LOGIN' AS type,
-  employee_id,
-  first_name || ' ' || last_name AS name,
-  factory,
-  department,
-  is_lead,
+  w.employee_id,
+  w.first_name || ' ' || w.last_name AS name,
+  f.code AS factory,
+  w.title,
+  w.is_lead,
   '5678' AS test_pin,
-  CASE WHEN pin_hash IS NOT NULL THEN 'SET' ELSE 'MISSING' END AS pin_status
-FROM workers
-WHERE employee_id = 'EMP007';
+  CASE WHEN w.pin_hash IS NOT NULL THEN 'SET' ELSE 'MISSING' END AS pin_status
+FROM workers w
+LEFT JOIN factories f ON w.factory_id = f.id
+WHERE w.employee_id = 'EMP007';
 
 -- ============================================================================
 -- VERIFICATION QUERIES
@@ -77,22 +79,23 @@ WHERE employee_id = 'EMP007';
 SELECT '=== FLOOR PWA TEST LOGINS ===' AS info;
 
 SELECT
-  employee_id,
-  first_name || ' ' || last_name AS full_name,
-  factory,
-  department,
-  CASE WHEN is_lead THEN 'Shift Lead' ELSE 'Worker' END AS role,
+  w.employee_id,
+  w.first_name || ' ' || w.last_name AS full_name,
+  f.code AS factory,
+  w.title,
+  CASE WHEN w.is_lead THEN 'Shift Lead' ELSE 'Worker' END AS role,
   CASE
-    WHEN employee_id = 'EMP001' THEN '1234'
-    WHEN employee_id = 'EMP007' THEN '5678'
+    WHEN w.employee_id = 'EMP001' THEN '1234'
+    WHEN w.employee_id = 'EMP007' THEN '5678'
     ELSE 'unknown'
   END AS test_pin,
-  is_active,
-  pin_attempts,
-  pin_locked_until
-FROM workers
-WHERE employee_id IN ('EMP001', 'EMP007')
-ORDER BY is_lead DESC, employee_id;
+  w.is_active,
+  w.pin_attempts,
+  w.pin_locked_until
+FROM workers w
+LEFT JOIN factories f ON w.factory_id = f.id
+WHERE w.employee_id IN ('EMP001', 'EMP007')
+ORDER BY w.is_lead DESC, w.employee_id;
 
 SELECT '=== TEST INSTRUCTIONS ===' AS info;
 SELECT 'Go to /pwa on your mobile device or browser' AS step_1;

@@ -22,7 +22,9 @@ import {
   FileText,
   User,
   Plus,
-  ChevronDown
+  ChevronDown,
+  Ruler,
+  Box
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -46,6 +48,41 @@ const PAYMENT_TERMS = [
   { value: '50_50', label: '50% Deposit / 50% on Delivery' },
   { value: 'progress', label: 'Progress Payments' },
   { value: 'custom', label: 'Custom Terms' }
+];
+
+// Standard module widths (in feet) - matches Praxis Building Order Sheet
+const MODULE_WIDTHS = [
+  { value: '', label: 'Select width' },
+  { value: '10', label: "10'" },
+  { value: '12', label: "12'" },
+  { value: '14', label: "14'" },
+  { value: 'custom', label: 'Custom' }
+];
+
+// Building types - matches Praxis
+const BUILDING_TYPES = [
+  { value: 'CUSTOM', label: 'Custom' },
+  { value: 'GOVERNMENT', label: 'Government' },
+  { value: 'EDUCATION', label: 'Education' },
+  { value: 'HEALTHCARE', label: 'Healthcare' },
+  { value: 'COMMERCIAL', label: 'Commercial' },
+  { value: 'INDUSTRIAL', label: 'Industrial' },
+  { value: 'STOCK', label: 'Stock' }
+];
+
+// Occupancy classifications
+const OCCUPANCY_TYPES = [
+  { value: '', label: 'Select occupancy' },
+  { value: 'A', label: 'A - Assembly' },
+  { value: 'B', label: 'B - Business' },
+  { value: 'E', label: 'E - Educational' },
+  { value: 'F', label: 'F - Factory/Industrial' },
+  { value: 'H', label: 'H - High Hazard' },
+  { value: 'I', label: 'I - Institutional' },
+  { value: 'M', label: 'M - Mercantile' },
+  { value: 'R', label: 'R - Residential' },
+  { value: 'S', label: 'S - Storage' },
+  { value: 'U', label: 'U - Utility' }
 ];
 
 // ============================================================================
@@ -80,6 +117,20 @@ function QuoteForm({ quote, customers, onSave, onCancel }) {
     product_type: 'modular_building',
     product_config: {},
 
+    // Building Specifications (matches Praxis Building Order Sheet)
+    building_type: 'CUSTOM',
+    building_width: '',
+    building_length: '',
+    module_count: '',
+    mod_width: '',
+    custom_mod_width: '',  // For custom module width entry
+    occupancy: '',
+    special_materials: {
+      tt_p: false,        // TT&P (Truck, Trailer & Parts)
+      sprinklers: false,
+      plumbing: false
+    },
+
     // Pricing
     base_price: '',
     options_price: '',
@@ -108,6 +159,9 @@ function QuoteForm({ quote, customers, onSave, onCancel }) {
     fetchSalesUsers();
 
     if (quote) {
+      // Determine if mod_width is custom
+      const isCustomModWidth = quote.mod_width && !['10', '12', '14'].includes(String(quote.mod_width));
+
       setFormData({
         customer_id: quote.customer_id || '',
         project_name: quote.project_name || '',
@@ -119,6 +173,16 @@ function QuoteForm({ quote, customers, onSave, onCancel }) {
         assigned_to: quote.assigned_to || '',
         product_type: quote.product_type || 'modular_building',
         product_config: quote.product_config || {},
+        // Building Specifications
+        building_type: quote.building_type || 'CUSTOM',
+        building_width: quote.building_width || '',
+        building_length: quote.building_length || '',
+        module_count: quote.module_count || '',
+        mod_width: isCustomModWidth ? 'custom' : (quote.mod_width || ''),
+        custom_mod_width: isCustomModWidth ? quote.mod_width : '',
+        occupancy: quote.occupancy || '',
+        special_materials: quote.special_materials || { tt_p: false, sprinklers: false, plumbing: false },
+        // Pricing
         base_price: quote.base_price || '',
         options_price: quote.options_price || '',
         discount_amount: quote.discount_amount || '',
@@ -187,8 +251,23 @@ function QuoteForm({ quote, customers, onSave, onCancel }) {
         }
       }
 
+      // Clear custom mod width if switching away from custom
+      if (field === 'mod_width' && value !== 'custom') {
+        updated.custom_mod_width = '';
+      }
+
       return updated;
     });
+  };
+
+  const handleSpecialMaterialChange = (material, checked) => {
+    setFormData(prev => ({
+      ...prev,
+      special_materials: {
+        ...prev.special_materials,
+        [material]: checked
+      }
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -206,6 +285,11 @@ function QuoteForm({ quote, customers, onSave, onCancel }) {
 
     setSaving(true);
     try {
+      // Determine the actual module width value (handle custom)
+      const actualModWidth = formData.mod_width === 'custom'
+        ? (formData.custom_mod_width ? parseFloat(formData.custom_mod_width) : null)
+        : (formData.mod_width ? parseFloat(formData.mod_width) : null);
+
       const payload = {
         customer_id: formData.customer_id || null,
         project_name: formData.project_name.trim(),
@@ -217,6 +301,15 @@ function QuoteForm({ quote, customers, onSave, onCancel }) {
         assigned_to: formData.assigned_to || user?.id,
         product_type: formData.product_type,
         product_config: formData.product_config,
+        // Building Specifications
+        building_type: formData.building_type || null,
+        building_width: formData.building_width ? parseFloat(formData.building_width) : null,
+        building_length: formData.building_length ? parseFloat(formData.building_length) : null,
+        module_count: formData.module_count ? parseInt(formData.module_count) : null,
+        mod_width: actualModWidth,
+        occupancy: formData.occupancy || null,
+        special_materials: formData.special_materials,
+        // Pricing
         base_price: formData.base_price ? parseFloat(formData.base_price) : null,
         options_price: formData.options_price ? parseFloat(formData.options_price) : null,
         discount_amount: formData.discount_amount ? parseFloat(formData.discount_amount) : null,
@@ -576,6 +669,244 @@ function QuoteForm({ quote, customers, onSave, onCancel }) {
                 <option key={p.value} value={p.value}>{p.label}</option>
               ))}
             </select>
+          </div>
+
+          {/* Building Specifications - Matches Praxis Building Order Sheet */}
+          <div style={{ marginBottom: '24px' }}>
+            <h4 style={{
+              fontSize: '0.9rem',
+              fontWeight: '600',
+              color: 'var(--text-secondary)',
+              marginBottom: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <Ruler size={16} />
+              Building Specifications
+            </h4>
+
+            {/* Building Type & Occupancy Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
+                  Building Type
+                </label>
+                <select
+                  value={formData.building_type}
+                  onChange={(e) => handleChange('building_type', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.95rem'
+                  }}
+                >
+                  {BUILDING_TYPES.map(t => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
+                  Occupancy
+                </label>
+                <select
+                  value={formData.occupancy}
+                  onChange={(e) => handleChange('occupancy', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.95rem'
+                  }}
+                >
+                  {OCCUPANCY_TYPES.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Building Footprint Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
+                  Building Width (ft)
+                </label>
+                <input
+                  type="number"
+                  value={formData.building_width}
+                  onChange={(e) => handleChange('building_width', e.target.value)}
+                  placeholder="e.g., 36"
+                  min="0"
+                  step="1"
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.95rem'
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
+                  Building Length (ft)
+                </label>
+                <input
+                  type="number"
+                  value={formData.building_length}
+                  onChange={(e) => handleChange('building_length', e.target.value)}
+                  placeholder="e.g., 120"
+                  min="0"
+                  step="1"
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.95rem'
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
+                  Footprint (sq ft)
+                </label>
+                <div style={{
+                  padding: '10px 14px',
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.95rem'
+                }}>
+                  {formData.building_width && formData.building_length
+                    ? (parseFloat(formData.building_width) * parseFloat(formData.building_length)).toLocaleString() + ' sq ft'
+                    : '—'
+                  }
+                </div>
+              </div>
+            </div>
+
+            {/* Module Specs Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
+                  Module Width
+                </label>
+                <select
+                  value={formData.mod_width}
+                  onChange={(e) => handleChange('mod_width', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.95rem'
+                  }}
+                >
+                  {MODULE_WIDTHS.map(w => (
+                    <option key={w.value} value={w.value}>{w.label}</option>
+                  ))}
+                </select>
+              </div>
+              {formData.mod_width === 'custom' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
+                    Custom Width (ft)
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.custom_mod_width}
+                    onChange={(e) => handleChange('custom_mod_width', e.target.value)}
+                    placeholder="e.g., 16"
+                    min="0"
+                    step="0.5"
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      background: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.95rem'
+                    }}
+                  />
+                </div>
+              )}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
+                  Module Count {!formData.module_count && <span style={{ color: 'var(--text-tertiary)', fontWeight: 'normal' }}>(TBD OK)</span>}
+                </label>
+                <input
+                  type="number"
+                  value={formData.module_count}
+                  onChange={(e) => handleChange('module_count', e.target.value)}
+                  placeholder="TBD"
+                  min="1"
+                  step="1"
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.95rem'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Special Materials Checkboxes */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: '8px' }}>
+                Special Materials
+              </label>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.special_materials.tt_p || false}
+                    onChange={(e) => handleSpecialMaterialChange('tt_p', e.target.checked)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  TT&P
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.special_materials.sprinklers || false}
+                    onChange={(e) => handleSpecialMaterialChange('sprinklers', e.target.checked)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  Sprinklers
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.special_materials.plumbing || false}
+                    onChange={(e) => handleSpecialMaterialChange('plumbing', e.target.checked)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  Plumbing
+                </label>
+              </div>
+            </div>
           </div>
 
           {/* Pricing */}

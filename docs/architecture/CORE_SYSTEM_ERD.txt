@@ -1,0 +1,244 @@
+================================================================================
+                    SUNBELT PM SYSTEM - CORE DATABASE SCHEMA ERD
+                          18 Core Tables | ASCII Diagram
+================================================================================
+
+Legend:
+  [BLUE]   Sales Domain        [GREEN]  Projects Domain      [ORANGE] Production
+  [PURPLE] Users Domain        [YELLOW] Inventory Domain     [CYAN]   Workforce
+  [GRAY]   System Domain
+
+  ═══► = Primary Business Flow    ───► = Foreign Key Reference
+
+================================================================================
+                         CORE BUSINESS FLOW DIAGRAM
+================================================================================
+
+
+                              ┌─────────────────┐
+                              │    DEALERS      │ [BLUE]
+                              │    (3 cols)     │
+                              └────────┬────────┘
+                                       │ supplies
+                                       ▼
+    ┌──────────────────────────────────────────────────────────────────────────┐
+    │                          SALES DOMAIN [BLUE]                              │
+    │                                                                           │
+    │  ┌─────────────────────┐         ┌─────────────────────────────────────┐ │
+    │  │   SALES_CUSTOMERS   │────────►│           SALES_QUOTES              │ │
+    │  ├─────────────────────┤ creates ├─────────────────────────────────────┤ │
+    │  │ • id (PK)           │         │ • id (PK)                           │ │
+    │  │ • name              │         │ • quote_number (UK)                 │ │
+    │  │ • email             │         │ • customer_id (FK)                  │ │
+    │  │ • phone             │         │ • assigned_to (FK) → users          │ │
+    │  │ • customer_type     │         │ • total_price                       │ │
+    │  │ • dealer_id (FK)    │         │ • status                            │ │
+    │  └─────────────────────┘         │ ─────────────────────────────────── │ │
+    │                                  │ BUILDING SPECS:                     │ │
+    │                                  │ • building_type, building_width     │ │
+    │                                  │ • building_length, mod_width        │ │
+    │                                  │ • module_count, occupancy           │ │
+    │                                  │ • special_materials (jsonb)         │ │
+    │                                  │ ─────────────────────────────────── │ │
+    │                                  │ PM FLAG:                            │ │
+    │                                  │ • is_pm_flagged                     │ │
+    │                                  │ • pm_flag_notes                     │ │
+    │                                  └─────────────────┬───────────────────┘ │
+    └────────────────────────────────────────────────────┼─────────────────────┘
+                                                         │
+                                                         │ converts to
+                                                         ▼
+    ┌──────────────────────────────────────────────────────────────────────────┐
+    │                         PROJECTS DOMAIN [GREEN]                           │
+    │                                                                           │
+    │  ┌─────────────────────────────────────────────────────────────────────┐ │
+    │  │                            PROJECTS                                  │ │
+    │  ├─────────────────────────────────────────────────────────────────────┤ │
+    │  │ • id (PK)              • project_number (UK)   • project_name       │ │
+    │  │ • customer_id (FK)     • factory (code)        • status             │ │
+    │  │ • contract_value       • delivery_date         • source_quote_id    │ │
+    │  │ ─────────────────────────────────────────────────────────────────── │ │
+    │  │ BUILDING SPECS (inherited from quote):                              │ │
+    │  │ • building_type, building_width, building_length                    │ │
+    │  │ • mod_width, occupancy, special_materials                           │ │
+    │  │ ─────────────────────────────────────────────────────────────────── │ │
+    │  │ PM ASSIGNMENT:                                                      │ │
+    │  │ • is_pm_job            • pm_flagged_from_quote                      │ │
+    │  │ • assigned_pm_id (FK) → users                                       │ │
+    │  └───────────┬─────────────────────┬─────────────────────┬─────────────┘ │
+    │              │                     │                     │               │
+    │              ▼                     ▼                     ▼               │
+    │  ┌───────────────────┐ ┌───────────────────┐                            │
+    │  │      TASKS        │ │  PURCHASE_ORDERS  │ [YELLOW]                   │
+    │  ├───────────────────┤ ├───────────────────┤                            │
+    │  │ • id (PK)         │ │ • id (PK)         │                            │
+    │  │ • project_id (FK) │ │ • po_number (UK)  │                            │
+    │  │ • title           │ │ • project_id (FK) │                            │
+    │  │ • status          │ │ • factory_id (FK) │                            │
+    │  │ • priority        │ │ • vendor_name     │                            │
+    │  │ • assigned_to(FK) │ │ • status          │                            │
+    │  │ • due_date        │ │ • total_amount    │                            │
+    │  │ • workflow_stn_key│ │ • expected_date   │                            │
+    │  └───────────────────┘ └───────────────────┘                            │
+    └────────────────────────────────────┬─────────────────────────────────────┘
+                                         │
+                                         │ produces
+                                         ▼
+    ┌──────────────────────────────────────────────────────────────────────────┐
+    │                        PRODUCTION DOMAIN [ORANGE]                         │
+    │                                                                           │
+    │  ┌─────────────────────────────────────────────────────────────────────┐ │
+    │  │                            MODULES                                   │ │
+    │  ├─────────────────────────────────────────────────────────────────────┤ │
+    │  │ • id (PK)              • module_number (UK)    • project_id (FK)    │ │
+    │  │ • factory_id (FK)      • status                • sequence_number    │ │
+    │  │ • module_width         • module_length                              │ │
+    │  │ • current_station      • queue_position        • station_entered_at │ │
+    │  └───────────┬─────────────────────────────────────────────────────────┘ │
+    │              │                                                           │
+    │              │ inspected at                                              │
+    │              ▼                                                           │
+    │  ┌───────────────────────┐     ┌───────────────────────────────────────┐│
+    │  │      QC_RECORDS       │     │         STATION_TEMPLATES             ││
+    │  ├───────────────────────┤     ├───────────────────────────────────────┤│
+    │  │ • id (PK)             │     │ • id (PK)                             ││
+    │  │ • module_id (FK)      │     │ • factory_id (FK)                     ││
+    │  │ • station_key         │     │ • station_key (UK)                    ││
+    │  │ • inspector_id (FK)───┼────►│ • name                                ││
+    │  │ • passed              │     │ • sequence_order                      ││
+    │  │ • checklist_results   │     │ • default_takt_minutes                ││
+    │  │ • notes               │     │ • is_bottleneck                       ││
+    │  └───────────────────────┘     └───────────────────────────────────────┘│
+    └──────────────────────────────────────────────────────────────────────────┘
+                     │
+                     │ performed by
+                     ▼
+    ┌──────────────────────────────────────────────────────────────────────────┐
+    │                         WORKFORCE DOMAIN [CYAN]                           │
+    │                                                                           │
+    │  ┌─────────────────────────────────┐     ┌─────────────────────────────┐ │
+    │  │            WORKERS              │     │       WORKER_SHIFTS         │ │
+    │  ├─────────────────────────────────┤     ├─────────────────────────────┤ │
+    │  │ • id (PK)                       │────►│ • id (PK)                   │ │
+    │  │ • factory_id (FK)               │     │ • worker_id (FK)            │ │
+    │  │ • first_name, last_name         │     │ • factory_id (FK)           │ │
+    │  │ • employee_id (UK)              │     │ • clock_in                  │ │
+    │  │ • pin_hash (for PWA auth)       │     │ • clock_out                 │ │
+    │  │ • role                          │     │ • hours_worked              │ │
+    │  │ • primary_station               │     │ • status                    │ │
+    │  │ • is_active                     │     │                             │ │
+    │  └─────────────────────────────────┘     └─────────────────────────────┘ │
+    └──────────────────────────────────────────────────────────────────────────┘
+
+
+    ┌──────────────────────────────────────────────────────────────────────────┐
+    │                           USERS DOMAIN [PURPLE]                           │
+    │                                                                           │
+    │  ┌─────────────────────────────────────────────────────────────────────┐ │
+    │  │                             USERS                                    │ │
+    │  ├─────────────────────────────────────────────────────────────────────┤ │
+    │  │ • id (PK)           • email (UK)           • name                   │ │
+    │  │ • role              • factory_id (FK)      • is_active              │ │
+    │  │                                                                      │ │
+    │  │ Roles: VP, Director, PM, Sales Manager, Sales Rep, Plant Manager,   │ │
+    │  │        Scheduler, QC Inspector, Admin                               │ │
+    │  └─────────────────────────────────────────────────────────────────────┘ │
+    │                                                                           │
+    │  Referenced By:                                                           │
+    │  • sales_quotes.assigned_to       • projects.assigned_pm_id              │
+    │  • tasks.assigned_to              • kaizen_suggestions.user_id           │
+    └──────────────────────────────────────────────────────────────────────────┘
+
+
+    ┌──────────────────────────────────────────────────────────────────────────┐
+    │                          SYSTEM DOMAIN [GRAY]                             │
+    │                                                                           │
+    │  ┌─────────────────────────────┐     ┌─────────────────────────────────┐ │
+    │  │         FACTORIES           │     │         PLANT_CONFIG            │ │
+    │  ├─────────────────────────────┤     ├─────────────────────────────────┤ │
+    │  │ • id (PK)                   │────►│ • id (PK)                       │ │
+    │  │ • name                      │     │ • factory_id (FK)               │ │
+    │  │ • code (UK) e.g. "NWBS"     │     │ • config_key (UK)               │ │
+    │  │ • timezone                  │     │ • config_value (jsonb)          │ │
+    │  │ • is_active                 │     │                                 │ │
+    │  └─────────────────────────────┘     │ Keys: line_sim_defaults,        │ │
+    │                                      │       shift_times, etc.         │ │
+    │  Referenced By:                      └─────────────────────────────────┘ │
+    │  • modules.factory_id                                                    │
+    │  • workers.factory_id                                                    │
+    │  • users.factory_id                                                      │
+    │  • station_templates.factory_id                                          │
+    │  • purchase_orders.factory_id                                            │
+    └──────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                          CORE BUSINESS FLOW SUMMARY
+================================================================================
+
+                    ┌─────────────────────────────────────────────┐
+                    │                 THE FLOW                     │
+                    └─────────────────────────────────────────────┘
+
+    1. SALES PHASE
+       ─────────────
+       Dealer → Customer → Quote (with Building Specs)
+                              ↓
+                         VP flags for PM if needed (is_pm_flagged)
+
+    2. PROJECT CREATION
+       ────────────────
+       Quote converts to Project
+         • Building specs transfer
+         • PM flag → is_pm_job
+         • Director assigns PM (assigned_pm_id)
+
+    3. PRODUCTION PHASE
+       ────────────────
+       Project → Modules
+         • Modules flow through 12 stations
+         • Workers perform QC at each station
+         • queue_position tracks line flow
+
+    4. TRACKING
+       ────────────────
+       • Tasks track PM workflow (19 workflow stations)
+       • Purchase Orders track procurement
+       • Worker Shifts track labor
+
+
+================================================================================
+                       BUILDING SPECS FIELD MAPPING
+================================================================================
+
+    sales_quotes                          projects
+    ────────────────────────────────────  ────────────────────────────────────
+    building_type        ──────────────►  building_type
+    building_width       ──────────────►  building_width
+    building_length      ──────────────►  building_length
+    mod_width            ──────────────►  mod_width
+    occupancy            ──────────────►  occupancy
+    special_materials    ──────────────►  special_materials
+    module_count         ──────────────►  (creates N modules)
+
+    is_pm_flagged        ──────────────►  is_pm_job
+    pm_flag_notes        ──────────────►  pm_flagged_from_quote = true
+
+
+================================================================================
+                            CORE TABLE COUNT
+================================================================================
+
+    Domain        │ Tables │ Core Tables
+    ──────────────┼────────┼─────────────────────────────────────────────
+    Sales         │   5    │ 3 (sales_quotes, sales_customers, dealers)
+    Projects      │  10    │ 2 (projects, tasks)
+    Production    │   6    │ 3 (modules, station_templates, qc_records)
+    Workforce     │   8    │ 2 (workers, worker_shifts)
+    Inventory     │   3    │ 1 (purchase_orders)
+    Users         │   1    │ 1 (users)
+    System        │   8    │ 2 (factories, plant_config)
+    ──────────────┼────────┼─────────────────────────────────────────────
+    TOTAL         │  48    │ 14 Core Tables
+
+================================================================================

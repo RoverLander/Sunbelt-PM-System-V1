@@ -1,0 +1,143 @@
+@startuml CORE_COMPONENT_DIAGRAM
+' ============================================================================
+' SUNBELT PM SYSTEM - CORE COMPONENT FLOW DIAGRAM (PlantUML)
+' Essential Business Flow Components
+' ============================================================================
+
+!define ENTRY_COLOR #10b981
+!define AUTH_COLOR #a855f7
+!define DASHBOARD_COLOR #3b82f6
+!define SALES_COLOR #3b82f6
+!define PROJECT_COLOR #22c55e
+!define PRODUCTION_COLOR #f97316
+!define PWA_COLOR #06b6d4
+!define SERVICE_COLOR #64748b
+!define DB_COLOR #1e293b
+
+skinparam component {
+    BackgroundColor White
+    BorderColor Gray
+    FontSize 11
+}
+
+skinparam package {
+    FontStyle Bold
+    FontSize 12
+}
+
+skinparam arrow {
+    Color #64748b
+}
+
+' ==================== ENTRY POINTS ====================
+package "Application Entry" <<Rectangle>> #E6FFF5 {
+    [App.jsx\nMain Router] as App ENTRY_COLOR
+    [PWAApp.jsx\nFloor Workers] as PWAApp ENTRY_COLOR
+    [ManagerApp.jsx\nMobile Managers] as ManagerApp ENTRY_COLOR
+}
+
+' ==================== AUTHENTICATION ====================
+package "Authentication" <<Rectangle>> #F5E6FF {
+    [AuthProvider\nEmail/Password] as AuthProvider AUTH_COLOR
+    [WorkerAuthContext\nPIN-based] as WorkerAuth AUTH_COLOR
+}
+
+' ==================== CORE DASHBOARDS ====================
+package "Core Dashboards" <<Rectangle>> #E6F0FF {
+    [VPDashboard\nSales Pipeline + PM Flag] as VPDash DASHBOARD_COLOR
+    [DirectorDashboard\nPM Assignment Queue] as DirDash DASHBOARD_COLOR
+    [PMDashboard\nProject Management] as PMDash DASHBOARD_COLOR
+    [PlantManagerDashboard\nProduction + Crew] as PlantDash DASHBOARD_COLOR
+}
+
+' ==================== SALES FLOW ====================
+package "Sales Flow" <<Rectangle>> #E6F0FF {
+    [QuoteForm\n+ Building Specs] as QuoteForm SALES_COLOR
+    [QuoteDetail\n+ PM Flag + Convert] as QuoteDetail SALES_COLOR
+}
+
+' ==================== PROJECT MANAGEMENT ====================
+package "Project Management" <<Rectangle>> #E6FFE6 {
+    [ProjectDetails\n+ Building Specs] as ProjectDetails PROJECT_COLOR
+    [WorkflowCanvas\n19 PM Stations] as WorkflowCanvas PROJECT_COLOR
+    [TasksView] as TasksView PROJECT_COLOR
+}
+
+' ==================== PRODUCTION LINE ====================
+package "Production Line" <<Rectangle>> #FFF0E6 {
+    [ProductionLine\n12 Stations] as ProductionLine PRODUCTION_COLOR
+    [ModuleDetailModal\n+ Building Specs] as ModuleModal PRODUCTION_COLOR
+    [QCInspectionModal] as QCModal PRODUCTION_COLOR
+}
+
+' ==================== MOBILE APPS ====================
+package "Mobile Apps (PWA)" <<Rectangle>> #E6FFFF {
+    [PWAHome\nFloor Actions] as PWAHome PWA_COLOR
+    [ModuleLookup\n+ Building Specs] as ModuleLookup PWA_COLOR
+    [QCInspection] as QCInspection PWA_COLOR
+    [ProjectDetail\n(Manager PWA)] as ManagerDetail PWA_COLOR
+}
+
+' ==================== CORE SERVICES ====================
+package "Core Services" <<Rectangle>> #F0F0F0 {
+    [vpService] as vpService SERVICE_COLOR
+    [modulesService] as modulesService SERVICE_COLOR
+    [qcService] as qcService SERVICE_COLOR
+    [workersService] as workersService SERVICE_COLOR
+}
+
+' ==================== DATABASE ====================
+database "Supabase\nPostgreSQL" as Supabase DB_COLOR
+
+' ==================== RELATIONSHIPS ====================
+
+' Entry Flow
+App --> AuthProvider
+PWAApp --> WorkerAuth
+ManagerApp --> AuthProvider
+
+' Dashboard Access
+AuthProvider --> VPDash
+AuthProvider --> DirDash
+AuthProvider --> PMDash
+AuthProvider --> PlantDash
+
+' Sales to Project Conversion
+VPDash --> QuoteDetail : "views"
+QuoteDetail --> ProjectDetails : "converts to"
+QuoteForm --> QuoteDetail : "Building Specs"
+
+' Director PM Assignment
+DirDash --> ProjectDetails : "assigns PM"
+
+' PM Project Management
+PMDash --> ProjectDetails
+ProjectDetails --> WorkflowCanvas
+ProjectDetails --> TasksView
+
+' Plant Manager Production
+PlantDash --> ProductionLine
+ProductionLine --> ModuleModal : "view details"
+ModuleModal --> QCModal : "start QC"
+
+' PWA Floor App
+WorkerAuth --> PWAHome
+PWAHome --> ModuleLookup
+PWAHome --> QCInspection
+ModuleLookup ..> ModuleModal : "shows specs"
+
+' PWA Manager App
+AuthProvider --> ManagerDetail
+
+' Service Layer
+VPDash --> vpService
+ProductionLine --> modulesService
+QCInspection --> qcService
+PlantDash --> workersService
+
+vpService --> Supabase
+modulesService --> Supabase
+qcService --> Supabase
+workersService --> Supabase
+
+@enduml

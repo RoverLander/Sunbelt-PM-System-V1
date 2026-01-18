@@ -635,7 +635,15 @@ export default function ModuleDetailModal({
                   <div style={styles.projectName}>{module.project.name}</div>
                   <div style={styles.projectNumber}>
                     {module.project.project_number} • {module.project.building_type}
+                    {module.project.module_count && ` • ${module.project.module_count} modules`}
                   </div>
+                  {/* Building Specs from Project */}
+                  {(module.project.building_width || module.project.building_length) && (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                      Building: {module.project.building_width || '—'}' × {module.project.building_length || '—'}'
+                      {module.project.mod_width && ` • Mod width: ${module.project.mod_width}'`}
+                    </div>
+                  )}
                 </div>
                 <ArrowRight size={16} color="var(--text-tertiary)" />
               </div>

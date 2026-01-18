@@ -350,7 +350,7 @@ function ModuleDetailCard({ module }) {
       {module.building_category && (
         <div style={styles.infoSection}>
           <div style={styles.infoLabel}>Building Type</div>
-          <div style={styles.infoValue} style={{ textTransform: 'capitalize' }}>
+          <div style={{ ...styles.infoValue, textTransform: 'capitalize' }}>
             {module.building_category}
           </div>
         </div>

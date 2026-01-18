@@ -1,0 +1,595 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#3b82f6', 'primaryTextColor': '#fff', 'primaryBorderColor': '#1d4ed8', 'lineColor': '#64748b', 'secondaryColor': '#22c55e', 'tertiaryColor': '#f97316'}}}%%
+
+erDiagram
+    %% ============================================================================
+    %% SUNBELT PM SYSTEM - FULL DATABASE SCHEMA ERD
+    %% 48 Tables | Color-Coded by Domain
+    %% Blue: Sales | Green: Projects | Orange: Production | Purple: Users
+    %% Yellow: Inventory | Cyan: Workforce | Gray: System
+    %% ============================================================================
+
+    %% ==================== SALES DOMAIN (Blue) ====================
+    sales_quotes {
+        uuid id PK
+        text quote_number UK
+        uuid customer_id FK
+        uuid assigned_to FK
+        decimal total_price
+        text status
+        text building_type
+        int building_width
+        int building_length
+        int mod_width
+        int module_count
+        char occupancy
+        jsonb special_materials
+        boolean is_pm_flagged
+        timestamp pm_flagged_at
+        uuid pm_flagged_by FK
+        text pm_flag_notes
+        boolean is_latest_version
+        uuid parent_quote_id FK
+        int version_number
+        timestamp created_at
+    }
+
+    sales_customers {
+        uuid id PK
+        text name
+        text email
+        text phone
+        text address
+        text city
+        text state
+        text zip
+        text customer_type
+        uuid dealer_id FK
+        timestamp created_at
+    }
+
+    sales_quote_revisions {
+        uuid id PK
+        uuid quote_id FK
+        int revision_number
+        text change_summary
+        jsonb changes
+        uuid created_by FK
+        timestamp created_at
+    }
+
+    sales_activities {
+        uuid id PK
+        uuid quote_id FK
+        uuid customer_id FK
+        text activity_type
+        text description
+        uuid created_by FK
+        timestamp created_at
+    }
+
+    dealers {
+        uuid id PK
+        text name
+        text code UK
+        text contact_name
+        text contact_email
+        text contact_phone
+        text address
+        boolean is_active
+        timestamp created_at
+    }
+
+    %% ==================== PROJECTS DOMAIN (Green) ====================
+    projects {
+        uuid id PK
+        text project_number UK
+        text project_name
+        uuid customer_id FK
+        text factory
+        text status
+        decimal contract_value
+        date start_date
+        date delivery_date
+        text building_type
+        int building_width
+        int building_length
+        int mod_width
+        char occupancy
+        jsonb special_materials
+        boolean is_pm_job
+        boolean pm_flagged_from_quote
+        uuid assigned_pm_id FK
+        timestamp pm_assigned_at
+        uuid pm_assigned_by FK
+        uuid source_quote_id FK
+        timestamp created_at
+    }
+
+    tasks {
+        uuid id PK
+        uuid project_id FK
+        text title
+        text description
+        text status
+        text priority
+        uuid assigned_to FK
+        date due_date
+        text workflow_station_key
+        int display_order
+        timestamp created_at
+    }
+
+    milestones {
+        uuid id PK
+        uuid project_id FK
+        text name
+        date target_date
+        date actual_date
+        text status
+        timestamp created_at
+    }
+
+    rfis {
+        uuid id PK
+        uuid project_id FK
+        text rfi_number UK
+        text subject
+        text question
+        text answer
+        text status
+        uuid submitted_by FK
+        uuid assigned_to FK
+        timestamp created_at
+    }
+
+    submittals {
+        uuid id PK
+        uuid project_id FK
+        text submittal_number UK
+        text title
+        text description
+        text status
+        text file_url
+        uuid submitted_by FK
+        timestamp created_at
+    }
+
+    change_orders {
+        uuid id PK
+        uuid project_id FK
+        text co_number UK
+        text title
+        text description
+        decimal amount
+        text status
+        uuid requested_by FK
+        uuid approved_by FK
+        timestamp created_at
+    }
+
+    project_logs {
+        uuid id PK
+        uuid project_id FK
+        text log_type
+        text message
+        jsonb metadata
+        uuid created_by FK
+        timestamp created_at
+    }
+
+    color_selections {
+        uuid id PK
+        uuid project_id FK
+        text component
+        text color_code
+        text color_name
+        uuid selected_by FK
+        timestamp created_at
+    }
+
+    project_workflow_status {
+        uuid id PK
+        uuid project_id FK
+        text station_key
+        text status
+        timestamp started_at
+        timestamp completed_at
+    }
+
+    project_external_contacts {
+        uuid id PK
+        uuid project_id FK
+        uuid external_contact_id FK
+        text role
+        timestamp created_at
+    }
+
+    %% ==================== PRODUCTION DOMAIN (Orange) ====================
+    modules {
+        uuid id PK
+        text module_number UK
+        uuid project_id FK
+        uuid factory_id FK
+        text status
+        int sequence_number
+        decimal module_width
+        decimal module_length
+        decimal module_height
+        text current_station
+        int queue_position
+        timestamp station_entered_at
+        timestamp created_at
+    }
+
+    station_templates {
+        uuid id PK
+        uuid factory_id FK
+        text station_key UK
+        text name
+        int sequence_order
+        int default_takt_minutes
+        boolean is_bottleneck
+        boolean is_active
+        timestamp created_at
+    }
+
+    station_assignments {
+        uuid id PK
+        uuid station_id FK
+        uuid worker_id FK
+        uuid lead_id FK
+        text shift
+        boolean is_active
+        timestamp created_at
+    }
+
+    module_queue_history {
+        uuid id PK
+        uuid module_id FK
+        text station_key
+        int queue_position
+        timestamp entered_at
+        timestamp exited_at
+        int wait_time_minutes
+    }
+
+    %% ==================== QC DOMAIN (Orange subset) ====================
+    qc_records {
+        uuid id PK
+        uuid module_id FK
+        uuid station_id FK
+        text station_key
+        uuid inspector_id FK
+        boolean passed
+        jsonb checklist_results
+        text notes
+        text[] photos
+        timestamp inspected_at
+    }
+
+    inspection_rules {
+        uuid id PK
+        uuid factory_id FK
+        text station_key
+        text rule_name
+        text description
+        boolean is_required
+        int display_order
+        boolean is_active
+        timestamp created_at
+    }
+
+    %% ==================== WORKFORCE DOMAIN (Cyan) ====================
+    workers {
+        uuid id PK
+        uuid factory_id FK
+        text first_name
+        text last_name
+        text full_name
+        text employee_id UK
+        text pin_hash
+        text email
+        text phone
+        text role
+        text primary_station
+        boolean is_active
+        timestamp created_at
+    }
+
+    worker_shifts {
+        uuid id PK
+        uuid worker_id FK
+        uuid factory_id FK
+        timestamp clock_in
+        timestamp clock_out
+        decimal hours_worked
+        text status
+        text shift_type
+        timestamp created_at
+    }
+
+    worker_sessions {
+        uuid id PK
+        uuid worker_id FK
+        text session_token UK
+        timestamp expires_at
+        timestamp created_at
+    }
+
+    cross_training {
+        uuid id PK
+        uuid worker_id FK
+        text station_key
+        int proficiency_level
+        date certified_date
+        uuid certified_by FK
+        timestamp created_at
+    }
+
+    %% ==================== EFFICIENCY DOMAIN (Cyan subset) ====================
+    takt_events {
+        uuid id PK
+        uuid module_id FK
+        uuid factory_id FK
+        text station_key
+        timestamp started_at
+        timestamp completed_at
+        int duration_minutes
+        boolean met_target
+        uuid worker_id FK
+    }
+
+    kaizen_suggestions {
+        uuid id PK
+        uuid factory_id FK
+        uuid user_id FK
+        text title
+        text description
+        text category
+        text status
+        int impact_score
+        uuid reviewed_by FK
+        text review_notes
+        timestamp created_at
+    }
+
+    safety_checks {
+        uuid id PK
+        uuid factory_id FK
+        uuid worker_id FK
+        text check_type
+        boolean passed
+        text notes
+        timestamp checked_at
+    }
+
+    five_s_audits {
+        uuid id PK
+        uuid factory_id FK
+        text area
+        int sort_score
+        int set_in_order_score
+        int shine_score
+        int standardize_score
+        int sustain_score
+        int total_score
+        uuid auditor_id FK
+        timestamp audited_at
+    }
+
+    %% ==================== INVENTORY DOMAIN (Yellow) ====================
+    purchase_orders {
+        uuid id PK
+        text po_number UK
+        uuid project_id FK
+        uuid factory_id FK
+        text vendor_name
+        text status
+        decimal total_amount
+        date expected_date
+        date received_date
+        uuid created_by FK
+        timestamp created_at
+    }
+
+    inventory_receipts {
+        uuid id PK
+        uuid purchase_order_id FK
+        uuid factory_id FK
+        text item_description
+        int quantity_ordered
+        int quantity_received
+        uuid received_by FK
+        text notes
+        timestamp received_at
+    }
+
+    long_lead_items {
+        uuid id PK
+        uuid project_id FK
+        text item_name
+        text vendor
+        int lead_time_days
+        date order_date
+        date expected_date
+        text status
+        timestamp created_at
+    }
+
+    %% ==================== USERS DOMAIN (Purple) ====================
+    users {
+        uuid id PK
+        text email UK
+        text name
+        text role
+        uuid factory_id FK
+        text phone
+        boolean is_active
+        timestamp created_at
+    }
+
+    %% ==================== SYSTEM DOMAIN (Gray) ====================
+    factories {
+        uuid id PK
+        text name
+        text code UK
+        text address
+        text city
+        text state
+        text zip
+        text timezone
+        boolean is_active
+        timestamp created_at
+    }
+
+    departments {
+        uuid id PK
+        uuid factory_id FK
+        text name
+        text code UK
+        uuid manager_id FK
+        timestamp created_at
+    }
+
+    directory_contacts {
+        uuid id PK
+        uuid factory_id FK
+        text name
+        text title
+        text department
+        text email
+        text phone
+        text extension
+        boolean is_active
+        timestamp created_at
+    }
+
+    external_contacts {
+        uuid id PK
+        text name
+        text company
+        text role
+        text email
+        text phone
+        timestamp created_at
+    }
+
+    plant_config {
+        uuid id PK
+        uuid factory_id FK
+        text config_key UK
+        jsonb config_value
+        timestamp updated_at
+    }
+
+    calendar_audit {
+        uuid id PK
+        uuid factory_id FK
+        date audit_date
+        text audit_type
+        jsonb data
+        uuid created_by FK
+        timestamp created_at
+    }
+
+    workflow_stations {
+        uuid id PK
+        text station_key UK
+        text name
+        text category
+        int sequence_order
+        text description
+        boolean is_active
+        timestamp created_at
+    }
+
+    announcements {
+        uuid id PK
+        uuid factory_id FK
+        text title
+        text content
+        text priority
+        text target_role
+        date start_date
+        date end_date
+        uuid created_by FK
+        boolean is_active
+        timestamp created_at
+    }
+
+    %% ==================== RELATIONSHIPS ====================
+
+    %% Sales Relationships
+    sales_quotes ||--o{ sales_quote_revisions : "has revisions"
+    sales_quotes ||--o{ sales_activities : "has activities"
+    sales_quotes }o--|| sales_customers : "for customer"
+    sales_quotes }o--o| users : "assigned to"
+    sales_quotes }o--o| users : "flagged by"
+    sales_quotes }o--o| sales_quotes : "parent quote"
+    sales_customers }o--o| dealers : "through dealer"
+    sales_activities }o--o| users : "created by"
+
+    %% Projects Relationships
+    projects }o--o| sales_quotes : "from quote"
+    projects }o--o| sales_customers : "for customer"
+    projects }o--o| users : "assigned PM"
+    projects ||--o{ tasks : "has tasks"
+    projects ||--o{ milestones : "has milestones"
+    projects ||--o{ rfis : "has RFIs"
+    projects ||--o{ submittals : "has submittals"
+    projects ||--o{ change_orders : "has COs"
+    projects ||--o{ project_logs : "has logs"
+    projects ||--o{ color_selections : "has colors"
+    projects ||--o{ project_workflow_status : "has workflow"
+    projects ||--o{ project_external_contacts : "has contacts"
+    projects ||--o{ modules : "has modules"
+    projects ||--o{ purchase_orders : "has POs"
+    projects ||--o{ long_lead_items : "has LLIs"
+    tasks }o--o| users : "assigned to"
+    rfis }o--o| users : "submitted/assigned"
+    change_orders }o--o| users : "requested/approved"
+    project_external_contacts }o--|| external_contacts : "links to"
+
+    %% Production Relationships
+    modules }o--|| projects : "belongs to"
+    modules }o--|| factories : "in factory"
+    modules ||--o{ qc_records : "has QC"
+    modules ||--o{ module_queue_history : "has history"
+    modules ||--o{ takt_events : "has takt"
+    station_templates }o--|| factories : "in factory"
+    station_templates ||--o{ station_assignments : "has assignments"
+    station_assignments }o--|| workers : "assigned worker"
+    station_assignments }o--o| users : "lead"
+    qc_records }o--|| workers : "inspected by"
+
+    %% Workforce Relationships
+    workers }o--|| factories : "works at"
+    workers ||--o{ worker_shifts : "has shifts"
+    workers ||--o{ worker_sessions : "has sessions"
+    workers ||--o{ cross_training : "has training"
+    workers ||--o{ takt_events : "performed"
+    workers ||--o{ safety_checks : "performed"
+    cross_training }o--o| users : "certified by"
+
+    %% Efficiency Relationships
+    kaizen_suggestions }o--|| factories : "for factory"
+    kaizen_suggestions }o--|| users : "submitted by"
+    kaizen_suggestions }o--o| users : "reviewed by"
+    five_s_audits }o--|| factories : "for factory"
+    five_s_audits }o--|| users : "audited by"
+
+    %% Inventory Relationships
+    purchase_orders }o--o| projects : "for project"
+    purchase_orders }o--|| factories : "at factory"
+    purchase_orders }o--|| users : "created by"
+    purchase_orders ||--o{ inventory_receipts : "has receipts"
+    inventory_receipts }o--|| workers : "received by"
+
+    %% System Relationships
+    factories ||--o{ departments : "has depts"
+    factories ||--o{ directory_contacts : "has contacts"
+    factories ||--o{ plant_config : "has config"
+    factories ||--o{ announcements : "has announcements"
+    factories ||--o{ calendar_audit : "has audits"
+    departments }o--o| users : "managed by"
+    users }o--o| factories : "at factory"

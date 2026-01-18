@@ -1,0 +1,205 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#3b82f6', 'primaryTextColor': '#fff', 'primaryBorderColor': '#1d4ed8', 'lineColor': '#64748b', 'secondaryColor': '#22c55e', 'tertiaryColor': '#f97316'}}}%%
+
+erDiagram
+    %% ============================================================================
+    %% SUNBELT PM SYSTEM - CORE DATABASE SCHEMA ERD
+    %% 18 Core Tables | The Essential Business Flow
+    %% Blue: Sales | Green: Projects | Orange: Production | Purple: Users
+    %% Yellow: Inventory | Cyan: Workforce | Gray: System
+    %% ============================================================================
+
+    %% ==================== SALES (Blue) ====================
+    sales_quotes {
+        uuid id PK
+        text quote_number UK
+        uuid customer_id FK "→ sales_customers"
+        uuid assigned_to FK "→ users"
+        decimal total_price
+        text status
+        text building_type
+        int building_width
+        int building_length
+        int mod_width
+        int module_count
+        char occupancy
+        jsonb special_materials
+        boolean is_pm_flagged
+        text pm_flag_notes
+        boolean is_latest_version
+    }
+
+    sales_customers {
+        uuid id PK
+        text name
+        text email
+        text phone
+        text customer_type
+        uuid dealer_id FK "→ dealers"
+    }
+
+    dealers {
+        uuid id PK
+        text name
+        text code UK
+        boolean is_active
+    }
+
+    %% ==================== PROJECTS (Green) ====================
+    projects {
+        uuid id PK
+        text project_number UK
+        text project_name
+        uuid customer_id FK "→ sales_customers"
+        text factory "Factory code"
+        text status
+        decimal contract_value
+        date delivery_date
+        text building_type
+        int building_width
+        int building_length
+        int mod_width
+        char occupancy
+        jsonb special_materials
+        boolean is_pm_job
+        boolean pm_flagged_from_quote
+        uuid assigned_pm_id FK "→ users"
+        uuid source_quote_id FK "→ sales_quotes"
+    }
+
+    tasks {
+        uuid id PK
+        uuid project_id FK "→ projects"
+        text title
+        text status
+        text priority
+        uuid assigned_to FK "→ users"
+        date due_date
+        text workflow_station_key
+    }
+
+    %% ==================== PRODUCTION (Orange) ====================
+    modules {
+        uuid id PK
+        text module_number UK
+        uuid project_id FK "→ projects"
+        uuid factory_id FK "→ factories"
+        text status
+        int sequence_number
+        decimal module_width
+        decimal module_length
+        text current_station
+        int queue_position
+        timestamp station_entered_at
+    }
+
+    station_templates {
+        uuid id PK
+        uuid factory_id FK "→ factories"
+        text station_key UK
+        text name
+        int sequence_order
+        int default_takt_minutes
+        boolean is_bottleneck
+    }
+
+    qc_records {
+        uuid id PK
+        uuid module_id FK "→ modules"
+        text station_key
+        uuid inspector_id FK "→ workers"
+        boolean passed
+        jsonb checklist_results
+        text notes
+    }
+
+    %% ==================== WORKFORCE (Cyan) ====================
+    workers {
+        uuid id PK
+        uuid factory_id FK "→ factories"
+        text first_name
+        text last_name
+        text employee_id UK
+        text pin_hash
+        text role
+        text primary_station
+        boolean is_active
+    }
+
+    worker_shifts {
+        uuid id PK
+        uuid worker_id FK "→ workers"
+        uuid factory_id FK "→ factories"
+        timestamp clock_in
+        timestamp clock_out
+        decimal hours_worked
+        text status
+    }
+
+    %% ==================== INVENTORY (Yellow) ====================
+    purchase_orders {
+        uuid id PK
+        text po_number UK
+        uuid project_id FK "→ projects"
+        uuid factory_id FK "→ factories"
+        text vendor_name
+        text status
+        decimal total_amount
+        date expected_date
+    }
+
+    %% ==================== USERS (Purple) ====================
+    users {
+        uuid id PK
+        text email UK
+        text name
+        text role
+        uuid factory_id FK "→ factories"
+        boolean is_active
+    }
+
+    %% ==================== SYSTEM (Gray) ====================
+    factories {
+        uuid id PK
+        text name
+        text code UK
+        text timezone
+        boolean is_active
+    }
+
+    plant_config {
+        uuid id PK
+        uuid factory_id FK "→ factories"
+        text config_key UK
+        jsonb config_value
+    }
+
+    %% ==================== CORE RELATIONSHIPS ====================
+
+    %% Sales Flow
+    dealers ||--o{ sales_customers : "supplies"
+    sales_customers ||--o{ sales_quotes : "requests"
+    users ||--o{ sales_quotes : "manages"
+
+    %% Quote to Project Conversion
+    sales_quotes ||--o| projects : "converts to"
+    sales_customers ||--o{ projects : "orders"
+    users ||--o{ projects : "manages as PM"
+
+    %% Project to Production
+    projects ||--o{ modules : "produces"
+    projects ||--o{ tasks : "has"
+    projects ||--o{ purchase_orders : "procures for"
+
+    %% Production Floor
+    factories ||--o{ modules : "manufactures"
+    factories ||--o{ station_templates : "configures"
+    modules ||--o{ qc_records : "inspected"
+
+    %% Workforce
+    factories ||--o{ workers : "employs"
+    workers ||--o{ worker_shifts : "logs"
+    workers ||--o{ qc_records : "performs"
+
+    %% System Config
+    factories ||--o{ plant_config : "configured by"
+    factories ||--o{ users : "houses"

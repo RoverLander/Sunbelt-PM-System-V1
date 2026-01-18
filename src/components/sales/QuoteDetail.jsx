@@ -199,7 +199,7 @@ function QuoteDetail({ quote, onBack, onEdit, onRefresh }) {
 
     setUpdating(true);
     try {
-      // Create the project
+      // Create the project with building specs and PM flag info
       const projectData = {
         project_name: quote.project_name,
         factory: quote.factory,
@@ -216,6 +216,19 @@ function QuoteDetail({ quote, onBack, onEdit, onRefresh }) {
         city: quote.project_city || null,
         state: quote.project_state || null,
         description: quote.project_description || null,
+        // Building Specifications - transferred from quote
+        building_type: quote.building_type || null,
+        building_width: quote.building_width || null,
+        building_length: quote.building_length || null,
+        module_count: quote.module_count || null,
+        mod_width: quote.mod_width || null,
+        occupancy: quote.occupancy || null,
+        special_materials: quote.special_materials || null,
+        // PM Flag - if quote was flagged as PM project
+        is_pm_job: quote.is_pm_flagged || true, // Default to true since it's being converted via PM path
+        pm_flagged_from_quote: quote.is_pm_flagged || false,
+        // If quote was PM-flagged, project goes to Director's unassigned queue
+        // assigned_pm_id stays null until Director assigns
         created_by: user?.id
       };
 
@@ -245,11 +258,11 @@ function QuoteDetail({ quote, onBack, onEdit, onRefresh }) {
         quote_id: quote.id,
         activity_type: 'other',
         subject: 'Project created from quote',
-        description: `PM Project created: ${newProject.project_name}`,
+        description: `PM Project created: ${newProject.project_name}${quote.is_pm_flagged ? ' (PM-Flagged)' : ''}`,
         created_by: user?.id
       });
 
-      alert('Project created successfully!');
+      alert('Project created successfully!' + (quote.is_pm_flagged ? ' This PM-flagged project will appear in the Director\'s assignment queue.' : ''));
       onRefresh();
     } catch (error) {
       console.error('Error creating project:', error);

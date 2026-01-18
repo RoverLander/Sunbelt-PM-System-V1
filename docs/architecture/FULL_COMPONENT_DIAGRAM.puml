@@ -1,0 +1,271 @@
+@startuml FULL_COMPONENT_DIAGRAM
+' ============================================================================
+' SUNBELT PM SYSTEM - FULL COMPONENT DEPENDENCY DIAGRAM (PlantUML)
+' 148 Components | Color-Coded by Domain
+' ============================================================================
+
+!define ENTRY_COLOR #10b981
+!define AUTH_COLOR #a855f7
+!define DASHBOARD_COLOR #3b82f6
+!define SALES_COLOR #3b82f6
+!define PROJECT_COLOR #22c55e
+!define PRODUCTION_COLOR #f97316
+!define PWA_COLOR #06b6d4
+!define INVENTORY_COLOR #eab308
+!define SERVICE_COLOR #64748b
+!define SHARED_COLOR #94a3b8
+
+skinparam component {
+    BackgroundColor White
+    BorderColor Gray
+    FontSize 10
+}
+
+skinparam package {
+    FontStyle Bold
+    FontSize 12
+}
+
+' ==================== ENTRY POINTS ====================
+package "Entry Points" <<Rectangle>> #E6FFF5 {
+    [App.jsx] as App ENTRY_COLOR
+    [PWAApp.jsx] as PWAApp ENTRY_COLOR
+    [ManagerApp.jsx] as ManagerApp ENTRY_COLOR
+}
+
+' ==================== AUTHENTICATION ====================
+package "Authentication" <<Rectangle>> #F5E6FF {
+    [AuthProvider.jsx] as AuthProvider AUTH_COLOR
+    [WorkerAuthContext.jsx] as WorkerAuthContext AUTH_COLOR
+    [ManagerAuthContext.jsx] as ManagerAuthContext AUTH_COLOR
+    [Login.jsx] as Login AUTH_COLOR
+    [WorkerPinLogin.jsx] as WorkerPinLogin AUTH_COLOR
+}
+
+' ==================== DASHBOARDS ====================
+package "Dashboards" <<Rectangle>> #E6F0FF {
+    [VPDashboard.jsx] as VPDashboard DASHBOARD_COLOR
+    [DirectorDashboard.jsx] as DirectorDashboard DASHBOARD_COLOR
+    [PMDashboard.jsx] as PMDashboard DASHBOARD_COLOR
+    [PlantManagerDashboard.jsx] as PlantManagerDash DASHBOARD_COLOR
+    [SalesDashboard.jsx] as SalesDashboard DASHBOARD_COLOR
+    [SalesManagerDashboard.jsx] as SalesManagerDash DASHBOARD_COLOR
+}
+
+' ==================== SALES COMPONENTS ====================
+package "Sales Components" <<Rectangle>> #E6F0FF {
+    [QuoteList.jsx] as QuoteList SALES_COLOR
+    [QuoteForm.jsx] as QuoteForm SALES_COLOR
+    [QuoteDetail.jsx] as QuoteDetail SALES_COLOR
+    [CustomerList.jsx] as CustomerList SALES_COLOR
+    [CustomerForm.jsx] as CustomerForm SALES_COLOR
+    [CustomerDetail.jsx] as CustomerDetail SALES_COLOR
+    [DealerList.jsx] as DealerList SALES_COLOR
+    [DealerForm.jsx] as DealerForm SALES_COLOR
+    [SalesPipeline.jsx] as SalesPipeline SALES_COLOR
+}
+
+' ==================== PROJECT COMPONENTS ====================
+package "Project Components" <<Rectangle>> #E6FFE6 {
+    [ProjectsList.jsx] as ProjectsList PROJECT_COLOR
+    [ProjectDetails.jsx] as ProjectDetails PROJECT_COLOR
+    [ProjectForm.jsx] as ProjectForm PROJECT_COLOR
+    [KanbanBoard.jsx] as KanbanBoard PROJECT_COLOR
+    [WorkflowCanvas.jsx] as WorkflowCanvas PROJECT_COLOR
+
+    package "Project Tabs" {
+        [OverviewTab.jsx] as OverviewTab PROJECT_COLOR
+        [TasksView.jsx] as TasksView PROJECT_COLOR
+        [MilestonesView.jsx] as MilestonesView PROJECT_COLOR
+        [RFIsView.jsx] as RFIsView PROJECT_COLOR
+        [SubmittalsView.jsx] as SubmittalsView PROJECT_COLOR
+        [ChangeOrdersView.jsx] as ChangeOrdersView PROJECT_COLOR
+        [LogsView.jsx] as LogsView PROJECT_COLOR
+        [ColorSelectionsView.jsx] as ColorSelectionsView PROJECT_COLOR
+    }
+}
+
+' ==================== PRODUCTION COMPONENTS ====================
+package "Production Components" <<Rectangle>> #FFF0E6 {
+    [ProductionLine.jsx] as ProductionLine PRODUCTION_COLOR
+    [StationBox.jsx] as StationBox PRODUCTION_COLOR
+    [ModuleCard.jsx] as ModuleCard PRODUCTION_COLOR
+
+    package "Modals" {
+        [StationDetailModal.jsx] as StationDetailModal PRODUCTION_COLOR
+        [ModuleDetailModal.jsx] as ModuleDetailModal PRODUCTION_COLOR
+        [QCInspectionModal.jsx] as QCInspectionModal PRODUCTION_COLOR
+    }
+
+    package "Efficiency" {
+        [TaktTimeTracker.jsx] as TaktTimeTracker PRODUCTION_COLOR
+        [QueueTimeMonitor.jsx] as QueueTimeMonitor PRODUCTION_COLOR
+        [OEECalculator.jsx] as OEECalculator PRODUCTION_COLOR
+        [KaizenBoard.jsx] as KaizenBoard PRODUCTION_COLOR
+        [DefectTimer.jsx] as DefectTimer PRODUCTION_COLOR
+        [CrewUtilizationHeatmap.jsx] as CrewUtilizationHeatmap PRODUCTION_COLOR
+        [CrossTrainingMatrix.jsx] as CrossTrainingMatrix PRODUCTION_COLOR
+        [VisualLoadBoard.jsx] as VisualLoadBoard PRODUCTION_COLOR
+    }
+
+    package "Crew" {
+        [AttendanceDashboard.jsx] as AttendanceDashboard PRODUCTION_COLOR
+        [CrewScheduleView.jsx] as CrewScheduleView PRODUCTION_COLOR
+    }
+}
+
+' ==================== PWA FLOOR APP ====================
+package "PWA Floor App" <<Rectangle>> #E6FFFF {
+    [PWAShell.jsx] as PWAShell PWA_COLOR
+    [PWAHome.jsx] as PWAHome PWA_COLOR
+    [ModuleLookup.jsx] as ModuleLookup PWA_COLOR
+    [QCInspection.jsx] as QCInspection PWA_COLOR
+    [StationMove.jsx] as StationMove PWA_COLOR
+    [InventoryReceiving.jsx] as InventoryReceiving PWA_COLOR
+    [PWAProfile.jsx] as PWAProfile PWA_COLOR
+}
+
+' ==================== PWA MANAGER APP ====================
+package "PWA Manager App" <<Rectangle>> #E6FFFF {
+    [ManagerShell.jsx] as ManagerShell PWA_COLOR
+    [ManagerDashboard.jsx] as ManagerDashboard PWA_COLOR
+    [Manager_ProjectsList.jsx] as ManagerProjectsList PWA_COLOR
+    [Manager_ProjectDetail.jsx] as ManagerProjectDetail PWA_COLOR
+    [Manager_TasksView.jsx] as ManagerTasksView PWA_COLOR
+    [Manager_RFIsView.jsx] as ManagerRFIsView PWA_COLOR
+}
+
+' ==================== INVENTORY COMPONENTS ====================
+package "Inventory Components" <<Rectangle>> #FFFCE6 {
+    [PurchaseOrderList.jsx] as PurchaseOrderList INVENTORY_COLOR
+    [PurchaseOrderForm.jsx] as PurchaseOrderForm INVENTORY_COLOR
+    [InventoryReceiptList.jsx] as InventoryReceiptList INVENTORY_COLOR
+    [LongLeadItems.jsx] as LongLeadItems INVENTORY_COLOR
+}
+
+' ==================== SERVICE LAYER ====================
+package "Service Layer" <<Rectangle>> #F0F0F0 {
+    [stationService.js] as stationService SERVICE_COLOR
+    [modulesService.js] as modulesService SERVICE_COLOR
+    [workersService.js] as workersService SERVICE_COLOR
+    [qcService.js] as qcService SERVICE_COLOR
+    [efficiencyService.js] as efficiencyService SERVICE_COLOR
+    [vpService.js] as vpService SERVICE_COLOR
+    [purchaseOrdersService.js] as purchaseOrdersService SERVICE_COLOR
+    [inventoryReceiptsService.js] as inventoryReceiptsService SERVICE_COLOR
+    [validationService.js] as validationService SERVICE_COLOR
+    [workerAuthService.js] as workerAuthService SERVICE_COLOR
+}
+
+' ==================== SUPABASE ====================
+database "Supabase" as Supabase {
+    [supabaseClient.js] as supabaseClient
+}
+
+' ==================== RELATIONSHIPS ====================
+
+' Entry Points
+App --> AuthProvider
+App --> VPDashboard
+App --> DirectorDashboard
+App --> PMDashboard
+App --> PlantManagerDash
+App --> SalesDashboard
+App --> SalesManagerDash
+App --> ProjectsList
+App --> QuoteList
+
+PWAApp --> WorkerAuthContext
+PWAApp --> PWAShell
+
+ManagerApp --> ManagerAuthContext
+ManagerApp --> ManagerShell
+
+' Auth Flow
+AuthProvider --> Login
+WorkerAuthContext --> WorkerPinLogin
+WorkerAuthContext --> workerAuthService
+
+' Dashboard Dependencies
+VPDashboard --> vpService
+VPDashboard --> QuoteDetail
+VPDashboard --> ProductionLine
+
+DirectorDashboard --> ProjectsList
+DirectorDashboard --> KanbanBoard
+
+PMDashboard --> ProjectDetails
+PMDashboard --> WorkflowCanvas
+
+PlantManagerDash --> ProductionLine
+PlantManagerDash --> TaktTimeTracker
+PlantManagerDash --> QueueTimeMonitor
+PlantManagerDash --> AttendanceDashboard
+PlantManagerDash --> CrewScheduleView
+PlantManagerDash --> QCInspectionModal
+
+SalesDashboard --> QuoteList
+SalesDashboard --> SalesPipeline
+
+' Sales Flow
+QuoteList --> QuoteDetail
+QuoteList --> QuoteForm
+QuoteDetail --> ProjectForm
+
+' Project Flow
+ProjectsList --> ProjectDetails
+ProjectDetails --> OverviewTab
+ProjectDetails --> TasksView
+ProjectDetails --> KanbanBoard
+ProjectDetails --> WorkflowCanvas
+
+' Production Flow
+ProductionLine --> StationBox
+StationBox --> ModuleCard
+StationBox --> StationDetailModal
+ModuleCard --> ModuleDetailModal
+StationDetailModal --> QCInspectionModal
+
+' PWA Floor Flow
+PWAShell --> PWAHome
+PWAHome --> ModuleLookup
+PWAHome --> QCInspection
+PWAHome --> StationMove
+PWAHome --> InventoryReceiving
+
+ModuleLookup --> modulesService
+QCInspection --> qcService
+StationMove --> stationService
+InventoryReceiving --> inventoryReceiptsService
+
+' PWA Manager Flow
+ManagerShell --> ManagerDashboard
+ManagerDashboard --> ManagerProjectsList
+ManagerProjectsList --> ManagerProjectDetail
+ManagerProjectDetail --> ManagerTasksView
+
+' Service to Supabase
+stationService --> supabaseClient
+modulesService --> supabaseClient
+workersService --> supabaseClient
+qcService --> supabaseClient
+efficiencyService --> supabaseClient
+vpService --> supabaseClient
+purchaseOrdersService --> supabaseClient
+inventoryReceiptsService --> supabaseClient
+workerAuthService --> supabaseClient
+
+' Efficiency to Services
+TaktTimeTracker --> efficiencyService
+QueueTimeMonitor --> modulesService
+OEECalculator --> efficiencyService
+KaizenBoard --> efficiencyService
+AttendanceDashboard --> workersService
+CrewScheduleView --> workersService
+CrossTrainingMatrix --> workersService
+
+' Inventory to Services
+PurchaseOrderList --> purchaseOrdersService
+InventoryReceiptList --> inventoryReceiptsService
+
+@enduml

@@ -1,0 +1,331 @@
+================================================================================
+                    SUNBELT PM SYSTEM - FULL DATABASE SCHEMA ERD
+                           48 Tables | ASCII Diagram
+================================================================================
+
+Legend:
+  [BLUE]   Sales Domain        [GREEN]  Projects Domain      [ORANGE] Production Domain
+  [PURPLE] Users Domain        [YELLOW] Inventory Domain     [CYAN]   Workforce Domain
+  [GRAY]   System Domain
+
+  PK = Primary Key    FK = Foreign Key    UK = Unique Key
+  ──► = One-to-Many   ◄──► = Many-to-Many   ─── = One-to-One
+
+================================================================================
+                              SALES DOMAIN [BLUE]
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              sales_quotes                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PK  id                 │ quote_number (UK)      │ customer_id (FK)          │
+│ assigned_to (FK)       │ total_price            │ status                    │
+│ building_type          │ building_width         │ building_length           │
+│ mod_width              │ module_count           │ occupancy                 │
+│ special_materials      │ is_pm_flagged          │ pm_flagged_at             │
+│ pm_flagged_by (FK)     │ pm_flag_notes          │ is_latest_version         │
+│ parent_quote_id (FK)   │ version_number         │ created_at                │
+└─────────────────────────────────────────────────────────────────────────────┘
+        │                           │                           │
+        │                           │                           ▼
+        │                           │           ┌───────────────────────────┐
+        │                           │           │    sales_quote_revisions   │
+        │                           │           ├───────────────────────────┤
+        │                           │           │ PK id                      │
+        │                           │           │ quote_id (FK)              │
+        │                           │           │ revision_number            │
+        │                           │           │ change_summary             │
+        │                           │           │ changes (jsonb)            │
+        │                           │           │ created_by (FK)            │
+        │                           │           └───────────────────────────┘
+        │                           │
+        │                           ▼
+        │           ┌───────────────────────────────────────┐
+        │           │           sales_activities             │
+        │           ├───────────────────────────────────────┤
+        │           │ PK id            │ quote_id (FK)       │
+        │           │ customer_id (FK) │ activity_type       │
+        │           │ description      │ created_by (FK)     │
+        │           └───────────────────────────────────────┘
+        │
+        ▼
+┌───────────────────────────────────────┐       ┌───────────────────────────┐
+│          sales_customers               │◄──────│          dealers           │
+├───────────────────────────────────────┤       ├───────────────────────────┤
+│ PK id            │ name               │       │ PK id                      │
+│ email            │ phone              │       │ name         │ code (UK)   │
+│ address          │ city               │       │ contact_name               │
+│ state            │ zip                │       │ contact_email              │
+│ customer_type    │ dealer_id (FK)     │       │ is_active                  │
+└───────────────────────────────────────┘       └───────────────────────────┘
+
+
+================================================================================
+                            PROJECTS DOMAIN [GREEN]
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                projects                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PK id                  │ project_number (UK)    │ project_name              │
+│ customer_id (FK)       │ factory                │ status                    │
+│ contract_value         │ start_date             │ delivery_date             │
+│ building_type          │ building_width         │ building_length           │
+│ mod_width              │ occupancy              │ special_materials         │
+│ is_pm_job              │ pm_flagged_from_quote  │ assigned_pm_id (FK)       │
+│ pm_assigned_at         │ pm_assigned_by (FK)    │ source_quote_id (FK)      │
+└─────────────────────────────────────────────────────────────────────────────┘
+    │         │         │         │         │         │         │         │
+    │         │         │         │         │         │         │         │
+    ▼         ▼         ▼         ▼         ▼         ▼         ▼         ▼
+┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
+│ tasks  │ │milesto-│ │  rfis  │ │submit- │ │change_ │ │project_│ │color_  │ │proj_   │
+│        │ │nes     │ │        │ │tals    │ │orders  │ │logs    │ │select  │ │workfl  │
+├────────┤ ├────────┤ ├────────┤ ├────────┤ ├────────┤ ├────────┤ ├────────┤ ├────────┤
+│PK id   │ │PK id   │ │PK id   │ │PK id   │ │PK id   │ │PK id   │ │PK id   │ │PK id   │
+│proj_id │ │proj_id │ │proj_id │ │proj_id │ │proj_id │ │proj_id │ │proj_id │ │proj_id │
+│title   │ │name    │ │rfi_num │ │sub_num │ │co_num  │ │log_type│ │comp    │ │stn_key │
+│status  │ │target  │ │subject │ │title   │ │title   │ │message │ │color   │ │status  │
+│assigned│ │actual  │ │Q & A   │ │status  │ │amount  │ │metadata│ │name    │ │started │
+│due_date│ │status  │ │status  │ │file_url│ │status  │ │created │ │sel_by  │ │completed
+│wf_stn  │ │        │ │        │ │        │ │        │ │        │ │        │ │        │
+└────────┘ └────────┘ └────────┘ └────────┘ └────────┘ └────────┘ └────────┘ └────────┘
+
+                        ┌─────────────────────────────────┐
+                        │    project_external_contacts     │
+                        ├─────────────────────────────────┤
+                        │ PK id                            │
+                        │ project_id (FK)                  │
+                        │ external_contact_id (FK) ───────►│ external_contacts
+                        │ role                             │
+                        └─────────────────────────────────┘
+
+
+================================================================================
+                           PRODUCTION DOMAIN [ORANGE]
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                 modules                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PK id                  │ module_number (UK)     │ project_id (FK)           │
+│ factory_id (FK)        │ status                 │ sequence_number           │
+│ module_width           │ module_length          │ module_height             │
+│ current_station        │ queue_position         │ station_entered_at        │
+└─────────────────────────────────────────────────────────────────────────────┘
+        │                           │                           │
+        │                           │                           │
+        ▼                           ▼                           ▼
+┌────────────────────┐  ┌────────────────────┐  ┌────────────────────────────┐
+│    qc_records       │  │ module_queue_hist  │  │       takt_events          │
+├────────────────────┤  ├────────────────────┤  ├────────────────────────────┤
+│ PK id               │  │ PK id               │  │ PK id                      │
+│ module_id (FK)      │  │ module_id (FK)      │  │ module_id (FK)             │
+│ station_id (FK)     │  │ station_key         │  │ factory_id (FK)            │
+│ station_key         │  │ queue_position      │  │ station_key                │
+│ inspector_id (FK)   │  │ entered_at          │  │ started_at                 │
+│ passed              │  │ exited_at           │  │ completed_at               │
+│ checklist_results   │  │ wait_time_minutes   │  │ duration_minutes           │
+│ notes               │  └────────────────────┘  │ met_target                 │
+│ photos              │                          │ worker_id (FK)             │
+└────────────────────┘                          └────────────────────────────┘
+
+┌─────────────────────────────────────────┐      ┌────────────────────────────┐
+│          station_templates               │──────│    station_assignments      │
+├─────────────────────────────────────────┤      ├────────────────────────────┤
+│ PK id                │ factory_id (FK)   │      │ PK id                      │
+│ station_key (UK)     │ name              │      │ station_id (FK)            │
+│ sequence_order       │ default_takt_mins │      │ worker_id (FK)             │
+│ is_bottleneck        │ is_active         │      │ lead_id (FK)               │
+└─────────────────────────────────────────┘      │ shift      │ is_active     │
+                                                  └────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│           inspection_rules               │
+├─────────────────────────────────────────┤
+│ PK id                │ factory_id (FK)   │
+│ station_key          │ rule_name         │
+│ description          │ is_required       │
+│ display_order        │ is_active         │
+└─────────────────────────────────────────┘
+
+
+================================================================================
+                           WORKFORCE DOMAIN [CYAN]
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                 workers                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PK id                  │ factory_id (FK)        │ first_name                │
+│ last_name              │ full_name (generated)  │ employee_id (UK)          │
+│ pin_hash               │ email                  │ phone                     │
+│ role                   │ primary_station        │ is_active                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+        │              │              │              │              │
+        │              │              │              │              │
+        ▼              ▼              ▼              ▼              ▼
+┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────────┐
+│worker_     │ │worker_     │ │cross_      │ │takt_events │ │safety_checks   │
+│shifts      │ │sessions    │ │training    │ │(see above) │ │                │
+├────────────┤ ├────────────┤ ├────────────┤ ├────────────┤ ├────────────────┤
+│PK id       │ │PK id       │ │PK id       │ │worker_id   │ │PK id           │
+│worker_id   │ │worker_id   │ │worker_id   │ │...         │ │factory_id (FK) │
+│factory_id  │ │session_tok │ │station_key │ │            │ │worker_id (FK)  │
+│clock_in    │ │expires_at  │ │prof_level  │ │            │ │check_type      │
+│clock_out   │ │            │ │cert_date   │ │            │ │passed          │
+│hours_worked│ │            │ │cert_by(FK) │ │            │ │notes           │
+│status      │ │            │ └────────────┘ │            │ └────────────────┘
+│shift_type  │ │            │                │            │
+└────────────┘ └────────────┘                └────────────┘
+
+┌─────────────────────────────────────────┐      ┌────────────────────────────┐
+│         kaizen_suggestions               │      │       five_s_audits         │
+├─────────────────────────────────────────┤      ├────────────────────────────┤
+│ PK id                │ factory_id (FK)   │      │ PK id                      │
+│ user_id (FK)         │ title             │      │ factory_id (FK)            │
+│ description          │ category          │      │ area                       │
+│ status               │ impact_score      │      │ sort_score                 │
+│ reviewed_by (FK)     │ review_notes      │      │ set_in_order_score         │
+└─────────────────────────────────────────┘      │ shine_score                │
+                                                  │ standardize_score          │
+                                                  │ sustain_score              │
+                                                  │ total_score                │
+                                                  │ auditor_id (FK)            │
+                                                  └────────────────────────────┘
+
+
+================================================================================
+                           INVENTORY DOMAIN [YELLOW]
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            purchase_orders                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PK id                  │ po_number (UK)         │ project_id (FK)           │
+│ factory_id (FK)        │ vendor_name            │ status                    │
+│ total_amount           │ expected_date          │ received_date             │
+│ created_by (FK)        │                        │                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+                    ┌───────────────────────────────────────┐
+                    │         inventory_receipts             │
+                    ├───────────────────────────────────────┤
+                    │ PK id               │ po_id (FK)       │
+                    │ factory_id (FK)     │ item_description │
+                    │ quantity_ordered    │ quantity_received│
+                    │ received_by (FK)    │ notes            │
+                    └───────────────────────────────────────┘
+
+┌───────────────────────────────────────┐
+│           long_lead_items              │
+├───────────────────────────────────────┤
+│ PK id               │ project_id (FK)  │
+│ item_name           │ vendor           │
+│ lead_time_days      │ order_date       │
+│ expected_date       │ status           │
+└───────────────────────────────────────┘
+
+
+================================================================================
+                             USERS DOMAIN [PURPLE]
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                  users                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PK id                  │ email (UK)             │ name                      │
+│ role                   │ factory_id (FK)        │ phone                     │
+│ is_active              │                        │                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+          ┌─────────────────────────┼─────────────────────────┐
+          │                         │                         │
+          ▼                         ▼                         ▼
+    ┌──────────┐            ┌──────────────┐          ┌──────────────┐
+    │ projects │            │ tasks        │          │ kaizen_      │
+    │(assigned)│            │ (assigned)   │          │ suggestions  │
+    └──────────┘            └──────────────┘          └──────────────┘
+
+
+================================================================================
+                             SYSTEM DOMAIN [GRAY]
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                factories                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PK id                  │ name                   │ code (UK)                 │
+│ address                │ city                   │ state                     │
+│ zip                    │ timezone               │ is_active                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+    │         │         │         │         │         │
+    │         │         │         │         │         │
+    ▼         ▼         ▼         ▼         ▼         ▼
+┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌──────────────┐
+│depart- │ │direct- │ │plant_  │ │announce│ │calendar│ │station_      │
+│ments   │ │ory_    │ │config  │ │ments   │ │_audit  │ │templates     │
+│        │ │contacts│ │        │ │        │ │        │ │(see above)   │
+├────────┤ ├────────┤ ├────────┤ ├────────┤ ├────────┤ └──────────────┘
+│PK id   │ │PK id   │ │PK id   │ │PK id   │ │PK id   │
+│fact_id │ │fact_id │ │fact_id │ │fact_id │ │fact_id │
+│name    │ │name    │ │config_ │ │title   │ │audit_  │
+│code(UK)│ │title   │ │key(UK) │ │content │ │date    │
+│manager │ │dept    │ │config_ │ │priority│ │audit_  │
+│        │ │email   │ │value   │ │target  │ │type    │
+│        │ │phone   │ │        │ │dates   │ │data    │
+└────────┘ └────────┘ └────────┘ └────────┘ └────────┘
+
+┌───────────────────────────────────────┐       ┌───────────────────────────┐
+│          workflow_stations             │       │     external_contacts      │
+├───────────────────────────────────────┤       ├───────────────────────────┤
+│ PK id               │ station_key(UK) │       │ PK id                      │
+│ name                │ category        │       │ name       │ company       │
+│ sequence_order      │ description     │       │ role       │ email         │
+│ is_active           │                 │       │ phone                      │
+└───────────────────────────────────────┘       └───────────────────────────┘
+
+
+================================================================================
+                       KEY RELATIONSHIP SUMMARY
+================================================================================
+
+SALES → PROJECTS:
+  sales_quotes.id ────────────────────► projects.source_quote_id
+  sales_customers.id ─────────────────► projects.customer_id
+
+PROJECTS → PRODUCTION:
+  projects.id ────────────────────────► modules.project_id
+
+PRODUCTION → WORKFORCE:
+  modules.id ─────────────────────────► takt_events.module_id
+  station_templates.id ───────────────► station_assignments.station_id
+  workers.id ─────────────────────────► station_assignments.worker_id
+  workers.id ─────────────────────────► qc_records.inspector_id
+
+INVENTORY → PROJECTS:
+  projects.id ────────────────────────► purchase_orders.project_id
+  projects.id ────────────────────────► long_lead_items.project_id
+
+SYSTEM → ALL:
+  factories.id ───────────────────────► (projects.factory, modules, workers, etc.)
+  users.id ───────────────────────────► (tasks.assigned_to, projects.assigned_pm_id, etc.)
+
+================================================================================
+                              TABLE COUNT BY DOMAIN
+================================================================================
+
+  Domain        │ Tables │ Description
+  ──────────────┼────────┼────────────────────────────────────────────────
+  Sales         │   5    │ Quotes, customers, dealers, revisions, activities
+  Projects      │  10    │ Projects, tasks, RFIs, submittals, COs, logs, etc.
+  Production    │   6    │ Modules, stations, QC, queue history, inspections
+  Workforce     │   8    │ Workers, shifts, sessions, training, efficiency
+  Inventory     │   3    │ Purchase orders, receipts, long-lead items
+  Users         │   1    │ System users (managers, PMs, directors, etc.)
+  System        │   8    │ Factories, departments, config, announcements
+  ──────────────┼────────┼────────────────────────────────────────────────
+  TOTAL         │  48    │
+
+================================================================================

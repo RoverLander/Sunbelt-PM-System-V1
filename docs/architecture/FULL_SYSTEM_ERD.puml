@@ -1,0 +1,598 @@
+@startuml FULL_SYSTEM_ERD
+' ============================================================================
+' SUNBELT PM SYSTEM - FULL DATABASE SCHEMA ERD (PlantUML)
+' 48 Tables | Color-Coded by Domain
+' Blue: Sales | Green: Projects | Orange: Production | Purple: Users
+' Yellow: Inventory | Cyan: Workforce | Gray: System
+' ============================================================================
+
+!define SALES_COLOR #3b82f6
+!define PROJECT_COLOR #22c55e
+!define PRODUCTION_COLOR #f97316
+!define USER_COLOR #a855f7
+!define INVENTORY_COLOR #eab308
+!define WORKFORCE_COLOR #06b6d4
+!define SYSTEM_COLOR #64748b
+
+skinparam class {
+    BackgroundColor White
+    BorderColor Gray
+    FontSize 10
+}
+
+skinparam package {
+    FontStyle Bold
+    FontSize 12
+}
+
+' ==================== SALES DOMAIN (Blue) ====================
+package "Sales Domain" <<Rectangle>> #E6F0FF {
+    entity "sales_quotes" as sq SALES_COLOR {
+        * id : uuid <<PK>>
+        --
+        quote_number : text <<UK>>
+        customer_id : uuid <<FK>>
+        assigned_to : uuid <<FK>>
+        total_price : decimal
+        status : text
+        building_type : text
+        building_width : int
+        building_length : int
+        mod_width : int
+        module_count : int
+        occupancy : char
+        special_materials : jsonb
+        is_pm_flagged : boolean
+        pm_flagged_at : timestamp
+        pm_flagged_by : uuid <<FK>>
+        pm_flag_notes : text
+        is_latest_version : boolean
+        parent_quote_id : uuid <<FK>>
+        version_number : int
+    }
+
+    entity "sales_customers" as sc SALES_COLOR {
+        * id : uuid <<PK>>
+        --
+        name : text
+        email : text
+        phone : text
+        address : text
+        city : text
+        state : text
+        zip : text
+        customer_type : text
+        dealer_id : uuid <<FK>>
+    }
+
+    entity "sales_quote_revisions" as sqr SALES_COLOR {
+        * id : uuid <<PK>>
+        --
+        quote_id : uuid <<FK>>
+        revision_number : int
+        change_summary : text
+        changes : jsonb
+        created_by : uuid <<FK>>
+    }
+
+    entity "sales_activities" as sa SALES_COLOR {
+        * id : uuid <<PK>>
+        --
+        quote_id : uuid <<FK>>
+        customer_id : uuid <<FK>>
+        activity_type : text
+        description : text
+        created_by : uuid <<FK>>
+    }
+
+    entity "dealers" as d SALES_COLOR {
+        * id : uuid <<PK>>
+        --
+        name : text
+        code : text <<UK>>
+        contact_name : text
+        contact_email : text
+        is_active : boolean
+    }
+}
+
+' ==================== PROJECTS DOMAIN (Green) ====================
+package "Projects Domain" <<Rectangle>> #E6FFE6 {
+    entity "projects" as p PROJECT_COLOR {
+        * id : uuid <<PK>>
+        --
+        project_number : text <<UK>>
+        project_name : text
+        customer_id : uuid <<FK>>
+        factory : text
+        status : text
+        contract_value : decimal
+        start_date : date
+        delivery_date : date
+        building_type : text
+        building_width : int
+        building_length : int
+        mod_width : int
+        occupancy : char
+        special_materials : jsonb
+        is_pm_job : boolean
+        pm_flagged_from_quote : boolean
+        assigned_pm_id : uuid <<FK>>
+        source_quote_id : uuid <<FK>>
+    }
+
+    entity "tasks" as t PROJECT_COLOR {
+        * id : uuid <<PK>>
+        --
+        project_id : uuid <<FK>>
+        title : text
+        status : text
+        priority : text
+        assigned_to : uuid <<FK>>
+        due_date : date
+        workflow_station_key : text
+        display_order : int
+    }
+
+    entity "milestones" as m PROJECT_COLOR {
+        * id : uuid <<PK>>
+        --
+        project_id : uuid <<FK>>
+        name : text
+        target_date : date
+        actual_date : date
+        status : text
+    }
+
+    entity "rfis" as r PROJECT_COLOR {
+        * id : uuid <<PK>>
+        --
+        project_id : uuid <<FK>>
+        rfi_number : text <<UK>>
+        subject : text
+        question : text
+        answer : text
+        status : text
+    }
+
+    entity "submittals" as sub PROJECT_COLOR {
+        * id : uuid <<PK>>
+        --
+        project_id : uuid <<FK>>
+        submittal_number : text <<UK>>
+        title : text
+        status : text
+        file_url : text
+    }
+
+    entity "change_orders" as co PROJECT_COLOR {
+        * id : uuid <<PK>>
+        --
+        project_id : uuid <<FK>>
+        co_number : text <<UK>>
+        title : text
+        amount : decimal
+        status : text
+    }
+
+    entity "project_logs" as pl PROJECT_COLOR {
+        * id : uuid <<PK>>
+        --
+        project_id : uuid <<FK>>
+        log_type : text
+        message : text
+        metadata : jsonb
+    }
+
+    entity "color_selections" as cs PROJECT_COLOR {
+        * id : uuid <<PK>>
+        --
+        project_id : uuid <<FK>>
+        component : text
+        color_code : text
+        color_name : text
+    }
+
+    entity "project_workflow_status" as pws PROJECT_COLOR {
+        * id : uuid <<PK>>
+        --
+        project_id : uuid <<FK>>
+        station_key : text
+        status : text
+    }
+
+    entity "project_external_contacts" as pec PROJECT_COLOR {
+        * id : uuid <<PK>>
+        --
+        project_id : uuid <<FK>>
+        external_contact_id : uuid <<FK>>
+        role : text
+    }
+}
+
+' ==================== PRODUCTION DOMAIN (Orange) ====================
+package "Production Domain" <<Rectangle>> #FFF0E6 {
+    entity "modules" as mod PRODUCTION_COLOR {
+        * id : uuid <<PK>>
+        --
+        module_number : text <<UK>>
+        project_id : uuid <<FK>>
+        factory_id : uuid <<FK>>
+        status : text
+        sequence_number : int
+        module_width : decimal
+        module_length : decimal
+        module_height : decimal
+        current_station : text
+        queue_position : int
+        station_entered_at : timestamp
+    }
+
+    entity "station_templates" as st PRODUCTION_COLOR {
+        * id : uuid <<PK>>
+        --
+        factory_id : uuid <<FK>>
+        station_key : text <<UK>>
+        name : text
+        sequence_order : int
+        default_takt_minutes : int
+        is_bottleneck : boolean
+        is_active : boolean
+    }
+
+    entity "station_assignments" as sass PRODUCTION_COLOR {
+        * id : uuid <<PK>>
+        --
+        station_id : uuid <<FK>>
+        worker_id : uuid <<FK>>
+        lead_id : uuid <<FK>>
+        shift : text
+        is_active : boolean
+    }
+
+    entity "module_queue_history" as mqh PRODUCTION_COLOR {
+        * id : uuid <<PK>>
+        --
+        module_id : uuid <<FK>>
+        station_key : text
+        queue_position : int
+        entered_at : timestamp
+        exited_at : timestamp
+        wait_time_minutes : int
+    }
+
+    entity "qc_records" as qc PRODUCTION_COLOR {
+        * id : uuid <<PK>>
+        --
+        module_id : uuid <<FK>>
+        station_id : uuid <<FK>>
+        station_key : text
+        inspector_id : uuid <<FK>>
+        passed : boolean
+        checklist_results : jsonb
+        notes : text
+        photos : text[]
+    }
+
+    entity "inspection_rules" as ir PRODUCTION_COLOR {
+        * id : uuid <<PK>>
+        --
+        factory_id : uuid <<FK>>
+        station_key : text
+        rule_name : text
+        is_required : boolean
+        display_order : int
+    }
+}
+
+' ==================== WORKFORCE DOMAIN (Cyan) ====================
+package "Workforce Domain" <<Rectangle>> #E6FFFF {
+    entity "workers" as w WORKFORCE_COLOR {
+        * id : uuid <<PK>>
+        --
+        factory_id : uuid <<FK>>
+        first_name : text
+        last_name : text
+        full_name : text
+        employee_id : text <<UK>>
+        pin_hash : text
+        email : text
+        role : text
+        primary_station : text
+        is_active : boolean
+    }
+
+    entity "worker_shifts" as ws WORKFORCE_COLOR {
+        * id : uuid <<PK>>
+        --
+        worker_id : uuid <<FK>>
+        factory_id : uuid <<FK>>
+        clock_in : timestamp
+        clock_out : timestamp
+        hours_worked : decimal
+        status : text
+        shift_type : text
+    }
+
+    entity "worker_sessions" as wss WORKFORCE_COLOR {
+        * id : uuid <<PK>>
+        --
+        worker_id : uuid <<FK>>
+        session_token : text <<UK>>
+        expires_at : timestamp
+    }
+
+    entity "cross_training" as ct WORKFORCE_COLOR {
+        * id : uuid <<PK>>
+        --
+        worker_id : uuid <<FK>>
+        station_key : text
+        proficiency_level : int
+        certified_date : date
+        certified_by : uuid <<FK>>
+    }
+
+    entity "takt_events" as te WORKFORCE_COLOR {
+        * id : uuid <<PK>>
+        --
+        module_id : uuid <<FK>>
+        factory_id : uuid <<FK>>
+        station_key : text
+        started_at : timestamp
+        completed_at : timestamp
+        duration_minutes : int
+        met_target : boolean
+        worker_id : uuid <<FK>>
+    }
+
+    entity "kaizen_suggestions" as ks WORKFORCE_COLOR {
+        * id : uuid <<PK>>
+        --
+        factory_id : uuid <<FK>>
+        user_id : uuid <<FK>>
+        title : text
+        description : text
+        category : text
+        status : text
+        impact_score : int
+        reviewed_by : uuid <<FK>>
+    }
+
+    entity "safety_checks" as sch WORKFORCE_COLOR {
+        * id : uuid <<PK>>
+        --
+        factory_id : uuid <<FK>>
+        worker_id : uuid <<FK>>
+        check_type : text
+        passed : boolean
+        notes : text
+    }
+
+    entity "five_s_audits" as fsa WORKFORCE_COLOR {
+        * id : uuid <<PK>>
+        --
+        factory_id : uuid <<FK>>
+        area : text
+        sort_score : int
+        set_in_order_score : int
+        shine_score : int
+        standardize_score : int
+        sustain_score : int
+        total_score : int
+        auditor_id : uuid <<FK>>
+    }
+}
+
+' ==================== INVENTORY DOMAIN (Yellow) ====================
+package "Inventory Domain" <<Rectangle>> #FFFCE6 {
+    entity "purchase_orders" as po INVENTORY_COLOR {
+        * id : uuid <<PK>>
+        --
+        po_number : text <<UK>>
+        project_id : uuid <<FK>>
+        factory_id : uuid <<FK>>
+        vendor_name : text
+        status : text
+        total_amount : decimal
+        expected_date : date
+        received_date : date
+        created_by : uuid <<FK>>
+    }
+
+    entity "inventory_receipts" as inv INVENTORY_COLOR {
+        * id : uuid <<PK>>
+        --
+        purchase_order_id : uuid <<FK>>
+        factory_id : uuid <<FK>>
+        item_description : text
+        quantity_ordered : int
+        quantity_received : int
+        received_by : uuid <<FK>>
+        notes : text
+    }
+
+    entity "long_lead_items" as lli INVENTORY_COLOR {
+        * id : uuid <<PK>>
+        --
+        project_id : uuid <<FK>>
+        item_name : text
+        vendor : text
+        lead_time_days : int
+        order_date : date
+        expected_date : date
+        status : text
+    }
+}
+
+' ==================== USERS DOMAIN (Purple) ====================
+package "Users Domain" <<Rectangle>> #F5E6FF {
+    entity "users" as u USER_COLOR {
+        * id : uuid <<PK>>
+        --
+        email : text <<UK>>
+        name : text
+        role : text
+        factory_id : uuid <<FK>>
+        phone : text
+        is_active : boolean
+    }
+}
+
+' ==================== SYSTEM DOMAIN (Gray) ====================
+package "System Domain" <<Rectangle>> #F0F0F0 {
+    entity "factories" as f SYSTEM_COLOR {
+        * id : uuid <<PK>>
+        --
+        name : text
+        code : text <<UK>>
+        address : text
+        city : text
+        state : text
+        timezone : text
+        is_active : boolean
+    }
+
+    entity "departments" as dept SYSTEM_COLOR {
+        * id : uuid <<PK>>
+        --
+        factory_id : uuid <<FK>>
+        name : text
+        code : text <<UK>>
+        manager_id : uuid <<FK>>
+    }
+
+    entity "directory_contacts" as dc SYSTEM_COLOR {
+        * id : uuid <<PK>>
+        --
+        factory_id : uuid <<FK>>
+        name : text
+        title : text
+        department : text
+        email : text
+        phone : text
+    }
+
+    entity "external_contacts" as ec SYSTEM_COLOR {
+        * id : uuid <<PK>>
+        --
+        name : text
+        company : text
+        role : text
+        email : text
+        phone : text
+    }
+
+    entity "plant_config" as pc SYSTEM_COLOR {
+        * id : uuid <<PK>>
+        --
+        factory_id : uuid <<FK>>
+        config_key : text <<UK>>
+        config_value : jsonb
+    }
+
+    entity "calendar_audit" as ca SYSTEM_COLOR {
+        * id : uuid <<PK>>
+        --
+        factory_id : uuid <<FK>>
+        audit_date : date
+        audit_type : text
+        data : jsonb
+    }
+
+    entity "workflow_stations" as wfs SYSTEM_COLOR {
+        * id : uuid <<PK>>
+        --
+        station_key : text <<UK>>
+        name : text
+        category : text
+        sequence_order : int
+        description : text
+    }
+
+    entity "announcements" as ann SYSTEM_COLOR {
+        * id : uuid <<PK>>
+        --
+        factory_id : uuid <<FK>>
+        title : text
+        content : text
+        priority : text
+        target_role : text
+        start_date : date
+        end_date : date
+    }
+}
+
+' ==================== RELATIONSHIPS ====================
+
+' Sales Relationships
+sq ||--o{ sqr
+sq ||--o{ sa
+sq }o--|| sc
+sq }o--o| u : assigned_to
+sq }o--o| sq : parent_quote
+sc }o--o| d
+
+' Projects Relationships
+p }o--o| sq : from_quote
+p }o--o| sc
+p }o--o| u : assigned_pm
+p ||--o{ t
+p ||--o{ m
+p ||--o{ r
+p ||--o{ sub
+p ||--o{ co
+p ||--o{ pl
+p ||--o{ cs
+p ||--o{ pws
+p ||--o{ pec
+p ||--o{ mod
+p ||--o{ po
+p ||--o{ lli
+t }o--o| u
+pec }o--|| ec
+
+' Production Relationships
+mod }o--|| p
+mod }o--|| f
+mod ||--o{ qc
+mod ||--o{ mqh
+mod ||--o{ te
+st }o--|| f
+st ||--o{ sass
+sass }o--|| w
+sass }o--o| u : lead
+qc }o--|| w : inspector
+
+' Workforce Relationships
+w }o--|| f
+w ||--o{ ws
+w ||--o{ wss
+w ||--o{ ct
+w ||--o{ te
+w ||--o{ sch
+ct }o--o| u : certified_by
+
+' Efficiency Relationships
+ks }o--|| f
+ks }o--|| u : submitted_by
+ks }o--o| u : reviewed_by
+fsa }o--|| f
+fsa }o--|| u : auditor
+
+' Inventory Relationships
+po }o--o| p
+po }o--|| f
+po }o--|| u : created_by
+po ||--o{ inv
+inv }o--|| w : received_by
+
+' System Relationships
+f ||--o{ dept
+f ||--o{ dc
+f ||--o{ pc
+f ||--o{ ann
+f ||--o{ ca
+dept }o--o| u : manager
+u }o--o| f
+
+@enduml

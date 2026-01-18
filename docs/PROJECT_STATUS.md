@@ -1,8 +1,8 @@
 # Project Status
 
-**Last Updated:** January 17, 2026
-**Version:** 1.6.0
-**Status:** Production Ready (Beta) + PWA Floor App Complete + Manager PWA Complete
+**Last Updated:** January 18, 2026
+**Version:** 1.7.0
+**Status:** Production Ready (Beta) + PWA Floor App Complete + Manager PWA Complete + Building Specs & PM Flag
 
 ---
 
@@ -200,6 +200,41 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 - **Files Modified:**
   - `src/App.jsx` - Added `/pwa/manager` route detection
   - `src/pwa/index.js` - Added manager exports
+
+---
+
+### January 18, 2026 (Building Specs & PM Flag Features)
+
+- **Building Specifications in Sales Flow:**
+  - QuoteForm.jsx enhanced with Building Specifications section
+  - Captures: Building Type, Width, Length, Module Count, Module Width, Occupancy, Special Materials
+  - Module Width presets (10', 12', 14') with custom option
+  - Special Materials checkboxes (TT&P, Sprinklers, Plumbing) - matches Praxis Building Order Sheet
+  - Building specs transfer from Quote → Project on conversion
+
+- **VP Pipeline PM Flag:**
+  - VP Dashboard shows Active Pipeline Quotes grid
+  - Flag icon on each quote card to mark as PM Project
+  - Flag modal with optional notes
+  - Unflag capability on already-flagged quotes
+  - Notifications sent to PM Team (Director, VP) when flagged
+
+- **Director Assignment Queue:**
+  - New PM Assignment Queue section on Director Dashboard
+  - Shows projects where is_pm_job=true AND assigned_pm_id=null
+  - List view with dropdown PM assignment
+  - Kanban view with drag-drop columns (Unassigned | Director | PM1 | PM2...)
+  - Director can drag project cards to assign PM
+
+- **Enhanced Project Views:**
+  - ProjectDetails OverviewTab shows Building Specifications section
+  - ModuleDetailModal shows project building specs
+  - PM Project badge when is_pm_job=true
+
+- **Database Migration:**
+  - `20260118_building_specs_and_pm_flag.sql`
+  - New columns on sales_quotes and projects tables
+  - Indexes for PM flagged and unassigned queries
 
 ---
 

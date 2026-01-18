@@ -1,0 +1,130 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#3b82f6', 'lineColor': '#64748b'}}}%%
+
+graph TB
+    %% ============================================================================
+    %% SUNBELT PM SYSTEM - CORE COMPONENT FLOW DIAGRAM
+    %% Essential Business Flow Components
+    %% ============================================================================
+
+    subgraph ENTRY["🚀 Application Entry"]
+        App["App.jsx"]
+        PWAApp["PWAApp.jsx<br/>Floor Workers"]
+        ManagerApp["ManagerApp.jsx<br/>Mobile Managers"]
+    end
+
+    subgraph AUTH["🔐 Authentication"]
+        AuthProvider["AuthProvider<br/>Email/Password"]
+        WorkerAuth["WorkerAuthContext<br/>PIN-based"]
+    end
+
+    subgraph DASHBOARDS["📊 Core Dashboards"]
+        VPDash["VPDashboard<br/>Sales Pipeline + PM Flag"]
+        DirDash["DirectorDashboard<br/>PM Assignment Queue"]
+        PMDash["PMDashboard<br/>Project Management"]
+        PlantDash["PlantManagerDashboard<br/>Production + Crew"]
+    end
+
+    subgraph SALES["💰 Sales Flow"]
+        QuoteForm["QuoteForm<br/>+ Building Specs"]
+        QuoteDetail["QuoteDetail<br/>+ PM Flag + Convert"]
+    end
+
+    subgraph PROJECTS["📁 Project Management"]
+        ProjectDetails["ProjectDetails<br/>+ Building Specs"]
+        WorkflowCanvas["WorkflowCanvas<br/>19 PM Stations"]
+        TasksView["TasksView"]
+    end
+
+    subgraph PRODUCTION["🏭 Production Line"]
+        ProductionLine["ProductionLine<br/>12 Stations"]
+        ModuleModal["ModuleDetailModal<br/>+ Building Specs"]
+        QCModal["QCInspectionModal"]
+    end
+
+    subgraph PWA["📱 Mobile Apps"]
+        PWAHome["PWAHome<br/>Floor Actions"]
+        ModuleLookup["ModuleLookup<br/>+ Building Specs"]
+        QCInspection["QCInspection"]
+        ManagerDetail["ProjectDetail<br/>(Manager PWA)"]
+    end
+
+    subgraph SERVICES["⚙️ Core Services"]
+        vpService["vpService"]
+        modulesService["modulesService"]
+        qcService["qcService"]
+        workersService["workersService"]
+    end
+
+    subgraph DB["🗄️ Database"]
+        Supabase["Supabase<br/>PostgreSQL"]
+    end
+
+    %% Entry Flow
+    App --> AuthProvider
+    PWAApp --> WorkerAuth
+    ManagerApp --> AuthProvider
+
+    %% Dashboard Access
+    AuthProvider --> VPDash
+    AuthProvider --> DirDash
+    AuthProvider --> PMDash
+    AuthProvider --> PlantDash
+
+    %% Sales to Project Conversion
+    VPDash --> QuoteDetail
+    QuoteDetail -->|"converts to"| ProjectDetails
+    QuoteForm -->|"Building Specs"| QuoteDetail
+
+    %% Director PM Assignment
+    DirDash --> ProjectDetails
+
+    %% PM Project Management
+    PMDash --> ProjectDetails
+    ProjectDetails --> WorkflowCanvas
+    ProjectDetails --> TasksView
+
+    %% Plant Manager Production
+    PlantDash --> ProductionLine
+    ProductionLine --> ModuleModal
+    ModuleModal --> QCModal
+
+    %% PWA Floor App
+    WorkerAuth --> PWAHome
+    PWAHome --> ModuleLookup
+    PWAHome --> QCInspection
+    ModuleLookup --> ModuleModal
+
+    %% PWA Manager App
+    AuthProvider --> ManagerDetail
+
+    %% Service Layer
+    VPDash --> vpService
+    ProductionLine --> modulesService
+    QCInspection --> qcService
+    PlantDash --> workersService
+
+    vpService --> Supabase
+    modulesService --> Supabase
+    qcService --> Supabase
+    workersService --> Supabase
+
+    %% Styling
+    classDef entry fill:#10b981,stroke:#059669,color:#fff
+    classDef auth fill:#a855f7,stroke:#7c3aed,color:#fff
+    classDef dashboard fill:#3b82f6,stroke:#1d4ed8,color:#fff
+    classDef sales fill:#3b82f6,stroke:#1d4ed8,color:#fff
+    classDef project fill:#22c55e,stroke:#16a34a,color:#fff
+    classDef production fill:#f97316,stroke:#ea580c,color:#fff
+    classDef pwa fill:#06b6d4,stroke:#0891b2,color:#fff
+    classDef service fill:#64748b,stroke:#475569,color:#fff
+    classDef db fill:#1e293b,stroke:#0f172a,color:#fff
+
+    class App,PWAApp,ManagerApp entry
+    class AuthProvider,WorkerAuth auth
+    class VPDash,DirDash,PMDash,PlantDash dashboard
+    class QuoteForm,QuoteDetail sales
+    class ProjectDetails,WorkflowCanvas,TasksView project
+    class ProductionLine,ModuleModal,QCModal production
+    class PWAHome,ModuleLookup,QCInspection,ManagerDetail pwa
+    class vpService,modulesService,qcService,workersService service
+    class Supabase db

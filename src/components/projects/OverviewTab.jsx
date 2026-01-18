@@ -33,7 +33,10 @@ import {
   AlertCircle,
   CheckSquare,
   Target,
-  Zap
+  Zap,
+  Ruler,
+  Box,
+  Layers
 } from 'lucide-react';
 
 // ============================================================================
@@ -629,6 +632,29 @@ function BlockersSection({ tasks, rfis, submittals, onItemClick }) {
 // PROJECT INFO CARD COMPONENT
 // ============================================================================
 function ProjectInfoCard({ project }) {
+  // Calculate building footprint if dimensions available
+  const buildingFootprint = project.building_width && project.building_length
+    ? project.building_width * project.building_length
+    : project.square_footage;
+
+  // Format module width for display
+  const formatModWidth = (width) => {
+    if (!width) return null;
+    return `${width}'`;
+  };
+
+  // Format special materials
+  const formatSpecialMaterials = (materials) => {
+    if (!materials || typeof materials !== 'object') return null;
+    const flags = [];
+    if (materials.tt_p) flags.push('TT&P');
+    if (materials.sprinklers) flags.push('Sprinklers');
+    if (materials.plumbing) flags.push('Plumbing');
+    return flags.length > 0 ? flags.join(', ') : null;
+  };
+
+  const hasBuildingSpecs = project.building_width || project.building_length || project.module_count || project.mod_width;
+
   return (
     <div style={{
       background: 'var(--bg-secondary)',
@@ -653,12 +679,92 @@ function ProjectInfoCard({ project }) {
         <InfoRow icon={Building2} label="Client" value={project.client_name} />
         <InfoRow icon={Factory} label="Factory" value={project.factory_name || project.factory} />
         <InfoRow icon={DollarSign} label="Value" value={formatCurrency(project.contract_value)} highlight />
-        <InfoRow icon={MapPin} label="Location" value={project.site_address || project.site_city} />
+        <InfoRow icon={MapPin} label="Location" value={project.site_address || project.site_city || project.location} />
         <InfoRow icon={FileText} label="Type" value={project.project_type || project.building_type} />
-        {project.square_footage && (
-          <InfoRow icon={Target} label="Size" value={`${project.square_footage?.toLocaleString()} sqft`} />
+        {project.occupancy && (
+          <InfoRow icon={Target} label="Occupancy" value={project.occupancy} />
         )}
       </div>
+
+      {/* Building Specifications Section */}
+      {hasBuildingSpecs && (
+        <>
+          <div style={{
+            borderTop: '1px solid var(--border-color)',
+            margin: '16px 0',
+            paddingTop: '16px'
+          }}>
+            <h4 style={{
+              fontSize: '0.8rem',
+              fontWeight: '600',
+              color: 'var(--text-secondary)',
+              margin: '0 0 12px 0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              <Ruler size={14} style={{ color: 'var(--sunbelt-orange)' }} />
+              Building Specifications
+            </h4>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {/* Building Dimensions */}
+              {(project.building_width || project.building_length) && (
+                <InfoRow
+                  icon={Box}
+                  label="Building Size"
+                  value={`${project.building_width || '—'}' × ${project.building_length || '—'}' ${buildingFootprint ? `(${buildingFootprint.toLocaleString()} sq ft)` : ''}`}
+                />
+              )}
+
+              {/* Module Specs */}
+              {(project.module_count || project.mod_width) && (
+                <InfoRow
+                  icon={Layers}
+                  label="Modules"
+                  value={`${project.module_count || '—'} modules ${project.mod_width ? `@ ${formatModWidth(project.mod_width)} wide` : ''}`}
+                />
+              )}
+
+              {/* Special Materials */}
+              {formatSpecialMaterials(project.special_materials) && (
+                <InfoRow
+                  icon={Flag}
+                  label="Special Materials"
+                  value={formatSpecialMaterials(project.special_materials)}
+                />
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* PM Assignment Info (if PM flagged project) */}
+      {project.is_pm_job && (
+        <div style={{
+          marginTop: hasBuildingSpecs ? '0' : '16px',
+          padding: '10px 12px',
+          background: 'rgba(139, 92, 246, 0.1)',
+          borderRadius: '8px',
+          border: '1px solid rgba(139, 92, 246, 0.2)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Flag size={14} style={{ color: '#8b5cf6' }} />
+            <span style={{ fontSize: '0.75rem', fontWeight: '600', color: '#8b5cf6' }}>PM Project</span>
+            {project.pm_flagged_from_quote && (
+              <span style={{
+                fontSize: '0.625rem',
+                background: '#8b5cf6',
+                color: 'white',
+                padding: '1px 6px',
+                borderRadius: '4px'
+              }}>
+                Flagged from Quote
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
