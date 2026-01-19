@@ -1,7 +1,7 @@
 # Technology Stack
 
-**Last Updated:** January 17, 2026
-**Version:** 1.4.3
+**Last Updated:** January 19, 2026
+**Version:** 1.5.0
 **Maintainer:** Matthew McDaniel
 
 ---

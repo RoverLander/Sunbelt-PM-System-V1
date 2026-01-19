@@ -113,7 +113,8 @@ function ErrorTracking() {
   const fetchTickets = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // First try with FK relationships
+      let { data, error } = await supabase
         .from('error_tickets')
         .select(`
           *,
@@ -123,10 +124,25 @@ function ErrorTracking() {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      // If FK query fails (400 error), try simple query without joins
+      if (error) {
+        const simpleResult = await supabase
+          .from('error_tickets')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (simpleResult.error) {
+          console.error('Error fetching tickets:', simpleResult.error);
+          setTickets([]);
+          return;
+        }
+        data = simpleResult.data;
+      }
+
       setTickets(data || []);
     } catch (error) {
       console.error('Error fetching tickets:', error);
+      setTickets([]);
     } finally {
       setLoading(false);
     }

@@ -1,8 +1,8 @@
 
 # Coding Standards
 
-**Last Updated:** January 17, 2026
-**Version:** 1.0
+**Last Updated:** January 19, 2026
+**Version:** 1.1
 **Status:** Living Document
 
 ---
@@ -893,4 +893,4 @@ import './project-list.css';
 
 **This is a living document. Propose changes via pull request.**
 
-**Last Updated:** January 17, 2026 by Matthew McDaniel
+**Last Updated:** January 19, 2026 by Matthew McDaniel

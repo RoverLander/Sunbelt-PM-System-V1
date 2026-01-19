@@ -6,7 +6,8 @@
       "Bash(git add:*)",
       "Bash(find:*)",
       "Bash(npm test:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && head -50 \"\"{}\"\"')"
     ]
   }
 }

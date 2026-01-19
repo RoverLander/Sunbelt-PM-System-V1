@@ -124,6 +124,47 @@ Now read the architecture and help me build. If anything is unclear, ask before 
 
 RECENT FIXES & CHANGES (January 19, 2026):
 
+IT DASHBOARD FULL REVAMP:
+• ITDashboard.jsx - Complete Command Center redesign
+  - System Health Banner with ITHealthGauge component
+  - 8-card KPI grid (Users, Sessions, Projects, Tickets, Errors, Uptime, Storage, Tasks)
+  - 12 Quick Actions in 2-column grid
+  - System Alerts section with dismissable alerts
+  - Notifications feed with time-grouped items
+  - Real-time metrics with 3 mini charts (API latency, connections, error rate)
+  - User Activity Heatmap showing login patterns
+  - Database Overview showing 15 tables with row counts
+  - Recent Activity grouped by time period (Today, Yesterday, This Week)
+  - Auto-refresh with configurable interval (30s, 1m, 5m, Off)
+• New Widget Components (src/components/it/widgets/):
+  - ITStatCard.jsx - KPI stat card with trend indicator
+  - ITHealthGauge.jsx - Circular SVG health gauge (0-100%)
+  - ITSparkline.jsx - Mini SVG line chart for trends
+  - ITHeatmapGrid.jsx - Activity heatmap visualization
+  - ITAlertCard.jsx - Alert notification card
+  - ITQuickAction.jsx - Quick action button component
+  - ITMiniChart.jsx - Mini bar/area chart
+  - ITSubTabs.jsx - Sub-tab navigation for merged tabs
+• Merged Tab Components:
+  - UsersAndAccess.jsx - Combines Users + Sessions + Role Analytics + Access Logs
+  - ActivityAndLogs.jsx - Combines Audit Trail + Error Tickets + System Events
+• New Service Layer:
+  - itService.js - 20+ API functions for IT Dashboard data
+  - Graceful fallbacks for missing database tables (returns simulated data)
+  - Functions: getSystemAlerts, getConfigAudit, getApiMetrics, getLoginHeatmap, etc.
+• Database Migration (supabase/migrations/20260119_it_dashboard_tables.sql):
+  - system_alerts table - Active system alerts and notifications
+  - config_audit table - Configuration change tracking
+  - api_metrics table - API performance metrics
+  - it_reports table - Saved IT reports
+  - login_activity table - User login/logout events for heatmap
+  - Views: api_metrics_hourly, api_metrics_daily
+  - Cleanup functions for old metrics
+• Bug Fixes:
+  - Fixed React hooks error (useMemo was inside nested function)
+  - ErrorTracking.jsx - Defensive query with FK fallback
+  - All itService functions handle missing tables gracefully (no 404 errors)
+
 VP ANALYTICS & SALES VIEW FIXES:
 • AnalyticsPage.jsx - Complete redesign for Operations VP role
   - Multi-factory overview with aggregated metrics
