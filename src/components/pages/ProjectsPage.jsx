@@ -413,7 +413,7 @@ function ProjectsPage({ isDirectorView = false, isSalesView = false, onNavigateT
   // ==========================================================================
   useEffect(() => {
     if (user) fetchData();
-  }, [user, isDirectorView, includeBackupProjects]);
+  }, [user, isDirectorView, isSalesView, includeBackupProjects]);
 
   // ==========================================================================
   // FETCH DATA
@@ -452,7 +452,15 @@ function ProjectsPage({ isDirectorView = false, isSalesView = false, onNavigateT
         `);
 
       let projectsData = allProjectsData || [];
-      if (!isDirectorView && userData) {
+
+      if (isSalesView && userData) {
+        // Sales Manager view: Show projects at their factory
+        // These are projects converted from quotes at their factory
+        const userFactory = userData.factory;
+        if (userFactory) {
+          projectsData = projectsData.filter(p => p.factory === userFactory);
+        }
+      } else if (!isDirectorView && userData) {
         // Filter to only show projects where user is primary PM or owner
         // If includeBackupProjects is true, also include backup assignments
         projectsData = projectsData.filter(p => {
@@ -667,7 +675,7 @@ function ProjectsPage({ isDirectorView = false, isSalesView = false, onNavigateT
             gap: '10px'
           }}>
             <FolderKanban size={28} style={{ color: 'var(--sunbelt-orange)' }} />
-            {isSalesView ? 'PM Projects' : isDirectorView ? 'All Projects' : 'My Projects'}
+            {isSalesView ? 'Factory Projects' : isDirectorView ? 'All Projects' : 'My Projects'}
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
             {isSalesView
@@ -875,25 +883,27 @@ function ProjectsPage({ isDirectorView = false, isSalesView = false, onNavigateT
           </select>
         )}
 
-        {/* Factory Filter */}
-        <select
-          value={filterFactory}
-          onChange={(e) => setFilterFactory(e.target.value)}
-          style={{
-            padding: '8px 12px',
-            background: 'var(--bg-primary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-primary)',
-            fontSize: '0.8125rem',
-            cursor: 'pointer'
-          }}
-        >
-          <option value="all">All Factories</option>
-          {factories.map(f => (
-            <option key={f.id} value={f.code}>{f.short_name}</option>
-          ))}
-        </select>
+        {/* Factory Filter - Hide for Sales users (they only see their factory) */}
+        {!isSalesView && (
+          <select
+            value={filterFactory}
+            onChange={(e) => setFilterFactory(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-primary)',
+              fontSize: '0.8125rem',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="all">All Factories</option>
+            {factories.map(f => (
+              <option key={f.id} value={f.code}>{f.short_name}</option>
+            ))}
+          </select>
+        )}
 
         {/* Sort Dropdown */}
         <select

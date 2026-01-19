@@ -57,6 +57,7 @@ import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import CreateProjectModal from '../projects/CreateProjectModal';
 import PraxisImportModal from '../projects/PraxisImportModal';
+import QuoteDetail from '../sales/QuoteDetail';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -120,6 +121,8 @@ function VPDashboard() {
   const [flaggingQuote, setFlaggingQuote] = useState(null); // Quote being flagged
   const [flagNotes, setFlagNotes] = useState('');
   const [flagging, setFlagging] = useState(false);
+  const [selectedQuote, setSelectedQuote] = useState(null); // Quote detail view
+  const [teamViewTab, setTeamViewTab] = useState('pm'); // 'pm' | 'production'
 
   // ==========================================================================
   // FETCH DATA
@@ -337,11 +340,51 @@ function VPDashboard() {
       .slice(0, 8);
 
     // ===== TEAM STATS =====
-    // Roles: 'PM', 'Director' (not 'Project Manager')
-    const pms = users.filter(u => ['PM', 'Director'].includes(u.role));
+    // PM roles: PM, Project_Manager, Project Manager, Director
+    const pms = users.filter(u =>
+      ['PM', 'Project_Manager', 'Project Manager', 'Director'].includes(u.role)
+    );
     const avgProjectsPerPM = pms.length > 0
       ? (activeProjects.length / pms.length).toFixed(1)
       : 0;
+
+    // Production roles: Plant Manager, Plant_Manager, Plant_GM, PC, Project Coordinator
+    const productionStaff = users.filter(u =>
+      ['Plant Manager', 'Plant_Manager', 'Plant_GM', 'PC', 'Project Coordinator', 'plant manager', 'plant_manager', 'plant_gm', 'pc', 'project coordinator'].includes(u.role)
+    );
+
+    // Group PMs by factory for workload view
+    // Find PMs who have projects assigned at each factory (by owner_id, assigned_pm_id, or primary_pm_id)
+    const pmsByFactory = factories.reduce((acc, factory) => {
+      const factoryProjects = activeProjects.filter(p => p.factory === factory);
+
+      // Find unique PMs who have projects at this factory
+      const pmIdsAtFactory = new Set();
+      factoryProjects.forEach(p => {
+        if (p.owner_id) pmIdsAtFactory.add(p.owner_id);
+        if (p.assigned_pm_id) pmIdsAtFactory.add(p.assigned_pm_id);
+        if (p.primary_pm_id) pmIdsAtFactory.add(p.primary_pm_id);
+      });
+
+      const factoryPMs = pms.filter(pm => pmIdsAtFactory.has(pm.id));
+
+      acc[factory] = {
+        pms: factoryPMs,
+        projectCount: factoryProjects.length,
+        avgLoad: factoryPMs.length > 0 ? (factoryProjects.length / factoryPMs.length).toFixed(1) : 0
+      };
+      return acc;
+    }, {});
+
+    // Group production staff by factory
+    const productionByFactory = factories.reduce((acc, factory) => {
+      const factoryProduction = productionStaff.filter(p => p.factory === factory);
+      acc[factory] = {
+        staff: factoryProduction,
+        count: factoryProduction.length
+      };
+      return acc;
+    }, {});
 
     // ===== COMPLETION TREND (last 6 months) =====
     const sixMonthsAgo = new Date();
@@ -393,7 +436,11 @@ function VPDashboard() {
       // Team
       teamSize: pms.length,
       avgProjectsPerPM,
-      
+      pms,
+      productionStaff,
+      pmsByFactory,
+      productionByFactory,
+
       // Trends
       completionTrend
     };
@@ -499,10 +546,26 @@ function VPDashboard() {
   }
 
   // ==========================================================================
+  // RENDER - QUOTE DETAIL VIEW
+  // ==========================================================================
+  if (selectedQuote) {
+    return (
+      <QuoteDetail
+        quote={selectedQuote}
+        onBack={() => setSelectedQuote(null)}
+        onRefresh={() => {
+          fetchAllData();
+          setSelectedQuote(null);
+        }}
+      />
+    );
+  }
+
+  // ==========================================================================
   // RENDER - MAIN
   // ==========================================================================
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1800px', margin: '0 auto', width: '100%' }}>
       {/* ================================================================== */}
       {/* HEADER                                                            */}
       {/* ================================================================== */}
@@ -723,7 +786,7 @@ function VPDashboard() {
       {/* ================================================================== */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
+        gridTemplateColumns: '1fr 2fr',
         gap: '16px',
         marginBottom: 'var(--space-lg)'
       }}>
@@ -767,32 +830,220 @@ function VPDashboard() {
           </div>
         </div>
 
-        {/* Team Overview */}
+        {/* Team Management - Enhanced */}
         <div style={{
           background: 'var(--bg-secondary)',
           borderRadius: 'var(--radius-lg)',
           padding: '20px',
           border: '1px solid var(--border-color)'
         }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Users size={18} style={{ color: 'var(--sunbelt-orange)' }} />
-            Team Overview
-          </h3>
+          {/* Header with tabs */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Users size={18} style={{ color: 'var(--sunbelt-orange)' }} />
+              Team Management
+            </h3>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-            <div style={{ textAlign: 'center', padding: '16px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)' }}>{executiveMetrics.teamSize}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Team Members</div>
-            </div>
-            <div style={{ textAlign: 'center', padding: '16px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)' }}>{executiveMetrics.avgProjectsPerPM}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Avg Projects/PM</div>
-            </div>
-            <div style={{ textAlign: 'center', padding: '16px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: 'var(--text-primary)' }}>{executiveMetrics.factoryStats.length}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Factories</div>
+            {/* PM vs Production Tabs */}
+            <div style={{
+              display: 'flex',
+              background: 'var(--bg-tertiary)',
+              borderRadius: 'var(--radius-md)',
+              padding: '3px',
+              gap: '2px'
+            }}>
+              <button
+                onClick={() => setTeamViewTab('pm')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  background: teamViewTab === 'pm' ? 'var(--bg-primary)' : 'transparent',
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  fontSize: '0.8125rem',
+                  fontWeight: '500',
+                  color: teamViewTab === 'pm' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  boxShadow: teamViewTab === 'pm' ? 'var(--shadow-sm)' : 'none',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Briefcase size={14} />
+                Project Management
+              </button>
+              <button
+                onClick={() => setTeamViewTab('production')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  background: teamViewTab === 'production' ? 'var(--bg-primary)' : 'transparent',
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  fontSize: '0.8125rem',
+                  fontWeight: '500',
+                  color: teamViewTab === 'production' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  boxShadow: teamViewTab === 'production' ? 'var(--shadow-sm)' : 'none',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Factory size={14} />
+                Production
+              </button>
             </div>
           </div>
+
+          {/* Summary Stats Row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ textAlign: 'center', padding: '12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+                {teamViewTab === 'pm' ? executiveMetrics.teamSize : executiveMetrics.productionStaff?.length || 0}
+              </div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
+                {teamViewTab === 'pm' ? 'PM Team' : 'Production Staff'}
+              </div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+                {teamViewTab === 'pm' ? executiveMetrics.avgProjectsPerPM : executiveMetrics.factoryStats.length}
+              </div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
+                {teamViewTab === 'pm' ? 'Avg Projects/PM' : 'Factories'}
+              </div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+                {executiveMetrics.activeProjects}
+              </div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Active Projects</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+                {executiveMetrics.factoryStats.length}
+              </div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Locations</div>
+            </div>
+          </div>
+
+          {/* PM View: Factory Breakdown with PMs */}
+          {teamViewTab === 'pm' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+              {Object.entries(executiveMetrics.pmsByFactory || {}).map(([factory, data]) => (
+                <div
+                  key={factory}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 12px',
+                    background: 'var(--bg-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(139, 92, 246, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <Factory size={16} color="#8b5cf6" />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '600', fontSize: '0.875rem', color: 'var(--text-primary)' }}>{factory}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                        {data.pms?.map(pm => pm.name?.split(' ')[0]).join(', ') || 'No PMs assigned'}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)' }}>{data.pms?.length || 0}</div>
+                      <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>PMs</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--sunbelt-orange)' }}>{data.projectCount}</div>
+                      <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Projects</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '0.875rem', fontWeight: '600', color: data.avgLoad > 5 ? '#f59e0b' : '#22c55e' }}>{data.avgLoad}</div>
+                      <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Avg Load</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {Object.keys(executiveMetrics.pmsByFactory || {}).length === 0 && (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>
+                  No factory data available
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Production View: Factory Breakdown with Production Staff */}
+          {teamViewTab === 'production' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+              {Object.entries(executiveMetrics.productionByFactory || {}).map(([factory, data]) => (
+                <div
+                  key={factory}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 12px',
+                    background: 'var(--bg-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(249, 115, 22, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <Factory size={16} color="#f97316" />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '600', fontSize: '0.875rem', color: 'var(--text-primary)' }}>{factory}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                        {data.staff?.map(s => s.name?.split(' ')[0]).join(', ') || 'No staff assigned'}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)' }}>{data.count}</div>
+                      <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Staff</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--sunbelt-orange)' }}>
+                        {executiveMetrics.factoryStats.find(f => f.name === factory)?.active || 0}
+                      </div>
+                      <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Active</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {Object.keys(executiveMetrics.productionByFactory || {}).length === 0 && (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>
+                  No factory data available
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -942,6 +1193,7 @@ function VPDashboard() {
             {salesPipelineMetrics.activeQuotes?.slice(0, 12).map(quote => (
               <div
                 key={quote.id}
+                onClick={() => setSelectedQuote(quote)}
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -949,7 +1201,9 @@ function VPDashboard() {
                   padding: '14px',
                   background: quote.is_pm_flagged ? 'rgba(139, 92, 246, 0.1)' : 'var(--bg-primary)',
                   borderRadius: 'var(--radius-md)',
-                  border: quote.is_pm_flagged ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid var(--border-color)'
+                  border: quote.is_pm_flagged ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid var(--border-color)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
                 }}
               >
                 <div style={{ flex: 1 }}>
@@ -1003,7 +1257,8 @@ function VPDashboard() {
                 </div>
                 {/* Flag Button */}
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent opening quote detail
                     if (quote.is_pm_flagged) {
                       handleFlagForPM(quote, true); // Unflag
                     } else {
@@ -1063,6 +1318,7 @@ function VPDashboard() {
               {salesPipelineMetrics.pmFlaggedQuotes.slice(0, 5).map(quote => (
                 <div
                   key={quote.id}
+                  onClick={() => setSelectedQuote(quote)}
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -1070,8 +1326,12 @@ function VPDashboard() {
                     padding: '12px',
                     background: 'var(--bg-secondary)',
                     borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-color)'
+                    border: '1px solid var(--border-color)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
                   }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; e.currentTarget.style.borderColor = '#8b5cf6'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-secondary)'; e.currentTarget.style.borderColor = 'var(--border-color)'; }}
                 >
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
@@ -1099,7 +1359,7 @@ function VPDashboard() {
                     </div>
                     {/* Unflag Button */}
                     <button
-                      onClick={() => handleFlagForPM(quote, true)}
+                      onClick={(e) => { e.stopPropagation(); handleFlagForPM(quote, true); }}
                       title="Remove PM flag"
                       style={{
                         background: 'rgba(239, 68, 68, 0.15)',
@@ -1140,6 +1400,7 @@ function VPDashboard() {
               {salesPipelineMetrics.recentlyConverted.slice(0, 5).map(quote => (
                 <div
                   key={quote.id}
+                  onClick={() => setSelectedQuote(quote)}
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -1147,8 +1408,12 @@ function VPDashboard() {
                     padding: '12px',
                     background: 'var(--bg-primary)',
                     borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-color)'
+                    border: '1px solid var(--border-color)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
                   }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-tertiary)'; e.currentTarget.style.borderColor = '#10b981'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-primary)'; e.currentTarget.style.borderColor = 'var(--border-color)'; }}
                 >
                   <div>
                     <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
@@ -1174,66 +1439,66 @@ function VPDashboard() {
       </div>
 
       {/* ================================================================== */}
-      {/* FACTORY PERFORMANCE                                               */}
-      {/* ================================================================== */}
-      <div style={{
-        background: 'var(--bg-secondary)',
-        borderRadius: 'var(--radius-lg)',
-        padding: '20px',
-        border: '1px solid var(--border-color)',
-        marginBottom: 'var(--space-lg)'
-      }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Factory size={18} style={{ color: 'var(--sunbelt-orange)' }} />
-          Factory Performance
-        </h3>
-
-        {executiveMetrics.factoryStats.length === 0 ? (
-          <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>No factory data available</p>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
-            {executiveMetrics.factoryStats.map(factory => (
-              <div
-                key={factory.name}
-                style={{
-                  padding: '16px',
-                  background: 'var(--bg-primary)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-color)'
-                }}
-              >
-                <div style={{ fontWeight: '600', color: 'var(--text-primary)', marginBottom: '8px', fontSize: '0.9375rem' }}>
-                  {factory.name}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem', marginBottom: '4px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Active</span>
-                  <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{factory.active}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem', marginBottom: '4px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Value</span>
-                  <span style={{ fontWeight: '600', color: 'var(--sunbelt-orange)' }}>{formatCurrency(factory.value)}</span>
-                </div>
-                {factory.atRisk > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>At Risk</span>
-                    <span style={{ fontWeight: '600', color: '#f59e0b' }}>{factory.atRisk}</span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ================================================================== */}
-      {/* DELIVERIES & CLIENTS ROW                                          */}
+      {/* FACTORY, DELIVERIES & CLIENTS ROW                                 */}
       {/* ================================================================== */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
+        gridTemplateColumns: '1fr 1fr 1fr',
         gap: '16px',
         marginBottom: 'var(--space-lg)'
       }}>
+        {/* Factory Performance */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '20px',
+          border: '1px solid var(--border-color)'
+        }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Factory size={18} style={{ color: 'var(--sunbelt-orange)' }} />
+            Factory Performance
+          </h3>
+
+          {executiveMetrics.factoryStats.length === 0 ? (
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>No factory data available</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
+              {executiveMetrics.factoryStats.map(factory => (
+                <div
+                  key={factory.name}
+                  style={{
+                    padding: '12px',
+                    background: 'var(--bg-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.9375rem' }}>
+                      {factory.name}
+                    </span>
+                    {factory.atRisk > 0 && (
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        fontSize: '0.6875rem',
+                        fontWeight: '600',
+                        background: 'rgba(245, 158, 11, 0.15)',
+                        color: '#f59e0b'
+                      }}>
+                        {factory.atRisk} at risk
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>{factory.active} active</span>
+                    <span style={{ fontWeight: '600', color: 'var(--sunbelt-orange)' }}>{formatCurrency(factory.value)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         {/* Upcoming Deliveries */}
         <div style={{
           background: 'var(--bg-secondary)',
@@ -1249,7 +1514,7 @@ function VPDashboard() {
           {executiveMetrics.upcomingDeliveries.length === 0 ? (
             <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>No upcoming deliveries</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
               {executiveMetrics.upcomingDeliveries.map(project => (
                 <div
                   key={project.id}
@@ -1300,7 +1565,7 @@ function VPDashboard() {
           {executiveMetrics.clientStats.length === 0 ? (
             <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>No client data available</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
               {executiveMetrics.clientStats.map((client, idx) => (
                 <div
                   key={client.name}

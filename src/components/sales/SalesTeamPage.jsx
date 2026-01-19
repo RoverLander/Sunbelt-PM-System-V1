@@ -56,23 +56,42 @@ function SalesTeamPage({ onNavigateToQuote }) {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [quotesRes, teamRes] = await Promise.all([
-        supabase
-          .from('sales_quotes')
-          .select(`
-            *,
-            customer:customer_id(id, company_name),
-            dealer:dealer_id(id, code, name)
-          `)
-          .eq('is_latest_version', true)
-          .order('created_at', { ascending: false }),
-        supabase
+      // First get the user's factory to filter data
+      let userFactory = null;
+      if (user?.id) {
+        const { data: userData } = await supabase
           .from('users')
-          .select('id, name, role, email, factory_id')
-          .in('role', ['Sales_Rep', 'Sales_Manager'])
-          .eq('is_active', true)
-          .order('name')
-      ]);
+          .select('factory')
+          .eq('id', user.id)
+          .single();
+        userFactory = userData?.factory;
+      }
+
+      // Build queries - filter by user's factory if they have one
+      let quotesQuery = supabase
+        .from('sales_quotes')
+        .select(`
+          *,
+          customer:customer_id(id, company_name),
+          dealer:dealer_id(id, code, name)
+        `)
+        .eq('is_latest_version', true)
+        .order('created_at', { ascending: false });
+
+      let teamQuery = supabase
+        .from('users')
+        .select('id, name, role, email, factory')
+        .in('role', ['Sales_Rep', 'Sales_Manager'])
+        .eq('is_active', true)
+        .order('name');
+
+      // Apply factory filter if user has a factory assigned
+      if (userFactory) {
+        quotesQuery = quotesQuery.eq('factory', userFactory);
+        teamQuery = teamQuery.eq('factory', userFactory);
+      }
+
+      const [quotesRes, teamRes] = await Promise.all([quotesQuery, teamQuery]);
 
       if (quotesRes.error) throw quotesRes.error;
       setQuotes(quotesRes.data || []);
@@ -85,7 +104,7 @@ function SalesTeamPage({ onNavigateToQuote }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     fetchData();

@@ -1,10 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import CalendarWeekView from './CalendarWeekView';
 import CalendarMonthView from './CalendarMonthView';
 import CalendarDayView from './CalendarDayView';
-import { buildCalendarItems, getProjectColor } from '../../utils/calendarUtils';
+import { buildCalendarItems, getProjectColor, ITEM_TYPE_CONFIG } from '../../utils/calendarUtils';
+import {
+  Calendar,
+  Factory,
+  Briefcase,
+  Filter,
+  ChevronDown,
+  X,
+  CheckSquare,
+  MessageSquare,
+  ClipboardList,
+  Flag,
+  Truck,
+  Play,
+  Square
+} from 'lucide-react';
 
 // Import edit modals
 import EditTaskModal from '../projects/EditTaskModal';
@@ -17,12 +32,21 @@ function CalendarPage() {
   const [currentView, setCurrentView] = useState('month'); // week, month, day
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentUserRole, setCurrentUserRole] = useState('');
-  // eslint-disable-next-line no-unused-vars
-  const [userFactoryCode, setUserFactoryCode] = useState(null); // Factory code for PC/Plant Manager filtering (used in fetchCalendarData)
+  const [userFactoryCode, setUserFactoryCode] = useState(null);
+
+  // View mode: 'all' | 'production' | 'pm'
+  const [viewMode, setViewMode] = useState('all');
+
+  // Filters
+  const [filterFactory, setFilterFactory] = useState('all');
+  const [filterTypes, setFilterTypes] = useState([]); // Empty = show all
+  const [showFilters, setShowFilters] = useState(false);
 
   // Data
   const [projects, setProjects] = useState([]);
+  const [allProjects, setAllProjects] = useState([]); // Unfiltered for factory list
   const [calendarItems, setCalendarItems] = useState([]);
+  const [allCalendarItems, setAllCalendarItems] = useState([]); // Unfiltered
 
   // Edit modals
   const [editTask, setEditTask] = useState(null);
@@ -32,28 +56,72 @@ function CalendarPage() {
   // Toast
   const [toast, setToast] = useState(null);
 
-  // Roles that cannot edit tasks/items AND should only see their factory's data
+  // Roles configuration
   const factoryRestrictedRoles = ['project coordinator', 'pc', 'plant manager', 'plant_manager', 'plant_gm', 'sales_manager', 'sales manager'];
   const readOnlyRoles = ['project coordinator', 'pc', 'plant manager', 'plant_manager', 'plant_gm'];
-  // PM roles that should only see their assigned projects
   const pmRoles = ['project manager', 'pm'];
-  // Sales roles
   const salesManagerRoles = ['sales_manager', 'sales manager'];
   const salesRepRoles = ['sales_rep', 'sales rep'];
   const canEdit = !readOnlyRoles.includes(currentUserRole.toLowerCase());
-  // Note: These role checks are used inside fetchCalendarData, not directly in component render
-   
-  const _isFactoryRestricted = factoryRestrictedRoles.includes(currentUserRole.toLowerCase());
-   
-  const _isPM = pmRoles.includes(currentUserRole.toLowerCase());
-   
-  const _isSalesManager = salesManagerRoles.includes(currentUserRole.toLowerCase());
-   
-  const _isSalesRep = salesRepRoles.includes(currentUserRole.toLowerCase());
+
+  // Item types for filtering
+  const itemTypes = [
+    { id: 'task', label: 'Tasks', icon: CheckSquare, color: '#3B82F6' },
+    { id: 'rfi', label: 'RFIs', icon: MessageSquare, color: '#F59E0B' },
+    { id: 'submittal', label: 'Submittals', icon: ClipboardList, color: '#8B5CF6' },
+    { id: 'milestone', label: 'Milestones', icon: Flag, color: '#22C55E' },
+    { id: 'online_date', label: 'Online', icon: Play, color: '#22C55E' },
+    { id: 'offline_date', label: 'Offline', icon: Square, color: '#64748B' },
+    { id: 'delivery_date', label: 'Delivery', icon: Truck, color: '#FF6B35' }
+  ];
+
+  // Get unique factories from projects
+  const factories = useMemo(() => {
+    const factorySet = new Set(allProjects.map(p => p.factory).filter(Boolean));
+    return Array.from(factorySet).sort();
+  }, [allProjects]);
 
   useEffect(() => {
     fetchCalendarData();
   }, [user]);
+
+  // Apply filters when filter state changes
+  useEffect(() => {
+    applyFilters();
+  }, [viewMode, filterFactory, filterTypes, allCalendarItems, allProjects]);
+
+  const applyFilters = () => {
+    let filteredItems = [...allCalendarItems];
+    let filteredProjects = [...allProjects];
+
+    // Filter by view mode (Production vs PM)
+    if (viewMode === 'production') {
+      // Production view: Only show project dates (online, offline, delivery)
+      const productionTypes = ['online_date', 'offline_date', 'delivery_date'];
+      filteredItems = filteredItems.filter(item => productionTypes.includes(item.type));
+    } else if (viewMode === 'pm') {
+      // PM view: Show tasks, RFIs, submittals, milestones
+      const pmTypes = ['task', 'rfi', 'submittal', 'milestone'];
+      filteredItems = filteredItems.filter(item => pmTypes.includes(item.type));
+    }
+
+    // Filter by factory
+    if (filterFactory !== 'all') {
+      const factoryProjectIds = new Set(
+        filteredProjects.filter(p => p.factory === filterFactory).map(p => p.id)
+      );
+      filteredItems = filteredItems.filter(item => factoryProjectIds.has(item.projectId));
+      filteredProjects = filteredProjects.filter(p => p.factory === filterFactory);
+    }
+
+    // Filter by item types
+    if (filterTypes.length > 0) {
+      filteredItems = filteredItems.filter(item => filterTypes.includes(item.type));
+    }
+
+    setCalendarItems(filteredItems);
+    setProjects(filteredProjects);
+  };
 
   const fetchCalendarData = async () => {
     setLoading(true);
@@ -74,29 +142,19 @@ function CalendarPage() {
           setCurrentUserRole(userData.role);
         }
 
-        // Get factory code for PC/Plant Manager/Sales users
-        // Users table has direct 'factory' column with factory code (e.g., 'PMI', 'NWBS')
         if (userData?.factory) {
           factoryCode = userData.factory;
           setUserFactoryCode(factoryCode);
         }
       }
 
-      // Check if this user should only see their factory's data (PC/Plant Manager/Plant GM)
-      const isFactoryRestrictedPM = ['project coordinator', 'pc', 'plant manager', 'plant_manager', 'plant_gm'].includes(userRole.toLowerCase()) && factoryCode;
-
-      // Check if this user is a PM (should only see their assigned projects)
+      // Check role-based filtering
+      const isFactoryRestrictedPM = factoryRestrictedRoles.some(r => userRole.toLowerCase() === r) && factoryCode;
       const shouldFilterByPM = pmRoles.includes(userRole.toLowerCase()) && user?.id;
-
-      // Check if this user is a Sales Manager (should see projects linked to factory quotes)
       const shouldFilterBySalesManager = salesManagerRoles.includes(userRole.toLowerCase()) && factoryCode;
-
-      // Check if this user is a Sales Rep (should only see projects they're assigned to via quotes)
       const shouldFilterBySalesRep = salesRepRoles.includes(userRole.toLowerCase()) && user?.id;
 
-      // Fetch all tasks, RFIs, submittals, milestones WITH embedded project info
-      // This bypasses RLS issues where PC users can't read projects directly
-      // Include PM assignment fields for PM filtering
+      // Fetch all data
       const baseQueries = [
         supabase.from('tasks').select('*, project:projects(id, name, project_number, factory, color, owner_id, primary_pm_id, backup_pm_id)'),
         supabase.from('rfis').select('*, project:projects(id, name, project_number, factory, color, owner_id, primary_pm_id, backup_pm_id)'),
@@ -104,19 +162,8 @@ function CalendarPage() {
         supabase.from('milestones').select('*, project:projects(id, name, project_number, factory, color, owner_id, primary_pm_id, backup_pm_id)')
       ];
 
-      // Track where quotes result will be in the results array
       let quotesResultIndex = null;
 
-      // For Sales Manager, fetch all quotes in their factory to determine linked projects
-      if (shouldFilterBySalesManager) {
-        quotesResultIndex = baseQueries.length;
-        baseQueries.push(
-          supabase.from('sales_quotes').select('project_id, converted_to_project_id').eq('factory', factoryCode)
-        );
-      }
-
-      // For Sales Reps, also fetch quotes to determine which projects they're assigned to
-      // Note: Quotes use both project_id and converted_to_project_id to link to projects
       if (shouldFilterBySalesRep) {
         quotesResultIndex = baseQueries.length;
         baseQueries.push(
@@ -133,7 +180,7 @@ function CalendarPage() {
       let submittalsData = submittalsResult.data || [];
       let milestonesData = milestonesResult.data || [];
 
-      // Filter by factory for PC/Plant Manager users
+      // Apply role-based filtering
       if (isFactoryRestrictedPM) {
         tasksData = tasksData.filter(t => t.project?.factory === factoryCode);
         rfisData = rfisData.filter(r => r.project?.factory === factoryCode);
@@ -141,21 +188,13 @@ function CalendarPage() {
         milestonesData = milestonesData.filter(m => m.project?.factory === factoryCode);
       }
 
-      // Filter by Sales Manager's factory quotes
-      if (shouldFilterBySalesManager && quotesResult) {
-        const linkedProjectIds = new Set();
-        (quotesResult?.data || []).forEach(q => {
-          if (q.project_id) linkedProjectIds.add(q.project_id);
-          if (q.converted_to_project_id) linkedProjectIds.add(q.converted_to_project_id);
-        });
-        const isLinkedProject = (project) => project && linkedProjectIds.has(project.id);
-        tasksData = tasksData.filter(t => isLinkedProject(t.project));
-        rfisData = rfisData.filter(r => isLinkedProject(r.project));
-        submittalsData = submittalsData.filter(s => isLinkedProject(s.project));
-        milestonesData = milestonesData.filter(m => isLinkedProject(m.project));
+      if (shouldFilterBySalesManager && factoryCode) {
+        tasksData = tasksData.filter(t => t.project?.factory === factoryCode);
+        rfisData = rfisData.filter(r => r.project?.factory === factoryCode);
+        submittalsData = submittalsData.filter(s => s.project?.factory === factoryCode);
+        milestonesData = milestonesData.filter(m => m.project?.factory === factoryCode);
       }
 
-      // Filter by PM assignment for PM users
       if (shouldFilterByPM) {
         const isAssignedToUser = (project) => {
           if (!project) return false;
@@ -169,8 +208,6 @@ function CalendarPage() {
         milestonesData = milestonesData.filter(m => isAssignedToUser(m.project));
       }
 
-      // Filter by Sales Rep's assigned projects (via quotes)
-      // Quotes can link to projects via either project_id or converted_to_project_id
       if (shouldFilterBySalesRep && quotesResult) {
         const assignedProjectIds = new Set();
         (quotesResult?.data || []).forEach(q => {
@@ -184,7 +221,7 @@ function CalendarPage() {
         milestonesData = milestonesData.filter(m => isAssignedProject(m.project));
       }
 
-      // Build projects from embedded data (fallback for RLS-blocked users)
+      // Build projects from embedded data
       const embeddedProjectsMap = {};
       [...tasksData, ...rfisData, ...submittalsData, ...milestonesData].forEach(item => {
         if (item.project && item.project.id) {
@@ -192,20 +229,19 @@ function CalendarPage() {
         }
       });
 
-      // Try to fetch all projects directly first
+      // Fetch all projects
       let projectsData = [];
-      const { data: allProjects, error: _projectsError } = await supabase
+      const { data: allProjectsData } = await supabase
         .from('projects')
         .select('*')
         .order('name');
 
-      if (allProjects && allProjects.length > 0) {
-        projectsData = allProjects;
-        // Also filter projects by factory for PC/Plant Manager users
+      if (allProjectsData && allProjectsData.length > 0) {
+        projectsData = allProjectsData;
+
         if (isFactoryRestrictedPM) {
           projectsData = projectsData.filter(p => p.factory === factoryCode);
         }
-        // Also filter projects by PM assignment for PM users
         if (shouldFilterByPM) {
           projectsData = projectsData.filter(p =>
             p.owner_id === user.id ||
@@ -213,16 +249,9 @@ function CalendarPage() {
             p.backup_pm_id === user.id
           );
         }
-        // Also filter projects by Sales Manager's factory quotes
-        if (shouldFilterBySalesManager && quotesResult) {
-          const linkedProjectIds = new Set();
-          (quotesResult?.data || []).forEach(q => {
-            if (q.project_id) linkedProjectIds.add(q.project_id);
-            if (q.converted_to_project_id) linkedProjectIds.add(q.converted_to_project_id);
-          });
-          projectsData = projectsData.filter(p => linkedProjectIds.has(p.id));
+        if (shouldFilterBySalesManager && factoryCode) {
+          projectsData = projectsData.filter(p => p.factory === factoryCode);
         }
-        // Also filter projects by Sales Rep's assigned quotes
         if (shouldFilterBySalesRep && quotesResult) {
           const assignedProjectIds = new Set();
           (quotesResult?.data || []).forEach(q => {
@@ -232,7 +261,6 @@ function CalendarPage() {
           projectsData = projectsData.filter(p => assignedProjectIds.has(p.id));
         }
       } else {
-        // Fallback: use projects extracted from embedded joins (already filtered)
         projectsData = Object.values(embeddedProjectsMap);
       }
 
@@ -242,7 +270,7 @@ function CalendarPage() {
         color: project.color || getProjectColor(project, index)
       }));
 
-      setProjects(projectsWithColors);
+      setAllProjects(projectsWithColors);
 
       // Build calendar items
       const items = buildCalendarItems(
@@ -252,7 +280,7 @@ function CalendarPage() {
         submittalsData,
         milestonesData
       );
-      setCalendarItems(items);
+      setAllCalendarItems(items);
 
     } catch (error) {
       console.error('Error fetching calendar data:', error);
@@ -276,13 +304,11 @@ function CalendarPage() {
   };
 
   const handleItemClick = (item) => {
-    // PC and Plant Manager roles cannot edit items
     if (!canEdit) {
       showToast('View only - editing is restricted for your role', 'info');
       return;
     }
 
-    // Open the appropriate edit modal
     switch (item.type) {
       case 'task':
         setEditTask(item.data);
@@ -294,7 +320,6 @@ function CalendarPage() {
         setEditSubmittal(item.data);
         break;
       default:
-        // For project dates and milestones - no action needed currently
         break;
     }
   };
@@ -309,14 +334,193 @@ function CalendarPage() {
     fetchCalendarData();
   };
 
+  const toggleTypeFilter = (typeId) => {
+    setFilterTypes(prev =>
+      prev.includes(typeId)
+        ? prev.filter(t => t !== typeId)
+        : [...prev, typeId]
+    );
+  };
+
+  const clearFilters = () => {
+    setViewMode('all');
+    setFilterFactory('all');
+    setFilterTypes([]);
+  };
+
+  const hasActiveFilters = viewMode !== 'all' || filterFactory !== 'all' || filterTypes.length > 0;
+
+  // Styles
+  const styles = {
+    container: {
+      height: 'calc(100vh - 64px)',
+      display: 'flex',
+      flexDirection: 'column'
+    },
+    toolbar: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '12px 20px',
+      background: 'var(--bg-secondary)',
+      borderBottom: '1px solid var(--border-color)',
+      flexWrap: 'wrap',
+      gap: '12px'
+    },
+    toolbarLeft: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px'
+    },
+    toolbarRight: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px'
+    },
+    viewModeToggle: {
+      display: 'flex',
+      background: 'var(--bg-tertiary)',
+      borderRadius: 'var(--radius-md)',
+      padding: '3px',
+      gap: '2px'
+    },
+    viewModeBtn: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      padding: '8px 14px',
+      background: 'transparent',
+      border: 'none',
+      borderRadius: 'var(--radius-sm)',
+      cursor: 'pointer',
+      fontSize: '0.8125rem',
+      fontWeight: '500',
+      color: 'var(--text-secondary)',
+      transition: 'all 0.15s ease'
+    },
+    viewModeBtnActive: {
+      background: 'var(--bg-primary)',
+      color: 'var(--text-primary)',
+      boxShadow: 'var(--shadow-sm)'
+    },
+    filterBtn: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      padding: '8px 14px',
+      background: hasActiveFilters ? 'rgba(255, 107, 53, 0.15)' : 'var(--bg-tertiary)',
+      border: hasActiveFilters ? '1px solid rgba(255, 107, 53, 0.3)' : '1px solid var(--border-color)',
+      borderRadius: 'var(--radius-md)',
+      cursor: 'pointer',
+      fontSize: '0.8125rem',
+      fontWeight: '500',
+      color: hasActiveFilters ? 'var(--sunbelt-orange)' : 'var(--text-secondary)',
+      transition: 'all 0.15s ease'
+    },
+    dropdown: {
+      position: 'relative',
+      display: 'inline-block'
+    },
+    select: {
+      appearance: 'none',
+      padding: '8px 32px 8px 12px',
+      background: 'var(--bg-tertiary)',
+      border: '1px solid var(--border-color)',
+      borderRadius: 'var(--radius-md)',
+      fontSize: '0.8125rem',
+      fontWeight: '500',
+      color: 'var(--text-primary)',
+      cursor: 'pointer',
+      minWidth: '140px'
+    },
+    selectIcon: {
+      position: 'absolute',
+      right: '10px',
+      top: '50%',
+      transform: 'translateY(-50%)',
+      pointerEvents: 'none',
+      color: 'var(--text-tertiary)'
+    },
+    filterPanel: {
+      background: 'var(--bg-secondary)',
+      borderBottom: '1px solid var(--border-color)',
+      padding: '12px 20px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      flexWrap: 'wrap'
+    },
+    filterLabel: {
+      fontSize: '0.75rem',
+      fontWeight: '600',
+      color: 'var(--text-tertiary)',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px'
+    },
+    typeChip: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '4px',
+      padding: '4px 10px',
+      borderRadius: 'var(--radius-sm)',
+      fontSize: '0.75rem',
+      fontWeight: '500',
+      cursor: 'pointer',
+      border: '1px solid transparent',
+      transition: 'all 0.15s ease'
+    },
+    clearBtn: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px',
+      padding: '4px 10px',
+      background: 'transparent',
+      border: 'none',
+      borderRadius: 'var(--radius-sm)',
+      fontSize: '0.75rem',
+      fontWeight: '500',
+      color: 'var(--text-tertiary)',
+      cursor: 'pointer'
+    },
+    badge: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minWidth: '18px',
+      height: '18px',
+      padding: '0 6px',
+      borderRadius: '9px',
+      fontSize: '0.6875rem',
+      fontWeight: '600',
+      background: 'var(--sunbelt-orange)',
+      color: 'white'
+    },
+    calendarContent: {
+      flex: 1,
+      overflow: 'hidden'
+    },
+    stats: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '16px',
+      fontSize: '0.75rem',
+      color: 'var(--text-tertiary)'
+    },
+    statItem: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px'
+    }
+  };
+
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
+      <div style={{
+        display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        height: '50vh' 
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '50vh'
       }}>
         <div className="loading-spinner"></div>
         <p style={{ marginTop: 'var(--space-md)', color: 'var(--text-secondary)' }}>
@@ -327,41 +531,169 @@ function CalendarPage() {
   }
 
   return (
-    <div style={{ height: 'calc(100vh - 64px)' }}>
-      {/* Render appropriate view */}
-      {currentView === 'week' && (
-        <CalendarWeekView
-          items={calendarItems}
-          projects={projects}
-          onItemClick={handleItemClick}
-          onDateClick={handleDateClick}
-          onViewChange={handleViewChange}
-          canEdit={canEdit}
-        />
+    <div style={styles.container}>
+      {/* Enhanced Toolbar */}
+      <div style={styles.toolbar}>
+        <div style={styles.toolbarLeft}>
+          {/* View Mode Toggle */}
+          <div style={styles.viewModeToggle}>
+            <button
+              style={{
+                ...styles.viewModeBtn,
+                ...(viewMode === 'all' ? styles.viewModeBtnActive : {})
+              }}
+              onClick={() => setViewMode('all')}
+            >
+              <Calendar size={14} />
+              All
+            </button>
+            <button
+              style={{
+                ...styles.viewModeBtn,
+                ...(viewMode === 'production' ? styles.viewModeBtnActive : {})
+              }}
+              onClick={() => setViewMode('production')}
+            >
+              <Factory size={14} />
+              Production
+            </button>
+            <button
+              style={{
+                ...styles.viewModeBtn,
+                ...(viewMode === 'pm' ? styles.viewModeBtnActive : {})
+              }}
+              onClick={() => setViewMode('pm')}
+            >
+              <Briefcase size={14} />
+              PM
+            </button>
+          </div>
+
+          {/* Factory Filter */}
+          {factories.length > 1 && (
+            <div style={styles.dropdown}>
+              <select
+                value={filterFactory}
+                onChange={(e) => setFilterFactory(e.target.value)}
+                style={styles.select}
+              >
+                <option value="all">All Factories</option>
+                {factories.map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+              <ChevronDown size={14} style={styles.selectIcon} />
+            </div>
+          )}
+
+          {/* Filter Toggle */}
+          <button
+            style={styles.filterBtn}
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <Filter size={14} />
+            Types
+            {filterTypes.length > 0 && (
+              <span style={styles.badge}>{filterTypes.length}</span>
+            )}
+          </button>
+        </div>
+
+        <div style={styles.toolbarRight}>
+          {/* Stats */}
+          <div style={styles.stats}>
+            <span style={styles.statItem}>
+              <strong>{calendarItems.length}</strong> items
+            </span>
+            <span style={styles.statItem}>
+              <strong>{projects.length}</strong> projects
+            </span>
+          </div>
+
+          {/* Clear Filters */}
+          {hasActiveFilters && (
+            <button style={styles.clearBtn} onClick={clearFilters}>
+              <X size={14} />
+              Clear filters
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Type Filters Panel */}
+      {showFilters && (
+        <div style={styles.filterPanel}>
+          <span style={styles.filterLabel}>Item Types:</span>
+          {itemTypes.map(type => {
+            const isActive = filterTypes.length === 0 || filterTypes.includes(type.id);
+            const isSelected = filterTypes.includes(type.id);
+            const Icon = type.icon;
+
+            return (
+              <button
+                key={type.id}
+                onClick={() => toggleTypeFilter(type.id)}
+                style={{
+                  ...styles.typeChip,
+                  background: isSelected ? `${type.color}20` : 'var(--bg-tertiary)',
+                  borderColor: isSelected ? type.color : 'var(--border-color)',
+                  color: isSelected ? type.color : 'var(--text-secondary)',
+                  opacity: isActive ? 1 : 0.5
+                }}
+              >
+                <Icon size={12} />
+                {type.label}
+              </button>
+            );
+          })}
+
+          {filterTypes.length > 0 && (
+            <button
+              style={styles.clearBtn}
+              onClick={() => setFilterTypes([])}
+            >
+              Show All
+            </button>
+          )}
+        </div>
       )}
 
-      {currentView === 'month' && (
-        <CalendarMonthView
-          items={calendarItems}
-          projects={projects}
-          onItemClick={handleItemClick}
-          onDateClick={handleDateClick}
-          onViewChange={handleViewChange}
-          initialDate={selectedDate}
-          canEdit={canEdit}
-        />
-      )}
+      {/* Calendar Content */}
+      <div style={styles.calendarContent}>
+        {currentView === 'week' && (
+          <CalendarWeekView
+            items={calendarItems}
+            projects={projects}
+            onItemClick={handleItemClick}
+            onDateClick={handleDateClick}
+            onViewChange={handleViewChange}
+            canEdit={canEdit}
+          />
+        )}
 
-      {currentView === 'day' && (
-        <CalendarDayView
-          items={calendarItems}
-          projects={projects}
-          onItemClick={handleItemClick}
-          onViewChange={handleViewChange}
-          initialDate={selectedDate}
-          canEdit={canEdit}
-        />
-      )}
+        {currentView === 'month' && (
+          <CalendarMonthView
+            items={calendarItems}
+            projects={projects}
+            onItemClick={handleItemClick}
+            onDateClick={handleDateClick}
+            onViewChange={handleViewChange}
+            initialDate={selectedDate}
+            canEdit={canEdit}
+          />
+        )}
+
+        {currentView === 'day' && (
+          <CalendarDayView
+            items={calendarItems}
+            projects={projects}
+            onItemClick={handleItemClick}
+            onViewChange={handleViewChange}
+            initialDate={selectedDate}
+            canEdit={canEdit}
+          />
+        )}
+      </div>
 
       {/* Edit Task Modal */}
       {editTask && (

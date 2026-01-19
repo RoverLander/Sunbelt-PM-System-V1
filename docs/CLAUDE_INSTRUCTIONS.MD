@@ -122,7 +122,26 @@ Now read the architecture and help me build. If anything is unclear, ask before 
 
 ---
 
-RECENT FIXES & CHANGES (January 18, 2026):
+RECENT FIXES & CHANGES (January 19, 2026):
+
+VP ANALYTICS & SALES VIEW FIXES:
+• AnalyticsPage.jsx - Complete redesign for Operations VP role
+  - Multi-factory overview with aggregated metrics
+  - PM Workload section showing all PMs with assigned projects
+  - Factory breakdown with project counts and revenue
+• VPDashboard.jsx - Fixed Team Management section
+  - Team now shows PMs based on actual project assignments (queries assigned_pm_id)
+  - Displays PM workload count for each PM
+• Sidebar.jsx - Renamed "PM Projects" to "Factory Projects" for Sales Manager/Sales Rep roles
+• ProjectsPage.jsx - Sales view improvements
+  - Hidden factory filter dropdown for sales users (only see their factory)
+  - Page title shows "Factory Projects" for sales view
+• FIX_DIRECTORY_CONTACTS.sql - Complete 311 contacts across 15 factories
+  - Corrected column names: phone_main, phone_cell, phone_extension (NOT phone, cell_phone, extension)
+
+---
+
+PREVIOUS FIXES & CHANGES (January 18, 2026):
 
 BUILDING SPECS & PM FLAG FEATURES:
 • QuoteForm.jsx - Added Building Specifications section with:

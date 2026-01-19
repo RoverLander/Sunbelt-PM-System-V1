@@ -1,23 +1,23 @@
 // ============================================================================
-// GanttTimeline Component
+// GanttTimeline Component (v2 - Hybrid View)
 // ============================================================================
-// Interactive Gantt chart showing project timelines with key dates.
-// Reusable for both Director Dashboard and PM project views.
+// Interactive project timeline with switchable views:
+// - GANTT VIEW: Visual timeline with bars and milestones
+// - TABLE VIEW: Simplified status table with countdowns
 //
 // FEATURES:
-// - Horizontal scrolling timeline
-// - Project bars showing start → delivery dates
-// - Milestone markers
+// - View toggle (Gantt | Table)
+// - Horizontal scrolling timeline with zoom
+// - Project bars colored by health status
+// - Clear milestone markers (Online, Delivery)
 // - Today indicator
-// - Zoom controls (month/quarter/year view)
-// - Color-coded by project health status
+// - Sortable table view
 // - Click to open project details
 //
 // USAGE:
-// <GanttTimeline 
+// <GanttTimeline
 //   projects={projectsArray}
 //   onProjectClick={(project) => handleClick(project)}
-//   showMilestones={true}
 // />
 // ============================================================================
 
@@ -30,8 +30,15 @@ import {
   Calendar,
   Target,
   Truck,
-  Flag,
-  Circle
+  LayoutGrid,
+  List,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  CheckCircle2,
+  AlertCircle,
+  XCircle,
+  Clock
 } from 'lucide-react';
 
 // ============================================================================
@@ -104,13 +111,154 @@ function GanttTimeline({
   // ==========================================================================
   // STATE
   // ==========================================================================
+  const [viewMode, setViewMode] = useState('gantt'); // 'gantt' or 'table'
   const [zoomLevel, setZoomLevel] = useState('quarter');
   const [_scrollLeft, _setScrollLeft] = useState(0);
   const [hoveredProject, setHoveredProject] = useState(null);
   const [tooltipData, setTooltipData] = useState(null);
-  
+  const [sortConfig, setSortConfig] = useState({ key: 'delivery_date', direction: 'asc' });
+
   const containerRef = useRef(null);
   const timelineRef = useRef(null);
+
+  // ==========================================================================
+  // TABLE VIEW HELPER FUNCTIONS
+  // ==========================================================================
+  const getDaysUntil = (dateString) => {
+    if (!dateString) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(dateString);
+    target.setHours(0, 0, 0, 0);
+    return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+  };
+
+  const formatShortDate = (dateString) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const getHealthIcon = (status) => {
+    switch (status) {
+      case 'on-track': return <CheckCircle2 size={16} color="#22c55e" />;
+      case 'at-risk': return <AlertCircle size={16} color="#f59e0b" />;
+      case 'critical': return <XCircle size={16} color="#ef4444" />;
+      default: return <Clock size={16} color="#64748b" />;
+    }
+  };
+
+  const getCountdownBadge = (days) => {
+    if (days === null) return <span style={{ color: 'var(--text-tertiary)' }}>-</span>;
+    if (days < 0) {
+      return (
+        <span style={{
+          background: 'rgba(239, 68, 68, 0.15)',
+          color: '#ef4444',
+          padding: '2px 8px',
+          borderRadius: 'var(--radius-full)',
+          fontSize: '0.75rem',
+          fontWeight: '600'
+        }}>
+          {Math.abs(days)}d overdue
+        </span>
+      );
+    }
+    if (days <= 7) {
+      return (
+        <span style={{
+          background: 'rgba(239, 68, 68, 0.15)',
+          color: '#ef4444',
+          padding: '2px 8px',
+          borderRadius: 'var(--radius-full)',
+          fontSize: '0.75rem',
+          fontWeight: '600'
+        }}>
+          {days}d
+        </span>
+      );
+    }
+    if (days <= 14) {
+      return (
+        <span style={{
+          background: 'rgba(245, 158, 11, 0.15)',
+          color: '#f59e0b',
+          padding: '2px 8px',
+          borderRadius: 'var(--radius-full)',
+          fontSize: '0.75rem',
+          fontWeight: '600'
+        }}>
+          {days}d
+        </span>
+      );
+    }
+    return (
+      <span style={{
+        color: 'var(--text-secondary)',
+        fontSize: '0.75rem'
+      }}>
+        {days}d
+      </span>
+    );
+  };
+
+  // ==========================================================================
+  // SORTED PROJECTS FOR TABLE VIEW
+  // ==========================================================================
+  const sortedProjects = useMemo(() => {
+    const sorted = [...projects].sort((a, b) => {
+      let aVal, bVal;
+
+      switch (sortConfig.key) {
+        case 'project_number':
+          aVal = a.project_number || '';
+          bVal = b.project_number || '';
+          break;
+        case 'health':
+          const healthOrder = { 'critical': 0, 'at-risk': 1, 'on-track': 2, 'inactive': 3 };
+          aVal = healthOrder[a.healthStatus] ?? 4;
+          bVal = healthOrder[b.healthStatus] ?? 4;
+          break;
+        case 'online_date':
+          aVal = a.target_online_date ? new Date(a.target_online_date).getTime() : Infinity;
+          bVal = b.target_online_date ? new Date(b.target_online_date).getTime() : Infinity;
+          break;
+        case 'delivery_date':
+          aVal = a.delivery_date ? new Date(a.delivery_date).getTime() : Infinity;
+          bVal = b.delivery_date ? new Date(b.delivery_date).getTime() : Infinity;
+          break;
+        case 'status':
+          aVal = a.status || '';
+          bVal = b.status || '';
+          break;
+        default:
+          return 0;
+      }
+
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [projects, sortConfig]);
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const SortIcon = ({ columnKey }) => {
+    if (sortConfig.key !== columnKey) {
+      return <ArrowUpDown size={12} style={{ opacity: 0.3 }} />;
+    }
+    return sortConfig.direction === 'asc'
+      ? <ArrowUp size={12} />
+      : <ArrowDown size={12} />;
+  };
 
   // ==========================================================================
   // CALCULATE TIMELINE BOUNDS
@@ -423,37 +571,93 @@ function GanttTimeline({
         flexWrap: 'wrap',
         gap: 'var(--space-sm)'
       }}>
-        {/* Legend */}
-        <div style={{ display: 'flex', gap: 'var(--space-lg)', fontSize: '0.75rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '12px', height: '12px', borderRadius: '2px', background: '#22c55e' }} />
-            <span style={{ color: 'var(--text-secondary)' }}>On Track</span>
+        {/* View Toggle + Legend */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)' }}>
+          {/* View Toggle */}
+          <div style={{
+            display: 'flex',
+            gap: '2px',
+            background: 'var(--bg-tertiary)',
+            borderRadius: 'var(--radius-md)',
+            padding: '3px'
+          }}>
+            <button
+              onClick={() => setViewMode('gantt')}
+              style={{
+                padding: '6px 12px',
+                background: viewMode === 'gantt' ? 'var(--bg-primary)' : 'transparent',
+                border: 'none',
+                borderRadius: 'var(--radius-sm)',
+                color: viewMode === 'gantt' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '0.8125rem',
+                fontWeight: '500',
+                boxShadow: viewMode === 'gantt' ? 'var(--shadow-sm)' : 'none'
+              }}
+            >
+              <LayoutGrid size={14} />
+              Gantt
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              style={{
+                padding: '6px 12px',
+                background: viewMode === 'table' ? 'var(--bg-primary)' : 'transparent',
+                border: 'none',
+                borderRadius: 'var(--radius-sm)',
+                color: viewMode === 'table' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '0.8125rem',
+                fontWeight: '500',
+                boxShadow: viewMode === 'table' ? 'var(--shadow-sm)' : 'none'
+              }}
+            >
+              <List size={14} />
+              Table
+            </button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '12px', height: '12px', borderRadius: '2px', background: '#f59e0b' }} />
-            <span style={{ color: 'var(--text-secondary)' }}>At Risk</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '12px', height: '12px', borderRadius: '2px', background: '#ef4444' }} />
-            <span style={{ color: 'var(--text-secondary)' }}>Critical</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }} />
-            <span style={{ color: 'var(--text-secondary)' }}>Online Date</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', border: '2px solid var(--text-secondary)', background: 'white' }} />
-            <span style={{ color: 'var(--text-secondary)' }}>Delivery</span>
-          </div>
+
+          {/* Legend (only show in Gantt view) */}
+          {viewMode === 'gantt' && (
+            <div style={{ display: 'flex', gap: 'var(--space-md)', fontSize: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: '12px', height: '12px', borderRadius: '2px', background: '#22c55e' }} />
+                <span style={{ color: 'var(--text-secondary)' }}>On Track</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: '12px', height: '12px', borderRadius: '2px', background: '#f59e0b' }} />
+                <span style={{ color: 'var(--text-secondary)' }}>At Risk</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: '12px', height: '12px', borderRadius: '2px', background: '#ef4444' }} />
+                <span style={{ color: 'var(--text-secondary)' }}>Critical</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }} />
+                <span style={{ color: 'var(--text-secondary)' }}>Online</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', border: '2px solid var(--text-secondary)', background: 'white' }} />
+                <span style={{ color: 'var(--text-secondary)' }}>Delivery</span>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Zoom Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-          <button
-            onClick={() => scrollTimeline('left')}
-            style={{
-              padding: '6px',
-              background: 'var(--bg-primary)',
+        {/* Zoom Controls (only show in Gantt view) */}
+        {viewMode === 'gantt' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+            <button
+              onClick={() => scrollTimeline('left')}
+              style={{
+                padding: '6px',
+                background: 'var(--bg-primary)',
               border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius-sm)',
               cursor: 'pointer',
@@ -524,19 +728,156 @@ function GanttTimeline({
           >
             <ChevronRight size={16} />
           </button>
-        </div>
+          </div>
+        )}
       </div>
+
+      {/* ================================================================== */}
+      {/* TABLE VIEW                                                        */}
+      {/* ================================================================== */}
+      {viewMode === 'table' && (
+        <div style={{
+          border: '1px solid var(--border-color)',
+          borderRadius: 'var(--radius-md)',
+          overflow: 'hidden',
+          background: 'var(--bg-primary)'
+        }}>
+          {/* Table Header */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '180px 1fr 100px 120px 120px 100px',
+            gap: '8px',
+            padding: '12px 16px',
+            background: 'var(--bg-secondary)',
+            borderBottom: '1px solid var(--border-color)',
+            fontSize: '0.75rem',
+            fontWeight: '600',
+            color: 'var(--text-secondary)'
+          }}>
+            <div
+              onClick={() => handleSort('project_number')}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              Project <SortIcon columnKey="project_number" />
+            </div>
+            <div>Name</div>
+            <div
+              onClick={() => handleSort('health')}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              Health <SortIcon columnKey="health" />
+            </div>
+            <div
+              onClick={() => handleSort('online_date')}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              Online In <SortIcon columnKey="online_date" />
+            </div>
+            <div
+              onClick={() => handleSort('delivery_date')}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              Delivery In <SortIcon columnKey="delivery_date" />
+            </div>
+            <div
+              onClick={() => handleSort('status')}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              Status <SortIcon columnKey="status" />
+            </div>
+          </div>
+
+          {/* Table Body */}
+          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            {sortedProjects.map((project, index) => (
+              <div
+                key={project.id}
+                onClick={() => onProjectClick?.(project)}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '180px 1fr 100px 120px 120px 100px',
+                  gap: '8px',
+                  padding: '12px 16px',
+                  borderBottom: '1px solid var(--border-color)',
+                  background: index % 2 === 0 ? 'transparent' : 'var(--bg-secondary)',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = index % 2 === 0 ? 'transparent' : 'var(--bg-secondary)'}
+              >
+                {/* Project Number */}
+                <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                  {project.project_number || 'New'}
+                </div>
+
+                {/* Name */}
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {project.name || project.project_name || '-'}
+                </div>
+
+                {/* Health */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {getHealthIcon(project.healthStatus)}
+                  <span style={{
+                    fontSize: '0.75rem',
+                    color: project.healthStatus === 'critical' ? '#ef4444' :
+                           project.healthStatus === 'at-risk' ? '#f59e0b' :
+                           project.healthStatus === 'on-track' ? '#22c55e' : 'var(--text-tertiary)'
+                  }}>
+                    {project.healthLabel || project.healthStatus || '-'}
+                  </span>
+                </div>
+
+                {/* Online In */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {getCountdownBadge(getDaysUntil(project.target_online_date))}
+                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
+                    {formatShortDate(project.target_online_date)}
+                  </span>
+                </div>
+
+                {/* Delivery In */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {getCountdownBadge(getDaysUntil(project.delivery_date))}
+                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
+                    {formatShortDate(project.delivery_date)}
+                  </span>
+                </div>
+
+                {/* Status */}
+                <div>
+                  <span style={{
+                    fontSize: '0.75rem',
+                    padding: '2px 8px',
+                    borderRadius: 'var(--radius-full)',
+                    background: project.status === 'Active' ? 'rgba(34, 197, 94, 0.15)' :
+                               project.status === 'On Hold' ? 'rgba(245, 158, 11, 0.15)' :
+                               'var(--bg-tertiary)',
+                    color: project.status === 'Active' ? '#22c55e' :
+                           project.status === 'On Hold' ? '#f59e0b' :
+                           'var(--text-secondary)'
+                  }}>
+                    {project.status || 'Unknown'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ================================================================== */}
       {/* GANTT CHART                                                       */}
       {/* ================================================================== */}
-      <div style={{
-        display: 'flex',
-        border: '1px solid var(--border-color)',
-        borderRadius: 'var(--radius-md)',
-        overflow: 'hidden',
-        background: 'var(--bg-primary)'
-      }}>
+      {viewMode === 'gantt' && (
+        <div style={{
+          display: 'flex',
+          border: '1px solid var(--border-color)',
+          borderRadius: 'var(--radius-md)',
+          overflow: 'hidden',
+          background: 'var(--bg-primary)'
+        }}>
         {/* ===== PROJECT LABELS (FIXED) ===== */}
         <div style={{
           width: LABEL_WIDTH,
@@ -780,12 +1121,13 @@ function GanttTimeline({
             </svg>
           </div>
         </div>
-      </div>
+        </div>
+      )}
 
       {/* ================================================================== */}
-      {/* TOOLTIP                                                           */}
+      {/* TOOLTIP (only show in Gantt view)                                 */}
       {/* ================================================================== */}
-      {tooltipData && (
+      {viewMode === 'gantt' && tooltipData && (
         <div
           style={{
             position: 'absolute',

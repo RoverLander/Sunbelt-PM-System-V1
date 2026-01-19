@@ -371,8 +371,8 @@ const PMFlaggedSection = ({ quotes, onQuoteClick }) => {
           Flagged for PM ({flaggedQuotes.length})
         </span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {flaggedQuotes.slice(0, 3).map(quote => (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+        {flaggedQuotes.map(quote => (
           <button
             key={quote.id}
             onClick={() => onQuoteClick(quote)}

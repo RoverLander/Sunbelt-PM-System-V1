@@ -155,6 +155,7 @@ function DirectorDashboard() {
   const [assignmentViewMode, setAssignmentViewMode] = useState('kanban'); // 'list' or 'kanban'
   const [assigningProject, setAssigningProject] = useState(null);
   const [draggingProject, setDraggingProject] = useState(null);
+  const [showPMBoard, setShowPMBoard] = useState(true); // Toggle PM Assignment Board visibility
 
   const [riskSettings, setRiskSettings] = useState(() => {
     const saved = localStorage.getItem('directorRiskSettings');
@@ -782,22 +783,58 @@ function DirectorDashboard() {
       )}
 
       {/* ================================================================== */}
-      {/* PM ASSIGNMENT QUEUE                                               */}
+      {/* PM ASSIGNMENT BOARD - Always visible with collapsible content    */}
       {/* ================================================================== */}
-      {assignmentQueueData.unassignedCount > 0 && (
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.1))',
-          border: '1px solid rgba(139, 92, 246, 0.3)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '20px',
-          marginBottom: 'var(--space-lg)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <UserPlus size={18} style={{ color: '#8b5cf6' }} />
-              PM Assignment Queue ({assignmentQueueData.unassignedCount} unassigned)
-            </h3>
-            <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', padding: '4px' }}>
+      <div style={{
+        background: assignmentQueueData.unassignedCount > 0
+          ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.1))'
+          : 'var(--bg-secondary)',
+        border: assignmentQueueData.unassignedCount > 0
+          ? '1px solid rgba(139, 92, 246, 0.3)'
+          : '1px solid var(--border-color)',
+        borderRadius: 'var(--radius-lg)',
+        marginBottom: 'var(--space-lg)',
+        overflow: 'hidden'
+      }}>
+        {/* Collapsible Header */}
+        <div
+          onClick={() => setShowPMBoard(!showPMBoard)}
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '16px 20px',
+            cursor: 'pointer',
+            borderBottom: showPMBoard ? '1px solid var(--border-color)' : 'none'
+          }}
+        >
+          <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <UserPlus size={18} style={{ color: '#8b5cf6' }} />
+            PM Project Board
+            <span style={{
+              fontSize: '0.75rem',
+              fontWeight: '500',
+              color: 'var(--text-tertiary)',
+              marginLeft: '4px'
+            }}>
+              ({projects.filter(p => p.is_pm_job && !['Completed', 'Cancelled', 'Archived'].includes(p.status)).length} PM jobs)
+            </span>
+            {assignmentQueueData.unassignedCount > 0 && (
+              <span style={{
+                background: '#8b5cf6',
+                color: 'white',
+                padding: '2px 8px',
+                borderRadius: 'var(--radius-full)',
+                fontSize: '0.6875rem',
+                fontWeight: '600'
+              }}>
+                {assignmentQueueData.unassignedCount} unassigned
+              </span>
+            )}
+          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {showPMBoard && (
+              <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', padding: '4px' }} onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={() => setAssignmentViewMode('list')}
                 style={{
@@ -834,90 +871,186 @@ function DirectorDashboard() {
                 <LayoutGrid size={14} />
                 Kanban
               </button>
-            </div>
+              </div>
+            )}
+            <ChevronDown size={18} style={{ color: 'var(--text-tertiary)', transform: showPMBoard ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
           </div>
+        </div>
 
-          {/* LIST VIEW */}
+        {/* Collapsible Content */}
+        {showPMBoard && (
+          <div style={{ padding: '20px' }}>
+            {/* LIST VIEW - Shows ALL projects grouped by PM */}
           {assignmentViewMode === 'list' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {assignmentQueueData.unassignedProjects.map(project => (
-                <div
-                  key={project.id}
-                  style={{
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Unassigned Section */}
+              {assignmentQueueData.unassignedProjects.length > 0 && (
+                <div>
+                  <div style={{
                     display: 'flex',
-                    justifyContent: 'space-between',
                     alignItems: 'center',
-                    padding: '14px',
-                    background: 'var(--bg-secondary)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-color)'
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
-                        {project.project_number || 'New Project'}
-                      </span>
-                      {project.pm_flagged_from_quote && (
-                        <span style={{
-                          background: '#8b5cf6',
-                          color: 'white',
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          fontSize: '0.625rem',
-                          fontWeight: '600'
-                        }}>
-                          PM Flagged
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
-                      {project.name || project.project_name}
-                    </div>
-                    <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                      <span>{project.factory}</span>
-                      {project.contract_value && <span>{formatCurrency(project.contract_value)}</span>}
-                      {project.module_count && <span>{project.module_count} modules</span>}
-                    </div>
+                    gap: '8px',
+                    marginBottom: '8px',
+                    padding: '8px 12px',
+                    background: 'rgba(139, 92, 246, 0.15)',
+                    borderRadius: 'var(--radius-md)'
+                  }}>
+                    <span style={{ fontWeight: '600', color: '#8b5cf6', fontSize: '0.875rem' }}>
+                      Unassigned ({assignmentQueueData.unassignedProjects.length})
+                    </span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <select
-                      onChange={(e) => e.target.value && handleAssignPM(project.id, e.target.value)}
-                      defaultValue=""
-                      style={{
-                        padding: '8px 12px',
-                        background: 'var(--bg-primary)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: 'var(--radius-md)',
-                        color: 'var(--text-primary)',
-                        fontSize: '0.8125rem',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <option value="">Assign to PM...</option>
-                      {assignmentQueueData.pmUsers.map(pm => (
-                        <option key={pm.id} value={pm.id}>
-                          {pm.name} ({pm.role})
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => setSelectedProject(project)}
-                      style={{
-                        padding: '8px 12px',
-                        background: 'transparent',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: 'var(--radius-md)',
-                        color: 'var(--text-secondary)',
-                        cursor: 'pointer',
-                        fontSize: '0.8125rem'
-                      }}
-                    >
-                      View
-                    </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {assignmentQueueData.unassignedProjects.map(project => (
+                      <div
+                        key={project.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '12px',
+                          background: 'var(--bg-secondary)',
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid var(--border-color)'
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.8125rem' }}>
+                              {project.project_number || 'New'}
+                            </span>
+                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {project.name || project.project_name}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                            {project.factory} {project.contract_value && `• ${formatCurrency(project.contract_value)}`}
+                          </div>
+                        </div>
+                        <select
+                          onChange={(e) => e.target.value && handleAssignPM(project.id, e.target.value)}
+                          defaultValue=""
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            padding: '6px 10px',
+                            background: 'var(--bg-primary)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: 'var(--radius-sm)',
+                            color: 'var(--text-primary)',
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                            minWidth: '140px'
+                          }}
+                        >
+                          <option value="">Assign to PM...</option>
+                          {assignmentQueueData.pmUsers.map(pm => (
+                            <option key={pm.id} value={pm.id}>{pm.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
+              )}
+
+              {/* PM Sections */}
+              {assignmentQueueData.pmUsers.map(pm => {
+                const pmProjects = assignmentQueueData.projectsByPM[pm.id] || [];
+                return (
+                  <div key={pm.id}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '8px',
+                      padding: '8px 12px',
+                      background: 'var(--bg-tertiary)',
+                      borderRadius: 'var(--radius-md)'
+                    }}>
+                      <div style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        background: 'var(--sunbelt-orange)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontSize: '0.6875rem',
+                        fontWeight: '600'
+                      }}>
+                        {pm.name?.charAt(0) || 'P'}
+                      </div>
+                      <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                        {pm.name}
+                      </span>
+                      <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>
+                        ({pmProjects.length} projects)
+                      </span>
+                    </div>
+                    {pmProjects.length === 0 ? (
+                      <div style={{ padding: '12px', color: 'var(--text-tertiary)', fontSize: '0.8125rem', fontStyle: 'italic' }}>
+                        No projects assigned
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {pmProjects.map(project => (
+                          <div
+                            key={project.id}
+                            onClick={() => setSelectedProject(project)}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '12px',
+                              background: 'var(--bg-secondary)',
+                              borderRadius: 'var(--radius-md)',
+                              border: '1px solid var(--border-color)',
+                              cursor: 'pointer',
+                              transition: 'background 0.15s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                          >
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.8125rem' }}>
+                                  {project.project_number || 'New'}
+                                </span>
+                                <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {project.name || project.project_name}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                                {project.factory} {project.contract_value && `• ${formatCurrency(project.contract_value)}`}
+                              </div>
+                            </div>
+                            <select
+                              value={pm.id}
+                              onChange={(e) => handleAssignPM(project.id, e.target.value === 'unassigned' ? null : e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                padding: '6px 10px',
+                                background: 'var(--bg-primary)',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: 'var(--radius-sm)',
+                                color: 'var(--text-primary)',
+                                fontSize: '0.75rem',
+                                cursor: 'pointer',
+                                minWidth: '140px'
+                              }}
+                            >
+                              <option value="unassigned">Unassign</option>
+                              {assignmentQueueData.pmUsers.map(p => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -927,7 +1060,11 @@ function DirectorDashboard() {
               display: 'flex',
               gap: '12px',
               overflowX: 'auto',
-              paddingBottom: '8px'
+              paddingBottom: '8px',
+              marginLeft: '-20px',
+              marginRight: '-20px',
+              paddingLeft: '20px',
+              paddingRight: '20px'
             }}>
               {/* Unassigned Column */}
               <div
@@ -1058,8 +1195,9 @@ function DirectorDashboard() {
               ))}
             </div>
           )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
 
       {/* TWO COLUMN LAYOUT */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '16px', marginBottom: 'var(--space-lg)' }}>

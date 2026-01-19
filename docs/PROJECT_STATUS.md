@@ -1,8 +1,8 @@
 # Project Status
 
-**Last Updated:** January 18, 2026
-**Version:** 1.7.0
-**Status:** Production Ready (Beta) + PWA Floor App Complete + Manager PWA Complete + Building Specs & PM Flag
+**Last Updated:** January 19, 2026
+**Version:** 1.7.1
+**Status:** Production Ready (Beta) + PWA Floor App Complete + Manager PWA Complete + VP Analytics & Sales View Fixes
 
 ---
 
@@ -162,6 +162,39 @@ The Sunbelt PM System is a comprehensive project management platform built for S
 ---
 
 ## Recent Updates (January 2026)
+
+### January 19, 2026 (VP Analytics, Sales View Fixes, Directory Contacts)
+
+- **VP Analytics Page Redesign:**
+  - Complete redesign of AnalyticsPage.jsx for Operations VP role
+  - New multi-factory overview with aggregated metrics
+  - PM Workload section shows all PMs with assigned projects
+  - Factory breakdown with project counts and revenue
+  - Production metrics integration
+
+- **VPDashboard Team Management Fix:**
+  - Team section now shows PMs based on actual project assignments
+  - Queries projects table for assigned_pm_id to find active PMs
+  - Displays PM workload count (number of assigned projects)
+
+- **Sales View Improvements:**
+  - Renamed sidebar navigation from "PM Projects" to "Factory Projects" for Sales Manager and Sales Rep roles
+  - Removed factory filter dropdown from Projects tab for sales users (they only see their factory's projects)
+  - Page title changes to "Factory Projects" for sales view
+
+- **Directory Contacts Complete Data:**
+  - Fixed FIX_DIRECTORY_CONTACTS.sql with all 311 contacts across 15 factories
+  - Corrected column names to match schema (phone_main, phone_cell, phone_extension)
+  - Factories covered: SNB, AMT, BUSA, C&B, IBI, MRS, NWBS, PMI, PRM, SMM, SSI, WM-EAST, WM-EVERGREEN, WM-SOUTH, WM-ROCHESTER
+
+- **Files Modified:**
+  - `src/components/pages/AnalyticsPage.jsx` - Complete VP Analytics redesign
+  - `src/components/dashboards/VPDashboard.jsx` - Fixed Team Management section
+  - `src/components/layout/Sidebar.jsx` - Renamed PM Projects → Factory Projects for sales roles
+  - `src/components/pages/ProjectsPage.jsx` - Hide factory filter for sales, update title
+  - `supabase/demo/FIX_DIRECTORY_CONTACTS.sql` - Complete 311 contact dataset
+
+---
 
 ### January 17, 2026 (Manager Mobile PWA - Complete)
 

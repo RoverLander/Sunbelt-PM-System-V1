@@ -245,10 +245,12 @@ function Sidebar({
 
       const overdueCount = (allTasks || []).filter(t => activeTaskStatuses.includes(t.status)).length;
 
+      // Count only PMs and Directors for the Director's team
       const { count: teamCount } = await supabase
         .from('users')
         .select('id', { count: 'exact', head: true })
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .in('role', ['PM', 'Project_Manager', 'Project Manager', 'Director']);
 
       setDirectorStats({
         totalProjects: total,
@@ -1159,7 +1161,7 @@ function Sidebar({
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'team', label: 'Team', icon: Users },
-          { id: 'projects', label: 'PM Projects', icon: FolderKanban },
+          { id: 'projects', label: 'Factory Projects', icon: FolderKanban },
           { id: 'calendar', label: 'Calendar', icon: Calendar },
         ];
 
@@ -1168,7 +1170,7 @@ function Sidebar({
         // No team page - they only see their own data
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { id: 'projects', label: 'PM Projects', icon: FolderKanban },
+          { id: 'projects', label: 'Factory Projects', icon: FolderKanban },
           { id: 'calendar', label: 'Calendar', icon: Calendar },
         ];
 
