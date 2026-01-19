@@ -175,13 +175,12 @@ function StatCard({ icon: Icon, label, value, subValue, color, bgColor, onClick,
       }}>
         <Icon size={20} style={{ color }} />
       </div>
-      <div style={{ minWidth: 0 }}>
+      <div style={{ minWidth: 0, overflow: 'hidden' }}>
         <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--text-primary)', lineHeight: 1.1 }}>
           {value}
         </div>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-          {label}
-          {subValue && <span style={{ color: 'var(--text-tertiary)', marginLeft: '4px' }}>{subValue}</span>}
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {label}{subValue && <span style={{ color: 'var(--text-tertiary)' }}> {subValue}</span>}
         </div>
       </div>
     </div>
