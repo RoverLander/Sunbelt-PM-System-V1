@@ -39,6 +39,8 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Increase file size limit for precaching (default is 2 MB)
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB
         // Cache strategies for different routes
         runtimeCaching: [
           {
