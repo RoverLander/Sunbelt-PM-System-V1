@@ -131,7 +131,7 @@ const getHealthColor = (health) => {
 };
 
 // ============================================================================
-// STATS CARD COMPONENT
+// STATS CARD COMPONENT - Compact horizontal strip version
 // ============================================================================
 function StatCard({ icon: Icon, label, value, subValue, color, bgColor, onClick, isActive }) {
   return (
@@ -140,13 +140,15 @@ function StatCard({ icon: Icon, label, value, subValue, color, bgColor, onClick,
       style={{
         background: isActive ? bgColor : 'var(--bg-secondary)',
         borderRadius: '12px',
-        border: `1px solid ${isActive ? color : 'var(--border-color)'}`,
-        padding: '16px 20px',
+        border: `2px solid ${isActive ? color : 'var(--border-color)'}`,
+        padding: '14px 18px',
         cursor: onClick ? 'pointer' : 'default',
         transition: 'all 0.15s',
         display: 'flex',
         alignItems: 'center',
-        gap: '14px'
+        gap: '12px',
+        flex: '1 1 0',
+        minWidth: '140px'
       }}
       onMouseOver={(e) => {
         if (onClick) {
@@ -162,8 +164,8 @@ function StatCard({ icon: Icon, label, value, subValue, color, bgColor, onClick,
       }}
     >
       <div style={{
-        width: '44px',
-        height: '44px',
+        width: '40px',
+        height: '40px',
         borderRadius: '10px',
         background: bgColor,
         display: 'flex',
@@ -171,15 +173,15 @@ function StatCard({ icon: Icon, label, value, subValue, color, bgColor, onClick,
         justifyContent: 'center',
         flexShrink: 0
       }}>
-        <Icon size={22} style={{ color }} />
+        <Icon size={20} style={{ color }} />
       </div>
-      <div>
-        <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--text-primary)', lineHeight: 1.1 }}>
           {value}
         </div>
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
           {label}
-          {subValue && <span style={{ color: 'var(--text-tertiary)', marginLeft: '6px' }}>{subValue}</span>}
+          {subValue && <span style={{ color: 'var(--text-tertiary)', marginLeft: '4px' }}>{subValue}</span>}
         </div>
       </div>
     </div>
@@ -740,13 +742,13 @@ function ProjectsPage({ isDirectorView = false, isSalesView = false, onNavigateT
       </div>
 
       {/* ================================================================== */}
-      {/* ENHANCED STATS CARDS                                              */}
+      {/* STATS BAR - Single row, full width                                */}
       {/* ================================================================== */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        display: 'flex',
         gap: '12px',
-        marginBottom: 'var(--space-lg)'
+        marginBottom: 'var(--space-lg)',
+        flexWrap: 'wrap'
       }}>
         <StatCard
           icon={FolderKanban}
