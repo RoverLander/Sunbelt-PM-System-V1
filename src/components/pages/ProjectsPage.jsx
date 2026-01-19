@@ -131,7 +131,7 @@ const getHealthColor = (health) => {
 };
 
 // ============================================================================
-// STATS CARD COMPONENT - Compact horizontal strip version
+// STATS CARD COMPONENT - Vertical layout with full text visibility
 // ============================================================================
 function StatCard({ icon: Icon, label, value, subValue, color, bgColor, onClick, isActive }) {
   return (
@@ -141,14 +141,17 @@ function StatCard({ icon: Icon, label, value, subValue, color, bgColor, onClick,
         background: isActive ? bgColor : 'var(--bg-secondary)',
         borderRadius: '12px',
         border: `2px solid ${isActive ? color : 'var(--border-color)'}`,
-        padding: '14px 18px',
+        padding: '16px',
         cursor: onClick ? 'pointer' : 'default',
         transition: 'all 0.15s',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
-        gap: '12px',
+        justifyContent: 'center',
+        textAlign: 'center',
         flex: '1 1 0',
-        minWidth: '140px'
+        minWidth: '120px',
+        minHeight: '100px'
       }}
       onMouseOver={(e) => {
         if (onClick) {
@@ -164,25 +167,28 @@ function StatCard({ icon: Icon, label, value, subValue, color, bgColor, onClick,
       }}
     >
       <div style={{
-        width: '40px',
-        height: '40px',
+        width: '36px',
+        height: '36px',
         borderRadius: '10px',
         background: bgColor,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        flexShrink: 0
+        marginBottom: '8px'
       }}>
-        <Icon size={20} style={{ color }} />
+        <Icon size={18} style={{ color }} />
       </div>
-      <div style={{ minWidth: 0, overflow: 'hidden' }}>
-        <div style={{ fontSize: '1.375rem', fontWeight: '700', color: 'var(--text-primary)', lineHeight: 1.1 }}>
-          {value}
-        </div>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {label}{subValue && <span style={{ color: 'var(--text-tertiary)' }}> {subValue}</span>}
-        </div>
+      <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-primary)', lineHeight: 1 }}>
+        {value}
       </div>
+      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+        {label}
+      </div>
+      {subValue && (
+        <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+          {subValue}
+        </div>
+      )}
     </div>
   );
 }
