@@ -113,30 +113,17 @@ function ErrorTracking() {
   const fetchTickets = async () => {
     setLoading(true);
     try {
-      // First try with FK relationships
-      let { data, error } = await supabase
+      // Use simple query without FK joins to avoid 400 errors
+      // The error_tickets table FK columns may not have proper relationships defined
+      const { data, error } = await supabase
         .from('error_tickets')
-        .select(`
-          *,
-          assigned_user:assigned_to(id, name, email),
-          reporter:reported_by(id, name, email),
-          resolver:resolved_by(id, name)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
-      // If FK query fails (400 error), try simple query without joins
       if (error) {
-        const simpleResult = await supabase
-          .from('error_tickets')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (simpleResult.error) {
-          console.error('Error fetching tickets:', simpleResult.error);
-          setTickets([]);
-          return;
-        }
-        data = simpleResult.data;
+        console.error('Error fetching tickets:', error);
+        setTickets([]);
+        return;
       }
 
       setTickets(data || []);
