@@ -370,7 +370,7 @@ function VPDashboard() {
       ['Plant Manager', 'Plant_Manager', 'Plant_GM', 'PC', 'Project Coordinator', 'plant manager', 'plant_manager', 'plant_gm', 'pc', 'project coordinator'].includes(u.role)
     );
 
-    // Group PMs by factory for workload view
+    // Group PMs by factory for workload view (legacy - kept for reference)
     // Find PMs who have projects assigned at each factory (by owner_id, assigned_pm_id, or primary_pm_id)
     const pmsByFactory = factories.reduce((acc, factory) => {
       const factoryProjects = activeProjects.filter(p => p.factory === factory);
@@ -389,6 +389,32 @@ function VPDashboard() {
         pms: factoryPMs,
         projectCount: factoryProjects.length,
         avgLoad: factoryPMs.length > 0 ? (factoryProjects.length / factoryPMs.length).toFixed(1) : 0
+      };
+      return acc;
+    }, {});
+
+    // NEW: Group factories by PM (PMs as top level with factories underneath)
+    const factoriesByPM = pms.reduce((acc, pm) => {
+      // Find all projects where this PM is assigned
+      const pmProjects = activeProjects.filter(p =>
+        p.owner_id === pm.id || p.assigned_pm_id === pm.id || p.primary_pm_id === pm.id
+      );
+
+      // Group PM's projects by factory
+      const pmFactories = {};
+      pmProjects.forEach(project => {
+        const factory = project.factory || 'Unassigned';
+        if (!pmFactories[factory]) {
+          pmFactories[factory] = { name: factory, projectCount: 0 };
+        }
+        pmFactories[factory].projectCount++;
+      });
+
+      acc[pm.id] = {
+        pm: pm,
+        name: pm.name || pm.email || 'Unknown PM',
+        totalProjects: pmProjects.length,
+        factories: Object.values(pmFactories).sort((a, b) => b.projectCount - a.projectCount)
       };
       return acc;
     }, {});
@@ -456,6 +482,7 @@ function VPDashboard() {
       pms,
       productionStaff,
       pmsByFactory,
+      factoriesByPM,
       productionByFactory,
 
       // Trends
@@ -1016,60 +1043,91 @@ function VPDashboard() {
             </div>
           </div>
 
-          {/* PM View: Factory Breakdown with PMs */}
+          {/* PM View: PMs as top level with their Factories underneath */}
           {teamViewTab === 'pm' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-              {Object.entries(executiveMetrics.pmsByFactory || {}).map(([factory, data]) => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
+              {Object.values(executiveMetrics.factoriesByPM || {})
+                .filter(data => data.totalProjects > 0) // Only show PMs with projects
+                .sort((a, b) => b.totalProjects - a.totalProjects) // Sort by project count descending
+                .map((data) => (
                 <div
-                  key={factory}
+                  key={data.pm.id}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 12px',
+                    padding: '12px',
                     background: 'var(--bg-primary)',
                     borderRadius: 'var(--radius-md)',
                     border: '1px solid var(--border-color)'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: 'var(--radius-sm)',
-                      background: 'rgba(139, 92, 246, 0.15)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      <Factory size={16} color="#8b5cf6" />
+                  {/* PM Header Row */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: data.factories.length > 0 ? '10px' : '0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, var(--sunbelt-orange), #f59e0b)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontWeight: '700',
+                        fontSize: '0.875rem'
+                      }}>
+                        {data.name?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || '??'}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: '600', fontSize: '0.875rem', color: 'var(--text-primary)' }}>{data.name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                          {data.factories.length} {data.factories.length === 1 ? 'factory' : 'factories'}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <div style={{ fontWeight: '600', fontSize: '0.875rem', color: 'var(--text-primary)' }}>{factory}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                        {data.pms?.map(pm => pm.name?.split(' ')[0]).join(', ') || 'No PMs assigned'}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '1.125rem', fontWeight: '700', color: 'var(--sunbelt-orange)' }}>{data.totalProjects}</div>
+                        <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Projects</div>
                       </div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)' }}>{data.pms?.length || 0}</div>
-                      <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>PMs</div>
+
+                  {/* Factories under this PM */}
+                  {data.factories.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', paddingLeft: '46px' }}>
+                      {data.factories.map((factory) => (
+                        <div
+                          key={factory.name}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '4px 10px',
+                            background: 'var(--bg-tertiary)',
+                            borderRadius: 'var(--radius-sm)',
+                            fontSize: '0.75rem'
+                          }}
+                        >
+                          <Factory size={12} style={{ color: '#8b5cf6' }} />
+                          <span style={{ color: 'var(--text-secondary)', fontWeight: '500' }}>{factory.name}</span>
+                          <span style={{
+                            background: 'var(--sunbelt-orange)',
+                            color: 'white',
+                            padding: '1px 6px',
+                            borderRadius: '8px',
+                            fontSize: '0.6875rem',
+                            fontWeight: '600'
+                          }}>
+                            {factory.projectCount}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--sunbelt-orange)' }}>{data.projectCount}</div>
-                      <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Projects</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '0.875rem', fontWeight: '600', color: data.avgLoad > 5 ? '#f59e0b' : '#22c55e' }}>{data.avgLoad}</div>
-                      <div style={{ fontSize: '0.625rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Avg Load</div>
-                    </div>
-                  </div>
+                  )}
                 </div>
               ))}
-              {Object.keys(executiveMetrics.pmsByFactory || {}).length === 0 && (
+              {Object.values(executiveMetrics.factoriesByPM || {}).filter(d => d.totalProjects > 0).length === 0 && (
                 <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>
-                  No factory data available
+                  No PMs with active projects
                 </div>
               )}
             </div>
