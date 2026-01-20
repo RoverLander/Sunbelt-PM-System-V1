@@ -157,13 +157,17 @@ export function useOfflineSync(options = {}) {
   const queueQCSubmission = useCallback(async (qcData, photos = []) => {
     const actionId = await addPendingAction(ACTION_TYPES.QC_SUBMIT, qcData);
 
-    // Queue photos
-    for (const photo of photos) {
-      await addPhotoToQueue(
-        actionId,
-        photo.blob,
-        photo.filename || `qc_${Date.now()}.jpg`,
-        photo.metadata || {}
+    // Queue photos in parallel
+    if (photos.length > 0) {
+      await Promise.all(
+        photos.map(photo =>
+          addPhotoToQueue(
+            actionId,
+            photo.blob,
+            photo.filename || `qc_${Date.now()}.jpg`,
+            photo.metadata || {}
+          )
+        )
       );
     }
 
@@ -207,13 +211,17 @@ export function useOfflineSync(options = {}) {
   const queueInventoryReceive = useCallback(async (receiveData, photos = []) => {
     const actionId = await addPendingAction(ACTION_TYPES.INVENTORY_RECEIVE, receiveData);
 
-    // Queue photos
-    for (const photo of photos) {
-      await addPhotoToQueue(
-        actionId,
-        photo.blob,
-        photo.filename || `receipt_${Date.now()}.jpg`,
-        photo.metadata || {}
+    // Queue photos in parallel
+    if (photos.length > 0) {
+      await Promise.all(
+        photos.map(photo =>
+          addPhotoToQueue(
+            actionId,
+            photo.blob,
+            photo.filename || `receipt_${Date.now()}.jpg`,
+            photo.metadata || {}
+          )
+        )
       );
     }
 

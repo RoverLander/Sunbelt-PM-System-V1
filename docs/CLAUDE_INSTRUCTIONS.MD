@@ -122,7 +122,78 @@ Now read the architecture and help me build. If anything is unclear, ask before 
 
 ---
 
-RECENT FIXES & CHANGES (January 19, 2026):
+RECENT FIXES & CHANGES (January 20, 2026):
+
+PLANT MANAGER DASHBOARD IMPROVEMENTS:
+• QueueTimeMonitor.jsx - Fixed UI spacing issues
+  - Increased gap between queue items (space-sm → space-md)
+  - Added borders and box-shadows for better visual separation
+  - Enhanced summary rows and bottleneck sections
+
+• CrewScheduleView.jsx - Department grouping with leads-first sorting
+  - Changed default groupBy from 'crew' to 'department'
+  - Added DEPARTMENT_ORDER array for consistent sorting
+  - Leads now display first within each department with orange badge indicator
+  - Worker rows show department affiliation
+
+• AttendanceDashboard.jsx - Department-based grouping
+  - Added DEPARTMENT_ORDER constant for consistent ordering
+  - Updated AreaBreakdown to support department grouping
+  - Tracks lead presence by department
+
+• PlantManagerDashboard.jsx - Analytics tab layout fix
+  - Changed Crew Utilization Heatmap and Cross-Training Matrix from side-by-side grid to full-width stacked layout
+
+• DailyReportGenerator.jsx - Weekly/Monthly reports with section toggles
+  - Added report type selector (Daily/Weekly/Monthly)
+  - Added section toggles for including/excluding sections in reports
+  - Sections: Labor Details, Station Activity, Quality Control, Schedules & Bottlenecks, Efficiency Metrics, Safety & Kaizen
+  - Navigation buttons support week/month navigation
+  - Aggregates daily reports for weekly/monthly views
+
+• PlantConfigPanel.jsx - Timezone selection
+  - Added timezone dropdown in Time & Pay Settings section
+  - Options: Pacific, Mountain, Central, Eastern, Alaska, Hawaii
+
+• modulesService.js - Station-specific active module rules
+  - INT_FINISH, FINAL_INSP, PICKUP stations can have multiple "In Progress" modules
+  - All other stations limited to 1 "In Progress" module at a time
+  - When setting a module to "In Progress", other modules at station move back to "In Queue"
+  - moveModuleToStation() auto-sets as "In Progress" if no modules at target station
+
+SALES DASHBOARD:
+• SalesDashboard.jsx - Sales rep project visibility (read-only)
+  - Added myProjects state to track converted projects
+  - Added tab switcher for Sales Reps (My Quotes / My Projects)
+  - My Projects section shows read-only project cards
+  - Displays PM assignment, phase, value, and original quote reference
+
+DATABASE MIGRATIONS:
+• 20260120_add_worker_department.sql
+  - Added department column to workers table
+  - Created get_department_sort_order() helper function for consistent sorting
+  - Department values: Framing, Rough Carpentry, Electrical, Plumbing, HVAC, Interior Rough, Interior Finish, Inspection, Staging, QC, Material Handling
+
+• 20260120_comprehensive_demo_data.sql - COMPREHENSIVE DEMO DATA
+  - Users: IT, Sales Team, PMs, PCs, Directors, VP, Plant Manager
+  - Sales Customers: 8 companies across government, direct, general types
+  - Dealers: 4 dealers with branch offices
+  - Sales Quotes: 8 quotes at various pipeline stages (draft, sent, negotiating, awaiting_po, won, lost)
+  - Projects: 10+ projects at various phases (Planning, In Progress, Production)
+  - Workers: 28 workers organized by department with leads
+  - Modules: Created for all active projects at various stations
+  - Worker Shifts: Today's attendance (85% rate)
+  - QC Records: Inspection records for active modules
+  - Tasks, RFIs, Submittals: PM work items for each project
+  - Announcements & Feature Flags: System configuration items
+  - All data targets NWBS factory for demo
+
+DOCUMENTATION:
+• DATABASE_SCHEMA.md - Added department column to workers table
+
+---
+
+PREVIOUS FIXES & CHANGES (January 19, 2026):
 
 IT DASHBOARD FULL REVAMP:
 • ITDashboard.jsx - Complete Command Center redesign

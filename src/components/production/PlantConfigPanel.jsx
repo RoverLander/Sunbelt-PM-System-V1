@@ -454,6 +454,22 @@ export default function PlantConfigPanel({ factoryId, factoryName, onSave }) {
           <div style={styles.sectionContent}>
             <div style={styles.formGrid}>
               <div style={styles.formGroup}>
+                <label style={styles.label}>Factory Timezone</label>
+                <select
+                  style={styles.input}
+                  value={config.time_settings?.timezone || 'America/Los_Angeles'}
+                  onChange={(e) => handleTimeChange('timezone', e.target.value)}
+                >
+                  <option value="America/Los_Angeles">Pacific (PT)</option>
+                  <option value="America/Denver">Mountain (MT)</option>
+                  <option value="America/Chicago">Central (CT)</option>
+                  <option value="America/New_York">Eastern (ET)</option>
+                  <option value="America/Anchorage">Alaska (AKT)</option>
+                  <option value="Pacific/Honolulu">Hawaii (HT)</option>
+                </select>
+                <span style={styles.hint}>Used for all time displays and calculations</span>
+              </div>
+              <div style={styles.formGroup}>
                 <label style={styles.label}>Shift Start</label>
                 <input
                   type="time"

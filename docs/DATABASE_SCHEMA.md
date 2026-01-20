@@ -1150,6 +1150,7 @@ Factory floor workers (workforce tracking, not system users).
 | phone | VARCHAR(20) | YES | | |
 | email | VARCHAR(255) | YES | | |
 | title | VARCHAR(50) | YES | | e.g., 'Welder', 'Carpenter' |
+| department | VARCHAR(50) | YES | | Department name (Framing, Rough Carpentry, Electrical, Plumbing, HVAC, Interior Rough, Interior Finish, Inspection, Staging, QC, Material Handling) |
 | primary_station_id | UUID | YES | | FK to station_templates.id |
 | is_lead | BOOLEAN | NO | false | |
 | reports_to | UUID | YES | | FK to workers.id |

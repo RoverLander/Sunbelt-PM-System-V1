@@ -1,17 +1,20 @@
 // ============================================================================
 // ProductionCalendar.jsx - Module Scheduling Calendar
 // ============================================================================
-// Displays scheduled modules in Day/Week/Month views with scheduling support.
+// Displays scheduled modules in Day/Week/Month/Timeline/Station views with scheduling support.
 //
 // FEATURES:
-// - Day/Week/Month view modes
+// - Day/Week/Month/Timeline/Station view modes
 // - Module blocks showing project name, module #, status
 // - Color coding by status/health
 // - Click module to open detail modal
 // - Drag to reschedule (GM only)
 // - Simulation mode support (in-memory edits)
+// - Gantt-style timeline view
+// - Station/Resource capacity view
 //
 // Created: January 15, 2026
+// Updated: January 20, 2026 - Added Timeline and Station views
 // ============================================================================
 
 import React, { useState, useMemo } from 'react';
@@ -27,9 +30,13 @@ import {
   Eye,
   Radio,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  LayoutGrid,
+  MapPin
 } from 'lucide-react';
 import { getModuleStatusColor } from '../../services/modulesService';
+import CalendarTimelineView from '../calendar/CalendarTimelineView';
+import CalendarStationView from '../calendar/CalendarStationView';
 
 // ============================================================================
 // STYLES
@@ -40,7 +47,10 @@ const styles = {
     background: 'var(--bg-secondary)',
     border: '1px solid var(--border-color)',
     borderRadius: 'var(--radius-lg)',
-    overflow: 'hidden'
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: '600px'
   },
   simModeBorder: {
     border: '2px solid #f59e0b'
@@ -988,7 +998,7 @@ export default function ProductionCalendar({
 
           {/* View Mode Toggle */}
           <div style={styles.viewToggle}>
-            {['day', 'week', 'month'].map(mode => (
+            {['day', 'week', 'month', 'timeline', 'station'].map(mode => (
               <button
                 key={mode}
                 style={{
@@ -996,7 +1006,10 @@ export default function ProductionCalendar({
                   ...(viewMode === mode ? styles.viewBtnActive : {})
                 }}
                 onClick={() => setViewMode(mode)}
+                title={mode === 'timeline' ? 'Gantt Timeline View' : mode === 'station' ? 'Station Resource View' : `${mode.charAt(0).toUpperCase() + mode.slice(1)} View`}
               >
+                {mode === 'timeline' && <LayoutGrid size={12} style={{ marginRight: '4px' }} />}
+                {mode === 'station' && <MapPin size={12} style={{ marginRight: '4px' }} />}
                 {mode.charAt(0).toUpperCase() + mode.slice(1)}
               </button>
             ))}
@@ -1005,39 +1018,70 @@ export default function ProductionCalendar({
       </div>
 
       {/* Calendar Content */}
-      <div style={styles.calendarGrid}>
-        {viewMode === 'month' && (
-          <MonthView
-            currentDate={currentDate}
+      {(viewMode === 'month' || viewMode === 'week' || viewMode === 'day') && (
+        <div style={styles.calendarGrid}>
+          {viewMode === 'month' && (
+            <MonthView
+              currentDate={currentDate}
+              modules={modules}
+              onModuleClick={onModuleClick}
+              onDayClick={handleDayClick}
+              simulatedChanges={simulatedChanges}
+            />
+          )}
+
+          {viewMode === 'week' && (
+            <WeekView
+              currentDate={currentDate}
+              modules={modules}
+              onModuleClick={onModuleClick}
+              onDayClick={handleDayClick}
+              simulatedChanges={simulatedChanges}
+            />
+          )}
+
+          {viewMode === 'day' && (
+            <DayView
+              currentDate={currentDate}
+              modules={modules}
+              onModuleClick={onModuleClick}
+              simulatedChanges={simulatedChanges}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Timeline View */}
+      {viewMode === 'timeline' && (
+        <div style={{ flex: 1, minHeight: '500px' }}>
+          <CalendarTimelineView
             modules={modules}
             onModuleClick={onModuleClick}
-            onDayClick={handleDayClick}
-            simulatedChanges={simulatedChanges}
+            onModuleReschedule={onScheduleModule}
+            onViewChange={(view) => setViewMode(view)}
+            initialDate={currentDate}
+            canEdit={isPlantManager && !isSimMode}
           />
-        )}
+        </div>
+      )}
 
-        {viewMode === 'week' && (
-          <WeekView
-            currentDate={currentDate}
+      {/* Station View */}
+      {viewMode === 'station' && (
+        <div style={{ flex: 1, minHeight: '500px' }}>
+          <CalendarStationView
             modules={modules}
             onModuleClick={onModuleClick}
-            onDayClick={handleDayClick}
-            simulatedChanges={simulatedChanges}
+            onModuleMove={onScheduleModule}
+            onViewChange={(view) => setViewMode(view)}
+            canEdit={isPlantManager && !isSimMode}
           />
-        )}
+        </div>
+      )}
 
-        {viewMode === 'day' && (
-          <DayView
-            currentDate={currentDate}
-            modules={modules}
-            onModuleClick={onModuleClick}
-            simulatedChanges={simulatedChanges}
-          />
-        )}
-      </div>
-
-      {/* Status Legend */}
-      <StatusLegend />
+      {/* Status Legend - only show for day/week/month views */}
+      {(viewMode === 'month' || viewMode === 'week' || viewMode === 'day') && (
+        <StatusLegend />
+      )}
     </div>
   );
 }

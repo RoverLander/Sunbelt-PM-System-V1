@@ -376,18 +376,26 @@ function WorkerAttendanceRow({
   );
 }
 
+// Department sort order for consistent display
+const DEPARTMENT_ORDER = [
+  'Framing', 'Rough Carpentry', 'Electrical', 'Plumbing', 'HVAC',
+  'Interior Rough', 'Interior Finish', 'Inspection', 'Staging', 'QC', 'Material Handling'
+];
+
 /**
  * Area/Station breakdown component
  */
-function AreaBreakdown({ workers, shifts, absences, isWorkDay = true }) {
-  // Group by station/area
+function AreaBreakdown({ workers, shifts, absences, isWorkDay = true, groupBy = 'department' }) {
+  // Group by department or station/area
   const areaStats = useMemo(() => {
     const areas = {};
 
     workers.forEach(worker => {
-      const area = worker.station_name || worker.area || 'Unassigned';
+      const area = groupBy === 'department'
+        ? (worker.department || 'Unassigned')
+        : (worker.station_name || worker.area || 'Unassigned');
       if (!areas[area]) {
-        areas[area] = { present: 0, absent: 0, notScheduled: 0, total: 0 };
+        areas[area] = { present: 0, absent: 0, notScheduled: 0, total: 0, leadPresent: false };
       }
 
       const shift = shifts.find(s => s.worker_id === worker.id);
@@ -396,6 +404,9 @@ function AreaBreakdown({ workers, shifts, absences, isWorkDay = true }) {
       areas[area].total++;
       if (shift?.clock_in && !shift.clock_out) {
         areas[area].present++;
+        if (worker.is_lead) {
+          areas[area].leadPresent = true;
+        }
       } else if (!absence) {
         // If not a work day, count as not scheduled instead of absent
         if (isWorkDay) {
@@ -408,8 +419,21 @@ function AreaBreakdown({ workers, shifts, absences, isWorkDay = true }) {
 
     return Object.entries(areas)
       .map(([name, stats]) => ({ name, ...stats }))
-      .sort((a, b) => b.total - a.total);
-  }, [workers, shifts, absences, isWorkDay]);
+      .sort((a, b) => {
+        // For department groupBy, use defined order
+        if (groupBy === 'department') {
+          const orderA = DEPARTMENT_ORDER.indexOf(a.name);
+          const orderB = DEPARTMENT_ORDER.indexOf(b.name);
+          // Unassigned goes last
+          if (orderA === -1 && orderB === -1) return a.name.localeCompare(b.name);
+          if (orderA === -1) return 1;
+          if (orderB === -1) return -1;
+          return orderA - orderB;
+        }
+        // Otherwise by total (largest first)
+        return b.total - a.total;
+      });
+  }, [workers, shifts, absences, isWorkDay, groupBy]);
 
   return (
     <div style={{
@@ -424,7 +448,7 @@ function AreaBreakdown({ workers, shifts, absences, isWorkDay = true }) {
         textTransform: 'uppercase',
         letterSpacing: '0.5px'
       }}>
-        Headcount by Area
+        Headcount by {groupBy === 'department' ? 'Department' : 'Area'}
       </div>
 
       <div style={{
@@ -452,9 +476,24 @@ function AreaBreakdown({ workers, shifts, absences, isWorkDay = true }) {
                 marginBottom: '6px',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
-                textOverflow: 'ellipsis'
+                textOverflow: 'ellipsis',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
               }}>
                 {area.name}
+                {area.leadPresent && (
+                  <span style={{
+                    fontSize: '8px',
+                    padding: '1px 4px',
+                    backgroundColor: '#f59e0b',
+                    color: 'white',
+                    borderRadius: '4px',
+                    fontWeight: '600'
+                  }}>
+                    LEAD
+                  </span>
+                )}
               </div>
               <div style={{
                 display: 'flex',
@@ -508,7 +547,8 @@ export default function AttendanceDashboard({
   onRefresh,
   compact = false,
   showAreaBreakdown = true,
-  filterStatus = 'all' // 'all', 'present', 'absent', 'late', 'not_scheduled'
+  filterStatus = 'all', // 'all', 'present', 'absent', 'late', 'not_scheduled'
+  groupBy = 'department' // 'department', 'station', 'area'
 }) {
   const [statusFilter, setStatusFilter] = useState(filterStatus);
   const [searchTerm, setSearchTerm] = useState('');
@@ -957,6 +997,7 @@ export default function AttendanceDashboard({
           shifts={shifts}
           absences={absences}
           isWorkDay={isWorkDay}
+          groupBy={groupBy}
         />
       )}
     </div>

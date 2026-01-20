@@ -23,12 +23,13 @@ import {
   ChevronRight,
   Play,
   Pause,
-  MoreVertical
+  MoreVertical,
+  ArrowRight
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
-import { getModulesAtStation, getModuleStatusColor } from '../../services/modulesService';
+import { getModulesAtStation, getModuleStatusColor, moveModuleToStation } from '../../services/modulesService';
 import { getWorkersByStation } from '../../services/workersService';
-import { getStationChecklist, getExpectedDuration } from '../../services/stationService';
+import { getStationChecklist, getExpectedDuration, getStationTemplates } from '../../services/stationService';
 
 // ============================================================================
 // STYLES
@@ -310,12 +311,17 @@ export default function StationDetailModal({
   onClose,
   onModuleClick,
   onStartWork,
+  onModuleAdvanced,
   userRole
 }) {
   const [loading, setLoading] = useState(true);
   const [modules, setModules] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [checklist, setChecklist] = useState([]);
+  const [allStations, setAllStations] = useState([]);
+  const [advancing, setAdvancing] = useState(null); // moduleId being advanced
+
+  const isPlantManager = userRole === 'plant manager' || userRole === 'plant_manager' || userRole === 'plant_gm' || userRole === 'Plant_GM';
 
   useEffect(() => {
     if (station) {
@@ -326,19 +332,59 @@ export default function StationDetailModal({
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [modulesResult, workersResult, checklistResult] = await Promise.all([
+      const [modulesResult, workersResult, checklistResult, stationsResult] = await Promise.all([
         getModulesAtStation(station.id, factoryId),
         getWorkersByStation(station.id),
-        getStationChecklist(station.id)
+        getStationChecklist(station.id),
+        getStationTemplates()
       ]);
 
       setModules(modulesResult.data || []);
       setWorkers(workersResult.data || []);
       setChecklist(checklistResult.data || []);
+      setAllStations(stationsResult.data || []);
     } catch (error) {
       console.error('Error fetching station data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Get the next station in the production line
+  const getNextStation = () => {
+    if (!station || allStations.length === 0) return null;
+    const sortedStations = [...allStations].sort((a, b) => a.order_num - b.order_num);
+    const currentIdx = sortedStations.findIndex(s => s.id === station.id);
+    if (currentIdx === -1 || currentIdx >= sortedStations.length - 1) return null;
+    return sortedStations[currentIdx + 1];
+  };
+
+  const nextStation = getNextStation();
+
+  // Handle advancing a module to the next station
+  const handleAdvanceModule = async (module) => {
+    if (!nextStation || advancing) return;
+
+    setAdvancing(module.id);
+    try {
+      const { data, error } = await moveModuleToStation(
+        module.id,
+        nextStation.id,
+        null, // leadId
+        [], // crewIds
+        { skipValidation: true } // GM override
+      );
+
+      if (!error && data) {
+        // Remove module from current list
+        setModules(prev => prev.filter(m => m.id !== module.id));
+        // Notify parent to refresh
+        onModuleAdvanced?.(data, nextStation);
+      }
+    } catch (error) {
+      console.error('Error advancing module:', error);
+    } finally {
+      setAdvancing(null);
     }
   };
 
@@ -408,11 +454,19 @@ export default function StationDetailModal({
             <h3 style={styles.sectionTitle}>
               <Package size={16} />
               Modules at Station ({modules.length})
+              {nextStation && (
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontWeight: '400', marginLeft: 'auto' }}>
+                  Next: {nextStation.name}
+                </span>
+              )}
             </h3>
             {modules.length > 0 ? (
               <div style={styles.moduleList}>
                 {modules.map(module => {
                   const statusColor = getModuleStatusColor(module.status);
+                  const canAdvance = isPlantManager && nextStation && module.status === 'In Progress';
+                  const isAdvancing = advancing === module.id;
+
                   return (
                     <div
                       key={module.id}
@@ -420,15 +474,11 @@ export default function StationDetailModal({
                         ...styles.moduleItem,
                         borderLeftColor: statusColor
                       }}
-                      onClick={() => onModuleClick?.(module)}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'var(--bg-tertiary)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'var(--bg-secondary)';
-                      }}
                     >
-                      <div style={styles.moduleInfo}>
+                      <div
+                        style={{ ...styles.moduleInfo, cursor: 'pointer' }}
+                        onClick={() => onModuleClick?.(module)}
+                      >
                         <div style={styles.moduleSerial}>{module.serial_number}</div>
                         <div style={styles.moduleProject}>
                           {module.project?.name || 'Unknown Project'} • {module.project?.project_number || ''}
@@ -447,7 +497,43 @@ export default function StationDetailModal({
                         <Clock size={12} />
                         {formatTimeAtStation(module.actual_start)}
                       </div>
-                      <ChevronRight size={16} color="var(--text-tertiary)" />
+                      {canAdvance ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAdvanceModule(module);
+                          }}
+                          disabled={isAdvancing}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '6px 12px',
+                            background: '#22c55e',
+                            border: 'none',
+                            borderRadius: 'var(--radius-md)',
+                            color: 'white',
+                            fontSize: '0.75rem',
+                            fontWeight: '600',
+                            cursor: isAdvancing ? 'wait' : 'pointer',
+                            opacity: isAdvancing ? 0.7 : 1,
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseEnter={(e) => !isAdvancing && (e.currentTarget.style.background = '#16a34a')}
+                          onMouseLeave={(e) => !isAdvancing && (e.currentTarget.style.background = '#22c55e')}
+                          title={`Advance to ${nextStation.name}`}
+                        >
+                          <ArrowRight size={14} />
+                          {isAdvancing ? 'Moving...' : 'Advance'}
+                        </button>
+                      ) : (
+                        <ChevronRight
+                          size={16}
+                          color="var(--text-tertiary)"
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => onModuleClick?.(module)}
+                        />
+                      )}
                     </div>
                   );
                 })}

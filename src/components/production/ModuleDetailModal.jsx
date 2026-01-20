@@ -33,7 +33,7 @@ import {
   Ruler
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
-import { getModuleById, getModuleStatusColor, updateModuleStatus } from '../../services/modulesService';
+import { getModuleById, getModuleStatusColor, updateModuleStatus, moveModuleToStation } from '../../services/modulesService';
 import { getStationTemplates } from '../../services/stationService';
 
 // ============================================================================
@@ -357,6 +357,7 @@ export default function ModuleDetailModal({
   onClose,
   onNavigateToProject,
   onStatusChange,
+  onAdvanceStation,
   userRole
 }) {
   const [loading, setLoading] = useState(!initialModule);
@@ -364,8 +365,9 @@ export default function ModuleDetailModal({
   const [stations, setStations] = useState([]);
   const [showActions, setShowActions] = useState(false);
   const [stationHistory, setStationHistory] = useState([]);
+  const [advancing, setAdvancing] = useState(false);
 
-  const isPlantManager = userRole === 'plant manager' || userRole === 'plant_manager';
+  const isPlantManager = userRole === 'plant manager' || userRole === 'plant_manager' || userRole === 'plant_gm' || userRole === 'Plant_GM';
 
   useEffect(() => {
     if (moduleId && !initialModule) {
@@ -418,6 +420,49 @@ export default function ModuleDetailModal({
     }
   };
 
+  // Find the next station for this module
+  const getNextStation = () => {
+    if (!module?.current_station_id || stations.length === 0) return null;
+    const sortedStations = [...stations].sort((a, b) => a.order_num - b.order_num);
+    const currentIdx = sortedStations.findIndex(s => s.id === module.current_station_id);
+    if (currentIdx === -1 || currentIdx >= sortedStations.length - 1) return null;
+    return sortedStations[currentIdx + 1];
+  };
+
+  const nextStation = getNextStation();
+
+  // Handle advancing module to next station
+  const handleAdvanceToNextStation = async () => {
+    if (!module || !nextStation || advancing) return;
+
+    setAdvancing(true);
+    try {
+      const { data, error } = await moveModuleToStation(
+        module.id,
+        nextStation.id,
+        null, // leadId
+        [], // crewIds
+        { skipValidation: true } // GM override
+      );
+
+      if (!error && data) {
+        // Refresh module data
+        const { data: updatedModule } = await getModuleById(module.id);
+        if (updatedModule) {
+          setModule(updatedModule);
+          onStatusChange?.(updatedModule);
+          onAdvanceStation?.(updatedModule, nextStation);
+        }
+        // Refresh station history
+        fetchHistory();
+      }
+    } catch (error) {
+      console.error('Error advancing module:', error);
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
   const handleAction = async (action) => {
     setShowActions(false);
 
@@ -432,13 +477,8 @@ export default function ModuleDetailModal({
         newStatus = 'Rework';
         break;
       case 'fasttrack':
-        // Move to next station
-        const currentIdx = stations.findIndex(s => s.id === module.current_station_id);
-        if (currentIdx < stations.length - 1) {
-          const nextStation = stations[currentIdx + 1];
-          // Would call moveModuleToStation here
-          console.log('Fast-track to:', nextStation.name);
-        }
+        // Advance to next station
+        await handleAdvanceToNextStation();
         return;
       case 'scrap':
         // Would require confirmation modal
@@ -521,15 +561,17 @@ export default function ModuleDetailModal({
                 </button>
                 {showActions && (
                   <div style={styles.actionsDropdown}>
-                    <div
-                      style={styles.actionItem}
-                      onClick={() => handleAction('fasttrack')}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <ArrowRight size={14} />
-                      Fast-track
-                    </div>
+                    {nextStation && (
+                      <div
+                        style={{ ...styles.actionItem, color: '#22c55e' }}
+                        onClick={() => handleAction('fasttrack')}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <ArrowRight size={14} />
+                        Advance to {nextStation.name}
+                      </div>
+                    )}
                     <div
                       style={styles.actionItem}
                       onClick={() => handleAction('hold')}
@@ -713,12 +755,24 @@ export default function ModuleDetailModal({
           <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
             Last updated: {formatDateTime(module.updated_at)}
           </div>
-          <button
-            style={{ ...styles.btn, ...styles.btnSecondary }}
-            onClick={onClose}
-          >
-            Close
-          </button>
+          <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
+            <button
+              style={{ ...styles.btn, ...styles.btnSecondary }}
+              onClick={onClose}
+            >
+              Close
+            </button>
+            {isPlantManager && nextStation && (
+              <button
+                style={{ ...styles.btn, ...styles.btnPrimary }}
+                onClick={handleAdvanceToNextStation}
+                disabled={advancing}
+              >
+                <ArrowRight size={16} />
+                {advancing ? 'Moving...' : `Advance to ${nextStation.name}`}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

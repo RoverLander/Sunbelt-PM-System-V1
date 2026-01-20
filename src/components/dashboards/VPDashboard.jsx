@@ -51,7 +51,13 @@ import {
   FileText,
   Percent,
   ArrowRight,
-  Package
+  Package,
+  Filter,
+  X,
+  SortAsc,
+  SortDesc,
+  Search,
+  Eye
 } from 'lucide-react';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
@@ -123,6 +129,17 @@ function VPDashboard() {
   const [flagging, setFlagging] = useState(false);
   const [selectedQuote, setSelectedQuote] = useState(null); // Quote detail view
   const [teamViewTab, setTeamViewTab] = useState('pm'); // 'pm' | 'production'
+
+  // Quote filtering and viewing state
+  const [showAllQuotes, setShowAllQuotes] = useState(false);
+  const [quoteFilters, setQuoteFilters] = useState({
+    factory: '',
+    buildingType: '',
+    status: '',
+    search: ''
+  });
+  const [quoteSortBy, setQuoteSortBy] = useState('created_at'); // 'created_at', 'total_price', 'project_name', 'factory'
+  const [quoteSortDir, setQuoteSortDir] = useState('desc'); // 'asc', 'desc'
 
   // ==========================================================================
   // FETCH DATA
@@ -532,6 +549,76 @@ function VPDashboard() {
       factoryBuildingTypes
     };
   }, [quotes, projects]);
+
+  // ==========================================================================
+  // FILTERED & SORTED QUOTES
+  // ==========================================================================
+  const filteredAndSortedQuotes = useMemo(() => {
+    let result = [...(salesPipelineMetrics.activeQuotes || [])];
+
+    // Apply filters
+    if (quoteFilters.factory) {
+      result = result.filter(q => (q.factory || q.praxis_source_factory || '').toLowerCase() === quoteFilters.factory.toLowerCase());
+    }
+    if (quoteFilters.buildingType) {
+      result = result.filter(q => (q.building_type || '').toLowerCase() === quoteFilters.buildingType.toLowerCase());
+    }
+    if (quoteFilters.status) {
+      result = result.filter(q => q.status === quoteFilters.status);
+    }
+    if (quoteFilters.search) {
+      const searchLower = quoteFilters.search.toLowerCase();
+      result = result.filter(q =>
+        (q.project_name || '').toLowerCase().includes(searchLower) ||
+        (q.quote_number || '').toLowerCase().includes(searchLower) ||
+        (q.dealer?.name || '').toLowerCase().includes(searchLower) ||
+        (q.customer?.company_name || '').toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Apply sorting
+    result.sort((a, b) => {
+      let aVal, bVal;
+      switch (quoteSortBy) {
+        case 'total_price':
+          aVal = a.total_price || 0;
+          bVal = b.total_price || 0;
+          break;
+        case 'project_name':
+          aVal = (a.project_name || a.quote_number || '').toLowerCase();
+          bVal = (b.project_name || b.quote_number || '').toLowerCase();
+          break;
+        case 'factory':
+          aVal = (a.factory || a.praxis_source_factory || '').toLowerCase();
+          bVal = (b.factory || b.praxis_source_factory || '').toLowerCase();
+          break;
+        case 'module_count':
+          aVal = a.module_count || 0;
+          bVal = b.module_count || 0;
+          break;
+        default: // created_at
+          aVal = new Date(a.created_at || 0).getTime();
+          bVal = new Date(b.created_at || 0).getTime();
+      }
+
+      if (typeof aVal === 'string') {
+        return quoteSortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      return quoteSortDir === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+
+    return result;
+  }, [salesPipelineMetrics.activeQuotes, quoteFilters, quoteSortBy, quoteSortDir]);
+
+  // Get unique values for filter dropdowns
+  const quoteFilterOptions = useMemo(() => {
+    const quotes = salesPipelineMetrics.activeQuotes || [];
+    return {
+      factories: [...new Set(quotes.map(q => q.factory || q.praxis_source_factory).filter(Boolean))].sort(),
+      buildingTypes: [...new Set(quotes.map(q => q.building_type).filter(Boolean))].sort(),
+      statuses: [...new Set(quotes.map(q => q.status).filter(Boolean))].sort()
+    };
+  }, [salesPipelineMetrics.activeQuotes]);
 
   // ==========================================================================
   // RENDER - LOADING
@@ -1178,13 +1265,37 @@ function VPDashboard() {
         border: '1px solid var(--border-color)',
         marginBottom: 'var(--space-lg)'
       }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Package size={18} style={{ color: '#3b82f6' }} />
-          Active Pipeline Quotes ({salesPipelineMetrics.pipelineCount})
-          <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--text-tertiary)', marginLeft: 'auto' }}>
-            Click flag icon to mark as PM project
-          </span>
-        </h3>
+        {/* Header with title and View All button */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Package size={18} style={{ color: '#3b82f6' }} />
+            Active Pipeline Quotes ({salesPipelineMetrics.pipelineCount})
+          </h3>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+              Click flag icon to mark as PM project
+            </span>
+            <button
+              onClick={() => setShowAllQuotes(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                background: 'var(--bg-tertiary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '0.8125rem',
+                fontWeight: '500'
+              }}
+            >
+              <Eye size={14} />
+              View All
+            </button>
+          </div>
+        </div>
 
         {salesPipelineMetrics.activeQuotes?.length === 0 ? (
           <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>No active quotes in pipeline</p>
@@ -1286,6 +1397,26 @@ function VPDashboard() {
                 </button>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Show more indicator if there are more than 12 quotes */}
+        {salesPipelineMetrics.pipelineCount > 12 && (
+          <div style={{ textAlign: 'center', marginTop: '16px' }}>
+            <button
+              onClick={() => setShowAllQuotes(true)}
+              style={{
+                padding: '8px 24px',
+                background: 'transparent',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontSize: '0.8125rem'
+              }}
+            >
+              View all {salesPipelineMetrics.pipelineCount} quotes
+            </button>
           </div>
         )}
       </div>
@@ -1789,6 +1920,413 @@ function VPDashboard() {
               >
                 <Flag size={16} />
                 {flagging ? 'Flagging...' : 'Flag for PM'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================== */}
+      {/* VIEW ALL QUOTES MODAL                                             */}
+      {/* ================================================================== */}
+      {showAllQuotes && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+          onClick={() => {
+            setShowAllQuotes(false);
+            setQuoteFilters({ factory: '', buildingType: '', status: '', search: '' });
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-primary)',
+              borderRadius: 'var(--radius-lg)',
+              width: '100%',
+              maxWidth: '1200px',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              border: '1px solid var(--border-color)',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid var(--border-color)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h2 style={{ margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Package size={24} style={{ color: '#3b82f6' }} />
+                All Pipeline Quotes
+                <span style={{ fontSize: '0.875rem', fontWeight: '500', color: 'var(--text-tertiary)' }}>
+                  ({filteredAndSortedQuotes.length} of {salesPipelineMetrics.pipelineCount})
+                </span>
+              </h2>
+              <button
+                onClick={() => {
+                  setShowAllQuotes(false);
+                  setQuoteFilters({ factory: '', buildingType: '', status: '', search: '' });
+                }}
+                style={{
+                  background: 'var(--bg-tertiary)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <X size={20} color="var(--text-secondary)" />
+              </button>
+            </div>
+
+            {/* Filter Bar */}
+            <div style={{
+              padding: '16px 24px',
+              borderBottom: '1px solid var(--border-color)',
+              background: 'var(--bg-secondary)',
+              display: 'flex',
+              gap: '12px',
+              flexWrap: 'wrap',
+              alignItems: 'center'
+            }}>
+              {/* Search */}
+              <div style={{ position: 'relative', flex: '1', minWidth: '200px', maxWidth: '300px' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+                <input
+                  type="text"
+                  placeholder="Search quotes..."
+                  value={quoteFilters.search}
+                  onChange={(e) => setQuoteFilters(prev => ({ ...prev, search: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px 8px 36px',
+                    background: 'var(--bg-primary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.875rem'
+                  }}
+                />
+              </div>
+
+              {/* Factory Filter */}
+              <select
+                value={quoteFilters.factory}
+                onChange={(e) => setQuoteFilters(prev => ({ ...prev, factory: e.target.value }))}
+                style={{
+                  padding: '8px 12px',
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="">All Factories</option>
+                {quoteFilterOptions.factories.map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+
+              {/* Building Type Filter */}
+              <select
+                value={quoteFilters.buildingType}
+                onChange={(e) => setQuoteFilters(prev => ({ ...prev, buildingType: e.target.value }))}
+                style={{
+                  padding: '8px 12px',
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="">All Building Types</option>
+                {quoteFilterOptions.buildingTypes.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+
+              {/* Status Filter */}
+              <select
+                value={quoteFilters.status}
+                onChange={(e) => setQuoteFilters(prev => ({ ...prev, status: e.target.value }))}
+                style={{
+                  padding: '8px 12px',
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="">All Statuses</option>
+                {quoteFilterOptions.statuses.map(s => (
+                  <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+                ))}
+              </select>
+
+              {/* Sort By */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Sort:</span>
+                <select
+                  value={quoteSortBy}
+                  onChange={(e) => setQuoteSortBy(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'var(--bg-primary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.875rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="created_at">Date Created</option>
+                  <option value="total_price">Price</option>
+                  <option value="project_name">Name</option>
+                  <option value="factory">Factory</option>
+                  <option value="module_count">Modules</option>
+                </select>
+                <button
+                  onClick={() => setQuoteSortDir(prev => prev === 'asc' ? 'desc' : 'asc')}
+                  style={{
+                    padding: '8px',
+                    background: 'var(--bg-primary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                  title={quoteSortDir === 'asc' ? 'Ascending' : 'Descending'}
+                >
+                  {quoteSortDir === 'asc' ? (
+                    <SortAsc size={16} color="var(--text-secondary)" />
+                  ) : (
+                    <SortDesc size={16} color="var(--text-secondary)" />
+                  )}
+                </button>
+              </div>
+
+              {/* Clear Filters */}
+              {(quoteFilters.factory || quoteFilters.buildingType || quoteFilters.status || quoteFilters.search) && (
+                <button
+                  onClick={() => setQuoteFilters({ factory: '', buildingType: '', status: '', search: '' })}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: 'var(--radius-md)',
+                    color: '#ef4444',
+                    fontSize: '0.8125rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <X size={14} />
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Quote List */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '16px 24px'
+            }}>
+              {filteredAndSortedQuotes.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)' }}>
+                  <Package size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                  <p>No quotes match your filters</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {filteredAndSortedQuotes.map(quote => (
+                    <div
+                      key={quote.id}
+                      onClick={() => {
+                        setShowAllQuotes(false);
+                        setSelectedQuote(quote);
+                      }}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '14px 16px',
+                        background: quote.is_pm_flagged ? 'rgba(139, 92, 246, 0.1)' : 'var(--bg-secondary)',
+                        borderRadius: 'var(--radius-md)',
+                        border: quote.is_pm_flagged ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid var(--border-color)',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = quote.is_pm_flagged ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-tertiary)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = quote.is_pm_flagged ? 'rgba(139, 92, 246, 0.1)' : 'var(--bg-secondary)';
+                      }}
+                    >
+                      {/* Left: Name and details */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.9375rem' }}>
+                            {quote.project_name || quote.quote_number}
+                          </div>
+                          {quote.is_pm_flagged && (
+                            <span style={{
+                              background: '#8b5cf6',
+                              color: 'white',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: '0.625rem',
+                              fontWeight: '600'
+                            }}>
+                              PM
+                            </span>
+                          )}
+                          <span style={{
+                            background: 'var(--bg-tertiary)',
+                            color: 'var(--text-secondary)',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.6875rem',
+                            textTransform: 'capitalize'
+                          }}>
+                            {(quote.status || '').replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                          {quote.dealer?.name || quote.customer?.company_name || 'Unknown Customer'}
+                        </div>
+                      </div>
+
+                      {/* Middle: Factory, Building Type, Modules */}
+                      <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginRight: '20px' }}>
+                        <div style={{ textAlign: 'center', minWidth: '80px' }}>
+                          <div style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--text-primary)' }}>
+                            {quote.factory || '-'}
+                          </div>
+                          <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>Factory</div>
+                        </div>
+                        <div style={{ textAlign: 'center', minWidth: '80px' }}>
+                          <div style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--text-primary)' }}>
+                            {quote.building_type || '-'}
+                          </div>
+                          <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>Type</div>
+                        </div>
+                        <div style={{ textAlign: 'center', minWidth: '60px' }}>
+                          <div style={{ fontSize: '0.8125rem', fontWeight: '600', color: 'var(--text-primary)' }}>
+                            {quote.module_count || '-'}
+                          </div>
+                          <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>Modules</div>
+                        </div>
+                      </div>
+
+                      {/* Right: Price and Flag button */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontWeight: '700', color: 'var(--sunbelt-orange)', fontSize: '1rem' }}>
+                            {formatCurrency(quote.total_price)}
+                          </div>
+                          <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
+                            {quote.outlook_percentage || 50}% outlook
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (quote.is_pm_flagged) {
+                              handleFlagForPM(quote, true);
+                            } else {
+                              setFlaggingQuote(quote);
+                              setShowAllQuotes(false);
+                            }
+                          }}
+                          title={quote.is_pm_flagged ? 'Remove PM flag' : 'Flag as PM project'}
+                          style={{
+                            background: quote.is_pm_flagged ? '#8b5cf6' : 'var(--bg-tertiary)',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '8px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          <Flag
+                            size={16}
+                            fill={quote.is_pm_flagged ? 'white' : 'none'}
+                            color={quote.is_pm_flagged ? 'white' : 'var(--text-secondary)'}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1px solid var(--border-color)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'var(--bg-secondary)'
+            }}>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
+                Total Value: <span style={{ fontWeight: '700', color: 'var(--sunbelt-orange)' }}>
+                  {formatCurrency(filteredAndSortedQuotes.reduce((sum, q) => sum + (q.total_price || 0), 0))}
+                </span>
+                {' '}•{' '}
+                Weighted: <span style={{ fontWeight: '600', color: '#8b5cf6' }}>
+                  {formatCurrency(filteredAndSortedQuotes.reduce((sum, q) => sum + ((q.total_price || 0) * ((q.outlook_percentage || 50) / 100)), 0))}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAllQuotes(false);
+                  setQuoteFilters({ factory: '', buildingType: '', status: '', search: '' });
+                }}
+                style={{
+                  padding: '10px 20px',
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer',
+                  fontWeight: '500'
+                }}
+              >
+                Close
               </button>
             </div>
           </div>

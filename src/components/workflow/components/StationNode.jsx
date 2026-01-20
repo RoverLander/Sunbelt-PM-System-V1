@@ -97,8 +97,14 @@ function StationNode({ data, selected }) {
     progress = 0,
     isOverdue = false,
     daysUntil = null,
-    onClick
+    onClick,
+    stationKey,
+    progressLabel,
+    productionProgress
   } = data;
+
+  // Check if this is the production station
+  const isProductionStation = stationKey === 'production';
 
   const colors = STATUS_COLORS[status] || STATUS_COLORS.not_started;
   const courtColor = COURT_COLORS[court] || COURT_COLORS.factory;
@@ -201,7 +207,7 @@ function StationNode({ data, selected }) {
         </div>
 
         {/* Progress bar (if in progress) */}
-        {status === 'in_progress' && progress > 0 && (
+        {status === 'in_progress' && progress > 0 && !isProductionStation && (
           <div style={{
             height: '3px',
             background: 'var(--bg-secondary)',
@@ -216,6 +222,37 @@ function StationNode({ data, selected }) {
               borderRadius: '2px',
               transition: 'width 0.3s ease'
             }} />
+          </div>
+        )}
+
+        {/* Production station progress bar and label */}
+        {isProductionStation && productionProgress && productionProgress.total > 0 && (
+          <div style={{ marginBottom: '6px' }}>
+            {/* Progress bar */}
+            <div style={{
+              height: '4px',
+              background: 'var(--bg-secondary)',
+              borderRadius: '2px',
+              marginBottom: '4px',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                width: `${productionProgress.percentage}%`,
+                height: '100%',
+                background: status === 'completed' ? '#22c55e' : colors.border,
+                borderRadius: '2px',
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+            {/* Progress label */}
+            <div style={{
+              fontSize: '0.65rem',
+              fontWeight: '600',
+              color: status === 'completed' ? '#22c55e' : colors.text,
+              textAlign: 'center'
+            }}>
+              {progressLabel}
+            </div>
           </div>
         )}
 
@@ -307,6 +344,23 @@ function StationNode({ data, selected }) {
                   {status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                 </span>
               </div>
+              {/* Production-specific module info */}
+              {isProductionStation && productionProgress && productionProgress.total > 0 && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-tertiary)' }}>Modules Staged:</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>
+                      {productionProgress.staged} / {productionProgress.total}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-tertiary)' }}>Progress:</span>
+                    <span style={{ color: status === 'completed' ? '#22c55e' : colors.text, fontWeight: '500' }}>
+                      {productionProgress.percentage}%
+                    </span>
+                  </div>
+                </>
+              )}
               {daysUntil !== null && status !== 'completed' && status !== 'skipped' && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--text-tertiary)' }}>Deadline:</span>
@@ -317,10 +371,12 @@ function StationNode({ data, selected }) {
                   </span>
                 </div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-tertiary)' }}>Tasks:</span>
-                <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>{taskCount}</span>
-              </div>
+              {!isProductionStation && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Tasks:</span>
+                  <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>{taskCount}</span>
+                </div>
+              )}
             </div>
             {/* Click hint */}
             <div style={{
@@ -331,7 +387,9 @@ function StationNode({ data, selected }) {
               color: 'var(--sunbelt-orange)',
               textAlign: 'center'
             }}>
-              {taskCount > 0 ? 'Click to view/edit tasks' : 'Click to add a task'}
+              {isProductionStation
+                ? 'Click to view production details'
+                : (taskCount > 0 ? 'Click to view/edit tasks' : 'Click to add a task')}
             </div>
             {/* Tooltip arrow */}
             <div style={{

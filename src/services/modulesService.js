@@ -476,12 +476,46 @@ export async function updateModuleStatus(moduleId, newStatus, stationId = null, 
     if (newStatus === 'In Progress') {
       const { data: current } = await supabase
         .from('modules')
-        .select('actual_start')
+        .select('actual_start, current_station_id')
         .eq('id', moduleId)
         .single();
 
       if (!current?.actual_start) {
         updates.actual_start = new Date().toISOString();
+      }
+
+      // ======================================================================
+      // ACTIVE MODULE LOGIC: Check if station allows multiple active modules
+      // Stations that allow multiple: INT_FINISH, FINAL_INSP, PICKUP
+      // All other stations: only 1 active module at a time
+      // ======================================================================
+      if (current?.current_station_id) {
+        // Get the station code to check if multiple active allowed
+        const { data: station } = await supabase
+          .from('station_templates')
+          .select('code')
+          .eq('id', current.current_station_id)
+          .single();
+
+        const multiActiveStations = ['INT_FINISH', 'FINAL_INSP', 'PICKUP'];
+        const allowsMultipleActive = station?.code && multiActiveStations.includes(station.code);
+
+        if (!allowsMultipleActive) {
+          // Move any existing "In Progress" modules at this station back to "In Queue"
+          const { error: queueError } = await supabase
+            .from('modules')
+            .update({
+              status: 'In Queue',
+              updated_at: new Date().toISOString()
+            })
+            .eq('current_station_id', current.current_station_id)
+            .eq('status', 'In Progress')
+            .neq('id', moduleId); // Don't update the module we're changing
+
+          if (queueError) {
+            console.warn('Warning: Could not queue other active modules:', queueError);
+          }
+        }
       }
     }
 
@@ -559,12 +593,33 @@ export async function moveModuleToStation(moduleId, stationId, leadId = null, cr
     // ========================================================================
     // UPDATE: Move module to station
     // ========================================================================
+
+    // Check if there are any modules currently at the target station
+    // If no modules at station, auto-set as "In Progress"
+    // If modules exist, set as "In Queue"
+    const { data: existingModules, error: checkError } = await supabase
+      .from('modules')
+      .select('id, status')
+      .eq('current_station_id', stationId)
+      .in('status', ['In Progress', 'In Queue']);
+
+    if (checkError) throw checkError;
+
+    // Determine initial status for the moved module
+    let initialStatus = 'In Queue';
+    if (!existingModules || existingModules.length === 0) {
+      // No modules at station - auto-set as "In Progress"
+      initialStatus = 'In Progress';
+    }
+
     const { data: module, error: moduleError } = await supabase
       .from('modules')
       .update({
         current_station_id: stationId,
-        status: 'In Queue',
-        updated_at: new Date().toISOString()
+        status: initialStatus,
+        updated_at: new Date().toISOString(),
+        // Set actual_start if auto-setting to In Progress
+        ...(initialStatus === 'In Progress' ? { actual_start: new Date().toISOString() } : {})
       })
       .eq('id', moduleId)
       .select('*, factory_id')
@@ -581,7 +636,7 @@ export async function moveModuleToStation(moduleId, stationId, leadId = null, cr
         factory_id: module.factory_id,
         lead_id: leadId,
         crew_ids: crewIds,
-        status: 'Pending'
+        status: initialStatus === 'In Progress' ? 'In Progress' : 'Pending'
       });
 
     if (assignmentError) throw assignmentError;

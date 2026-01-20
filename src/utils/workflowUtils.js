@@ -436,6 +436,109 @@ export const formatRelativeDate = (dateString) => {
 };
 
 // ============================================================================
+// PRODUCTION STATUS CALCULATION
+// ============================================================================
+
+/**
+ * Module statuses that indicate "complete" (module has finished production)
+ */
+export const COMPLETED_MODULE_STATUSES = ['Staged', 'Shipped'];
+
+/**
+ * Module statuses that indicate "in production" (actively being worked on)
+ */
+export const IN_PRODUCTION_STATUSES = ['In Queue', 'In Progress', 'QC Hold', 'Rework'];
+
+/**
+ * Calculate production workflow status from project modules
+ * This is used specifically for the "production" workflow station (station_key = 'production')
+ *
+ * Status Logic:
+ * - No modules exist → 'not_started'
+ * - All modules 'Not Started' → 'not_started'
+ * - At least one module in production (In Queue, In Progress, QC Hold, Rework) → 'in_progress'
+ * - All modules 'Staged' or 'Shipped' → 'completed'
+ *
+ * @param {Array} modules - Array of module objects for the project
+ * @returns {Object} { status: string, staged: number, total: number, percentage: number }
+ */
+export const calculateProductionStatus = (modules) => {
+  // No modules = not started (waiting for PO/modules to be created)
+  if (!modules || modules.length === 0) {
+    return {
+      status: 'not_started',
+      staged: 0,
+      total: 0,
+      percentage: 0
+    };
+  }
+
+  const total = modules.length;
+  const staged = modules.filter(m => COMPLETED_MODULE_STATUSES.includes(m.status)).length;
+  const inProduction = modules.filter(m => IN_PRODUCTION_STATUSES.includes(m.status)).length;
+  const notStarted = modules.filter(m => m.status === 'Not Started').length;
+  const percentage = total > 0 ? Math.round((staged / total) * 100) : 0;
+
+  // All modules staged/shipped = completed
+  if (staged === total) {
+    return {
+      status: 'completed',
+      staged,
+      total,
+      percentage: 100
+    };
+  }
+
+  // At least one module in production = in progress
+  if (inProduction > 0 || staged > 0) {
+    return {
+      status: 'in_progress',
+      staged,
+      total,
+      percentage
+    };
+  }
+
+  // All modules not started = not started
+  if (notStarted === total) {
+    return {
+      status: 'not_started',
+      staged: 0,
+      total,
+      percentage: 0
+    };
+  }
+
+  // Fallback to in_progress if mixed states
+  return {
+    status: 'in_progress',
+    staged,
+    total,
+    percentage
+  };
+};
+
+/**
+ * Format production progress for display
+ *
+ * @param {Object} productionStatus - Result from calculateProductionStatus
+ * @returns {string} Formatted string like "3/6 staged" or "100%"
+ */
+export const formatProductionProgress = (productionStatus) => {
+  if (!productionStatus || productionStatus.total === 0) {
+    return '';
+  }
+
+  const { staged, total, percentage } = productionStatus;
+
+  if (percentage === 100) {
+    return 'Complete';
+  }
+
+  return `${staged}/${total} staged`;
+};
+
+// ============================================================================
 // VALIDATION HELPERS
 // ============================================================================
 
@@ -501,6 +604,12 @@ export default {
   groupStationsByPhase,
   getStationHierarchy,
   calculateWorkflowProgress,
+
+  // Production status
+  COMPLETED_MODULE_STATUSES,
+  IN_PRODUCTION_STATUSES,
+  calculateProductionStatus,
+  formatProductionProgress,
 
   // Date formatting
   formatDate,

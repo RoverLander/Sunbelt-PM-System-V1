@@ -44,6 +44,7 @@ import ClientsPage from './components/pages/ClientsPage';
 import DirectoryPage from './components/pages/DirectoryPage';
 import FactoryMapPage from './pages/FactoryMapPage';
 import FactoryMapFullscreen from './pages/FactoryMapFullscreen';
+import TimelinePopout from './pages/TimelinePopout';
 
 // Project Details
 import ProjectDetails from './components/projects/ProjectDetails';
@@ -637,6 +638,12 @@ function App() {
   // Check if we're on a PWA route
   const isPWARoute = pathname.startsWith('/pwa');
   const isManagerPWARoute = pathname.startsWith('/pwa/manager');
+  const isTimelinePopout = pathname === '/timeline-popout';
+
+  // Render Timeline Popout for /timeline-popout route
+  if (isTimelinePopout) {
+    return <TimelinePopout />;
+  }
 
   // Render Manager PWA for /pwa/manager/* routes (Supabase Auth)
   if (isManagerPWARoute) {

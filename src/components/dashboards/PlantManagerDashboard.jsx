@@ -1852,13 +1852,17 @@ export default function PlantManagerDashboard({ onNavigateToProject, initialView
             />
           </div>
 
-          {/* Utilization and Cross-Training Row */}
-          <div style={styles.metricsRow}>
+          {/* Crew Utilization Heatmap - Full Width */}
+          <div style={{ marginBottom: 'var(--space-lg)' }}>
             <CrewUtilizationHeatmap
               factoryId={factoryId}
               compact={false}
               showNames={true}
             />
+          </div>
+
+          {/* Cross-Training Matrix - Full Width */}
+          <div style={{ marginBottom: 'var(--space-lg)' }}>
             <CrossTrainingMatrix
               factoryId={factoryId}
               compact={false}
@@ -1933,6 +1937,11 @@ export default function PlantManagerDashboard({ onNavigateToProject, initialView
             handleModuleClick(module);
           }}
           onStartWork={handleStartWork}
+          onModuleAdvanced={(module, nextStation) => {
+            // Refresh data when module is advanced from station modal
+            fetchModules();
+            fetchStations();
+          }}
           userRole={user?.role}
         />
       )}
@@ -1944,6 +1953,11 @@ export default function PlantManagerDashboard({ onNavigateToProject, initialView
           onClose={handleCloseModuleModal}
           onNavigateToProject={handleNavigateToProjectFromModule}
           onStatusChange={handleModuleStatusChange}
+          onAdvanceStation={(module, station) => {
+            // Refresh data when module is advanced
+            fetchModules();
+            fetchStations();
+          }}
           userRole={user?.role}
         />
       )}

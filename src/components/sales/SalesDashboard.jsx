@@ -425,6 +425,7 @@ function SalesDashboard() {
   const [customers, setCustomers] = useState([]);
   const [dealers, setDealers] = useState([]);
   const [salesTeam, setSalesTeam] = useState([]); // Sales team members for managers
+  const [myProjects, setMyProjects] = useState([]); // Projects from converted quotes
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -433,6 +434,9 @@ function SalesDashboard() {
   const [buildingTypeFilter, setBuildingTypeFilter] = useState('all');
   const [showPMFlaggedOnly, setShowPMFlaggedOnly] = useState(false);
   const [teamMemberFilter, setTeamMemberFilter] = useState('all'); // Filter by team member
+
+  // Tab state for Sales Reps (quotes vs projects)
+  const [activeTab, setActiveTab] = useState('quotes'); // 'quotes' or 'projects'
 
   // Modals
   const [showQuoteForm, setShowQuoteForm] = useState(false);
@@ -499,12 +503,44 @@ function SalesDashboard() {
         setSalesTeam(salesTeamRes.data || []);
       }
 
+      // Fetch projects converted from user's quotes (for Sales Reps)
+      if (user?.id) {
+        // Get quote IDs assigned to this user that have been converted
+        const convertedQuotes = (quotesRes.data || []).filter(
+          q => q.assigned_to === user.id && q.converted_to_project_id
+        );
+
+        if (convertedQuotes.length > 0) {
+          const projectIds = convertedQuotes.map(q => q.converted_to_project_id);
+          const projectsRes = await supabase
+            .from('projects')
+            .select(`
+              *,
+              primary_pm:primary_pm_id(id, name),
+              factory:factory_id(id, name, code)
+            `)
+            .in('id', projectIds)
+            .order('updated_at', { ascending: false });
+
+          if (!projectsRes.error) {
+            // Add originating quote info to each project
+            const projectsWithQuotes = (projectsRes.data || []).map(project => {
+              const originQuote = convertedQuotes.find(q => q.converted_to_project_id === project.id);
+              return { ...project, origin_quote: originQuote };
+            });
+            setMyProjects(projectsWithQuotes);
+          }
+        } else {
+          setMyProjects([]);
+        }
+      }
+
     } catch (error) {
       console.error('Error fetching sales data:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     fetchData();
@@ -1267,22 +1303,160 @@ function SalesDashboard() {
         </button>
       </div>
 
-      {/* Results Count */}
-      <div style={{
-        fontSize: '0.8rem',
-        color: 'var(--text-tertiary)',
-        marginBottom: '12px'
-      }}>
-        Showing {filteredQuotes.length} {statusFilter === 'active' ? 'active' : ''} quotes
-        {statusFilter === 'active' && quotes.length > filteredQuotes.length && (
-          <span style={{ color: 'var(--text-tertiary)' }}>
-            {' '}({quotes.length - filteredQuotes.length} won/lost/expired not shown)
-          </span>
-        )}
-      </div>
+      {/* Tab Switcher for Sales Reps */}
+      {isSalesRep && myProjects.length > 0 && (
+        <div style={{
+          display: 'flex',
+          gap: '0',
+          marginBottom: '16px',
+          background: 'var(--bg-secondary)',
+          borderRadius: '8px',
+          border: '1px solid var(--border-color)',
+          overflow: 'hidden',
+          width: 'fit-content'
+        }}>
+          <button
+            onClick={() => setActiveTab('quotes')}
+            style={{
+              padding: '10px 20px',
+              background: activeTab === 'quotes' ? 'var(--sunbelt-orange)' : 'transparent',
+              color: activeTab === 'quotes' ? 'white' : 'var(--text-secondary)',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: activeTab === 'quotes' ? '600' : '400',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <FileText size={16} />
+            My Quotes ({userQuotes.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('projects')}
+            style={{
+              padding: '10px 20px',
+              background: activeTab === 'projects' ? 'var(--sunbelt-orange)' : 'transparent',
+              color: activeTab === 'projects' ? 'white' : 'var(--text-secondary)',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: activeTab === 'projects' ? '600' : '400',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <Building2 size={16} />
+            My Projects ({myProjects.length})
+          </button>
+        </div>
+      )}
 
-      {/* Quotes List */}
-      {loading ? (
+      {/* My Projects Section (for Sales Reps) */}
+      {isSalesRep && activeTab === 'projects' && (
+        <div>
+          <div style={{
+            fontSize: '0.8rem',
+            color: 'var(--text-tertiary)',
+            marginBottom: '12px'
+          }}>
+            Projects converted from your quotes (read-only view)
+          </div>
+
+          {myProjects.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '48px',
+              color: 'var(--text-tertiary)',
+              background: 'var(--bg-secondary)',
+              borderRadius: '8px'
+            }}>
+              <Building2 size={48} style={{ opacity: 0.5, marginBottom: '12px' }} />
+              <p>No converted projects yet</p>
+              <p style={{ fontSize: '0.8rem' }}>Projects will appear here when your quotes are converted</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {myProjects.map(project => (
+                <div
+                  key={project.id}
+                  style={{
+                    padding: '16px',
+                    background: 'var(--bg-secondary)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <div>
+                      <div style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)' }}>
+                        {project.name}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
+                        {project.project_number} • {project.factory?.code || 'N/A'}
+                      </div>
+                    </div>
+                    <div style={{
+                      padding: '4px 10px',
+                      background: project.health_status === 'On Track' ? 'rgba(34, 197, 94, 0.15)' :
+                                  project.health_status === 'At Risk' ? 'rgba(245, 158, 11, 0.15)' :
+                                  'rgba(239, 68, 68, 0.15)',
+                      color: project.health_status === 'On Track' ? '#22c55e' :
+                             project.health_status === 'At Risk' ? '#f59e0b' : '#ef4444',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: '500'
+                    }}>
+                      {project.health_status || project.status || 'Active'}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '24px', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                    <span>PM: {project.primary_pm?.name || 'Unassigned'}</span>
+                    <span>Phase: {project.current_phase || 'N/A'}</span>
+                    <span>Value: {formatCurrency(project.contract_value || project.origin_quote?.total_price)}</span>
+                  </div>
+
+                  {project.origin_quote && (
+                    <div style={{
+                      padding: '8px 12px',
+                      background: 'var(--bg-tertiary)',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      color: 'var(--text-tertiary)'
+                    }}>
+                      From Quote: {project.origin_quote.quote_number || project.origin_quote.praxis_quote_number}
+                      {project.origin_quote.won_date && ` • Won ${new Date(project.origin_quote.won_date).toLocaleDateString()}`}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Results Count - only show for quotes tab */}
+      {(!isSalesRep || activeTab === 'quotes') && (
+        <div style={{
+          fontSize: '0.8rem',
+          color: 'var(--text-tertiary)',
+          marginBottom: '12px'
+        }}>
+          Showing {filteredQuotes.length} {statusFilter === 'active' ? 'active' : ''} quotes
+          {statusFilter === 'active' && quotes.length > filteredQuotes.length && (
+            <span style={{ color: 'var(--text-tertiary)' }}>
+              {' '}({quotes.length - filteredQuotes.length} won/lost/expired not shown)
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Quotes List - only show for quotes tab */}
+      {(!isSalesRep || activeTab === 'quotes') && (
+        loading ? (
         <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-tertiary)' }}>
           <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
           <div style={{ marginTop: '12px' }}>Loading quotes...</div>
@@ -1553,7 +1727,7 @@ function SalesDashboard() {
             );
           })}
         </div>
-      )}
+      ))}
 
       {/* Quote Form Modal */}
       {showQuoteForm && (

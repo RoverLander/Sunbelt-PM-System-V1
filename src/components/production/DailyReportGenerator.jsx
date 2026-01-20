@@ -24,10 +24,13 @@ import {
   Printer,
   DollarSign,
   Activity,
-  BarChart3
+  BarChart3,
+  ToggleLeft,
+  ToggleRight,
+  Settings
 } from 'lucide-react';
 import { generateDailyReport } from '../../services/vpService';
-import { format, subDays, addDays, isToday, parseISO } from 'date-fns';
+import { format, subDays, addDays, subWeeks, addWeeks, subMonths, addMonths, isToday, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameDay } from 'date-fns';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -39,20 +42,123 @@ export default function DailyReportGenerator({ factoryId, factoryName: _factoryN
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [exportFormat, setExportFormat] = useState('pdf');
+  const [reportType, setReportType] = useState('daily'); // 'daily', 'weekly', 'monthly'
+  const [showSettings, setShowSettings] = useState(false);
+  const [sectionToggles, setSectionToggles] = useState({
+    laborDetails: true,
+    stationActivity: true,
+    qualityControl: true,
+    moduleCompletions: true,
+    attendanceSummary: true
+  });
+
+  // Get date range based on report type
+  const getDateRange = useCallback(() => {
+    if (reportType === 'weekly') {
+      return {
+        startDate: startOfWeek(selectedDate, { weekStartsOn: 1 }), // Monday start
+        endDate: endOfWeek(selectedDate, { weekStartsOn: 1 })
+      };
+    } else if (reportType === 'monthly') {
+      return {
+        startDate: startOfMonth(selectedDate),
+        endDate: endOfMonth(selectedDate)
+      };
+    }
+    return { startDate: selectedDate, endDate: selectedDate };
+  }, [selectedDate, reportType]);
 
   // Fetch report
   const fetchReport = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await generateDailyReport(factoryId, selectedDate);
-      if (error) throw error;
-      setReport(data);
+      const { startDate, endDate } = getDateRange();
+
+      if (reportType === 'daily') {
+        const { data, error } = await generateDailyReport(factoryId, selectedDate);
+        if (error) throw error;
+        setReport(data);
+      } else {
+        // For weekly/monthly, fetch reports for each day and aggregate
+        const aggregatedReport = {
+          type: reportType,
+          startDate: format(startDate, 'yyyy-MM-dd'),
+          endDate: format(endDate, 'yyyy-MM-dd'),
+          labor: {
+            workerCount: 0,
+            totalHours: 0,
+            regularHours: 0,
+            overtimeHours: 0,
+            totalPay: 0,
+            shifts: [],
+            uniqueWorkers: new Set()
+          },
+          production: {
+            modulesCompleted: 0,
+            assignments: 0,
+            stationActivity: {}
+          },
+          quality: {
+            inspections: 0,
+            passed: 0,
+            failed: 0,
+            passRate: 0,
+            records: []
+          },
+          generatedAt: new Date().toISOString()
+        };
+
+        // Generate reports for each day in range
+        let currentDate = startDate;
+        while (currentDate <= endDate) {
+          const { data, error } = await generateDailyReport(factoryId, currentDate);
+          if (!error && data) {
+            // Aggregate labor data
+            aggregatedReport.labor.totalHours += data.labor.totalHours || 0;
+            aggregatedReport.labor.regularHours += data.labor.regularHours || 0;
+            aggregatedReport.labor.overtimeHours += data.labor.overtimeHours || 0;
+            aggregatedReport.labor.totalPay += data.labor.totalPay || 0;
+            data.labor.shifts?.forEach(s => {
+              aggregatedReport.labor.uniqueWorkers.add(s.worker);
+              aggregatedReport.labor.shifts.push({ ...s, date: format(currentDate, 'MM/dd') });
+            });
+
+            // Aggregate production data
+            aggregatedReport.production.modulesCompleted += data.production.modulesCompleted || 0;
+            aggregatedReport.production.assignments += data.production.assignments || 0;
+            Object.entries(data.production.stationActivity || {}).forEach(([station, d]) => {
+              if (!aggregatedReport.production.stationActivity[station]) {
+                aggregatedReport.production.stationActivity[station] = { count: 0 };
+              }
+              aggregatedReport.production.stationActivity[station].count += d.count || 0;
+            });
+
+            // Aggregate quality data
+            aggregatedReport.quality.inspections += data.quality.inspections || 0;
+            aggregatedReport.quality.passed += data.quality.passed || 0;
+            aggregatedReport.quality.failed += data.quality.failed || 0;
+            data.quality.records?.forEach(r => {
+              aggregatedReport.quality.records.push({ ...r, date: format(currentDate, 'MM/dd') });
+            });
+          }
+          currentDate = addDays(currentDate, 1);
+        }
+
+        // Calculate final stats
+        aggregatedReport.labor.workerCount = aggregatedReport.labor.uniqueWorkers.size;
+        delete aggregatedReport.labor.uniqueWorkers; // Remove Set before setting state
+        aggregatedReport.quality.passRate = aggregatedReport.quality.inspections > 0
+          ? Math.round((aggregatedReport.quality.passed / aggregatedReport.quality.inspections) * 100)
+          : 0;
+
+        setReport(aggregatedReport);
+      }
     } catch (error) {
       console.error('Error generating report:', error);
     } finally {
       setLoading(false);
     }
-  }, [factoryId, selectedDate]);
+  }, [factoryId, selectedDate, reportType, getDateRange]);
 
   useEffect(() => {
     if (factoryId) {
@@ -60,14 +166,54 @@ export default function DailyReportGenerator({ factoryId, factoryName: _factoryN
     }
   }, [factoryId, fetchReport]);
 
-  // Navigate date
-  const goToPrevDay = () => setSelectedDate(prev => subDays(prev, 1));
-  const goToNextDay = () => {
-    if (!isToday(selectedDate)) {
+  // Navigate date based on report type
+  const goToPrev = () => {
+    if (reportType === 'weekly') {
+      setSelectedDate(prev => subWeeks(prev, 1));
+    } else if (reportType === 'monthly') {
+      setSelectedDate(prev => subMonths(prev, 1));
+    } else {
+      setSelectedDate(prev => subDays(prev, 1));
+    }
+  };
+
+  const goToNext = () => {
+    const { endDate } = getDateRange();
+    if (isSameDay(endDate, new Date()) || endDate > new Date()) return;
+
+    if (reportType === 'weekly') {
+      setSelectedDate(prev => addWeeks(prev, 1));
+    } else if (reportType === 'monthly') {
+      setSelectedDate(prev => addMonths(prev, 1));
+    } else {
       setSelectedDate(prev => addDays(prev, 1));
     }
   };
+
   const goToToday = () => setSelectedDate(new Date());
+
+  // Get date display text
+  const getDateDisplayText = () => {
+    if (reportType === 'weekly') {
+      const { startDate, endDate } = getDateRange();
+      return `${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}`;
+    } else if (reportType === 'monthly') {
+      return format(selectedDate, 'MMMM yyyy');
+    }
+    return format(selectedDate, 'EEEE, MMMM d, yyyy');
+  };
+
+  // Check if current period includes today
+  const isCurrentPeriod = () => {
+    const { startDate, endDate } = getDateRange();
+    const today = new Date();
+    return today >= startDate && today <= endDate;
+  };
+
+  // Toggle section
+  const toggleSection = (section) => {
+    setSectionToggles(prev => ({ ...prev, [section]: !prev[section] }));
+  };
 
   // Export report
   const handleExport = () => {
@@ -379,16 +525,63 @@ export default function DailyReportGenerator({ factoryId, factoryName: _factoryN
     );
   }
 
+  // Get report title
+  const getReportTitle = () => {
+    if (reportType === 'weekly') return 'Weekly Production Report';
+    if (reportType === 'monthly') return 'Monthly Production Report';
+    return 'Daily Production Report';
+  };
+
   return (
     <div style={styles.container} className="daily-report">
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.title}>
           <FileText size={24} color="var(--sunbelt-orange)" />
-          Daily Production Report
+          {getReportTitle()}
           {_factoryName && <span style={styles.factoryBadge}>{_factoryName}</span>}
         </div>
         <div style={styles.headerActions}>
+          {/* Report Type Selector */}
+          <div style={{
+            display: 'flex',
+            background: 'var(--bg-primary)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-primary)',
+            overflow: 'hidden'
+          }}>
+            {['daily', 'weekly', 'monthly'].map(type => (
+              <button
+                key={type}
+                onClick={() => setReportType(type)}
+                style={{
+                  padding: 'var(--space-sm) var(--space-md)',
+                  background: reportType === type ? 'var(--sunbelt-orange)' : 'transparent',
+                  color: reportType === type ? 'white' : 'var(--text-secondary)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '0.8125rem',
+                  fontWeight: reportType === type ? '600' : '400',
+                  textTransform: 'capitalize'
+                }}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+
+          <button
+            style={{
+              ...styles.button,
+              background: showSettings ? 'var(--sunbelt-orange)' : 'var(--bg-tertiary)',
+              color: showSettings ? 'white' : 'var(--text-primary)'
+            }}
+            onClick={() => setShowSettings(!showSettings)}
+          >
+            <Settings size={16} />
+            Sections
+          </button>
+
           <select
             style={styles.select}
             value={exportFormat}
@@ -412,22 +605,65 @@ export default function DailyReportGenerator({ factoryId, factoryName: _factoryN
         </div>
       </div>
 
+      {/* Section Toggles Panel */}
+      {showSettings && (
+        <div style={{
+          padding: 'var(--space-md) var(--space-lg)',
+          borderBottom: '1px solid var(--border-primary)',
+          background: 'var(--bg-tertiary)',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 'var(--space-md)'
+        }}>
+          <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', fontWeight: '600' }}>
+            Include in report:
+          </span>
+          {Object.entries({
+            laborDetails: 'Labor Details',
+            stationActivity: 'Station Activity',
+            qualityControl: 'Quality Control',
+            moduleCompletions: 'Module Completions',
+            attendanceSummary: 'Attendance Summary'
+          }).map(([key, label]) => (
+            <label
+              key={key}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-xs)',
+                cursor: 'pointer',
+                fontSize: '0.8125rem',
+                color: 'var(--text-primary)'
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={sectionToggles[key]}
+                onChange={() => toggleSection(key)}
+                style={{ cursor: 'pointer' }}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      )}
+
       {/* Date Navigation */}
       <div style={styles.dateNav}>
-        <button style={styles.dateNavButton} onClick={goToPrevDay}>
+        <button style={styles.dateNavButton} onClick={goToPrev}>
           <ChevronLeft size={18} />
         </button>
         <div style={styles.currentDate}>
-          {format(selectedDate, 'EEEE, MMMM d, yyyy')}
-          {isToday(selectedDate) && <span style={styles.todayBadge}>Today</span>}
+          {getDateDisplayText()}
+          {isCurrentPeriod() && <span style={styles.todayBadge}>{reportType === 'daily' ? 'Today' : 'Current'}</span>}
         </div>
         <button
           style={{
             ...styles.dateNavButton,
-            ...(isToday(selectedDate) ? styles.dateNavButtonDisabled : {})
+            ...(isCurrentPeriod() ? styles.dateNavButtonDisabled : {})
           }}
-          onClick={goToNextDay}
-          disabled={isToday(selectedDate)}
+          onClick={goToNext}
+          disabled={isCurrentPeriod()}
         >
           <ChevronRight size={18} />
         </button>
@@ -495,109 +731,121 @@ export default function DailyReportGenerator({ factoryId, factoryName: _factoryN
           </div>
 
           {/* Labor Details */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <Users size={18} color="var(--sunbelt-orange)" />
-              Labor Details
-            </div>
-            {report.labor.shifts.length > 0 ? (
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={styles.th}>Worker</th>
-                    <th style={styles.th}>Title</th>
-                    <th style={styles.th}>Clock In</th>
-                    <th style={styles.th}>Clock Out</th>
-                    <th style={styles.th}>Hours</th>
-                    <th style={styles.th}>Pay</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.labor.shifts.map((shift, idx) => (
-                    <tr key={idx}>
-                      <td style={styles.td}>{shift.worker || '-'}</td>
-                      <td style={styles.td}>{shift.title || '-'}</td>
-                      <td style={styles.td}>{formatTime(shift.clockIn)}</td>
-                      <td style={styles.td}>{formatTime(shift.clockOut)}</td>
-                      <td style={styles.td}>{shift.hours || 0}</td>
-                      <td style={styles.td}>${shift.pay || 0}</td>
+          {sectionToggles.laborDetails && (
+            <div style={styles.section}>
+              <div style={styles.sectionHeader}>
+                <Users size={18} color="var(--sunbelt-orange)" />
+                Labor Details
+                {reportType !== 'daily' && <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginLeft: '8px' }}>({report.labor.shifts.length} records)</span>}
+              </div>
+              {report.labor.shifts.length > 0 ? (
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      {reportType !== 'daily' && <th style={styles.th}>Date</th>}
+                      <th style={styles.th}>Worker</th>
+                      <th style={styles.th}>Title</th>
+                      <th style={styles.th}>Clock In</th>
+                      <th style={styles.th}>Clock Out</th>
+                      <th style={styles.th}>Hours</th>
+                      <th style={styles.th}>Pay</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                No shifts recorded for this day
-              </p>
-            )}
-          </div>
+                  </thead>
+                  <tbody>
+                    {report.labor.shifts.map((shift, idx) => (
+                      <tr key={idx}>
+                        {reportType !== 'daily' && <td style={styles.td}>{shift.date || '-'}</td>}
+                        <td style={styles.td}>{shift.worker || '-'}</td>
+                        <td style={styles.td}>{shift.title || '-'}</td>
+                        <td style={styles.td}>{formatTime(shift.clockIn)}</td>
+                        <td style={styles.td}>{formatTime(shift.clockOut)}</td>
+                        <td style={styles.td}>{shift.hours || 0}</td>
+                        <td style={styles.td}>${shift.pay || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                  No shifts recorded for this {reportType === 'daily' ? 'day' : 'period'}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Station Activity */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <Activity size={18} color="var(--sunbelt-orange)" />
-              Station Activity
-            </div>
-            {Object.keys(report.production.stationActivity).length > 0 ? (
-              <div style={styles.stationGrid}>
-                {Object.entries(report.production.stationActivity).map(([station, data]) => (
+          {sectionToggles.stationActivity && (
+            <div style={styles.section}>
+              <div style={styles.sectionHeader}>
+                <Activity size={18} color="var(--sunbelt-orange)" />
+                Station Activity
+              </div>
+              {Object.keys(report.production.stationActivity).length > 0 ? (
+                <div style={styles.stationGrid}>
+                  {Object.entries(report.production.stationActivity).map(([station, data]) => (
                   <div key={station} style={styles.stationCard}>
                     <div style={styles.stationName}>{station}</div>
                     <div style={styles.stationCount}>{data.count}</div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                No station activity recorded for this day
-              </p>
-            )}
-          </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                  No station activity recorded for this {reportType === 'daily' ? 'day' : 'period'}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Quality Summary */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <CheckCircle2 size={18} color="var(--sunbelt-orange)" />
-              Quality Control
-            </div>
-            {report.quality.records.length > 0 ? (
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={styles.th}>Module</th>
-                    <th style={styles.th}>Station</th>
-                    <th style={styles.th}>Result</th>
-                    <th style={styles.th}>Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.quality.records.map((record, idx) => (
-                    <tr key={idx}>
-                      <td style={styles.td}>{record.module || '-'}</td>
-                      <td style={styles.td}>{record.station || '-'}</td>
-                      <td style={styles.td}>
-                        <span style={{
-                          padding: 'var(--space-xs) var(--space-sm)',
-                          borderRadius: 'var(--radius-sm)',
-                          fontSize: '0.75rem',
-                          fontWeight: '500',
-                          background: record.passed ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                          color: record.passed ? '#22c55e' : '#ef4444'
-                        }}>
-                          {record.passed ? 'Passed' : 'Failed'}
-                        </span>
-                      </td>
-                      <td style={styles.td}>{record.notes || '-'}</td>
+          {sectionToggles.qualityControl && (
+            <div style={styles.section}>
+              <div style={styles.sectionHeader}>
+                <CheckCircle2 size={18} color="var(--sunbelt-orange)" />
+                Quality Control
+                {reportType !== 'daily' && <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginLeft: '8px' }}>({report.quality.records.length} inspections)</span>}
+              </div>
+              {report.quality.records.length > 0 ? (
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      {reportType !== 'daily' && <th style={styles.th}>Date</th>}
+                      <th style={styles.th}>Module</th>
+                      <th style={styles.th}>Station</th>
+                      <th style={styles.th}>Result</th>
+                      <th style={styles.th}>Notes</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                No QC inspections recorded for this day
-              </p>
-            )}
-          </div>
+                  </thead>
+                  <tbody>
+                    {report.quality.records.map((record, idx) => (
+                      <tr key={idx}>
+                        {reportType !== 'daily' && <td style={styles.td}>{record.date || '-'}</td>}
+                        <td style={styles.td}>{record.module || '-'}</td>
+                        <td style={styles.td}>{record.station || '-'}</td>
+                        <td style={styles.td}>
+                          <span style={{
+                            padding: 'var(--space-xs) var(--space-sm)',
+                            borderRadius: 'var(--radius-sm)',
+                            fontSize: '0.75rem',
+                            fontWeight: '500',
+                            background: record.passed ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                            color: record.passed ? '#22c55e' : '#ef4444'
+                          }}>
+                            {record.passed ? 'Passed' : 'Failed'}
+                          </span>
+                        </td>
+                        <td style={styles.td}>{record.notes || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                  No QC inspections recorded for this {reportType === 'daily' ? 'day' : 'period'}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Generated Timestamp */}
           <div style={{

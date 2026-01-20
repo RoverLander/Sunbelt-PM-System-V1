@@ -103,14 +103,15 @@ const styles = {
   summaryRow: {
     display: 'grid',
     gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: 'var(--space-md)',
-    marginBottom: 'var(--space-lg)'
+    gap: 'var(--space-lg)',
+    marginBottom: 'var(--space-xl)'
   },
   summaryCard: {
-    padding: 'var(--space-md)',
+    padding: 'var(--space-lg)',
     background: 'var(--bg-tertiary)',
     borderRadius: 'var(--radius-md)',
-    textAlign: 'center'
+    textAlign: 'center',
+    border: '1px solid var(--border-color)'
   },
   summaryValue: {
     fontSize: '1.25rem',
@@ -126,18 +127,20 @@ const styles = {
   queueList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 'var(--space-sm)'
+    gap: 'var(--space-md)'
   },
   queueItem: {
     display: 'flex',
     alignItems: 'center',
-    padding: 'var(--space-md)',
+    padding: 'var(--space-md) var(--space-lg)',
     background: 'var(--bg-tertiary)',
     borderRadius: 'var(--radius-md)',
     gap: 'var(--space-md)',
     transition: 'all 0.15s ease',
     cursor: 'pointer',
-    borderLeft: '4px solid transparent'
+    borderLeft: '4px solid transparent',
+    border: '1px solid var(--border-color)',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
   },
   queueItemAlert: {
     borderLeftColor: '#ef4444',
@@ -205,8 +208,9 @@ const styles = {
     minWidth: '140px'
   },
   bottleneckSection: {
-    marginTop: 'var(--space-lg)',
-    padding: 'var(--space-md)',
+    marginTop: 'var(--space-md)',
+    marginBottom: 'var(--space-lg)',
+    padding: 'var(--space-lg)',
     background: 'linear-gradient(135deg, var(--sunbelt-orange) 0%, #f59e0b 100%)',
     borderRadius: 'var(--radius-md)',
     color: 'white'
@@ -235,7 +239,7 @@ const styles = {
   tabs: {
     display: 'flex',
     gap: 'var(--space-sm)',
-    marginBottom: 'var(--space-md)'
+    marginBottom: 'var(--space-lg)'
   },
   tab: {
     padding: 'var(--space-sm) var(--space-md)',

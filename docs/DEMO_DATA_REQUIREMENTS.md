@@ -604,6 +604,97 @@ After running demo data SQL:
 
 ---
 
+---
+
+## PART 15: JANUARY 20, 2026 - NEW DEMO DATA MIGRATION
+
+### 15.1 New Migration: `20260120_comprehensive_demo_data.sql`
+
+**Location:** `supabase/migrations/20260120_comprehensive_demo_data.sql`
+
+**Purpose:** Fresh comprehensive demo data with schema-compatible inserts
+
+**What It Creates:**
+| Section | Data |
+|---------|------|
+| Users | 12 demo users (IT, Sales Team, PMs, PCs, Directors, VP, Plant Manager) |
+| Sales Customers | 8 companies (government, direct, general types) |
+| Dealers | 4 dealers with branch offices |
+| Sales Quotes | 8 quotes at various pipeline stages |
+| Projects | 7 standalone projects at various phases |
+| Workers | 28 workers organized by department with leads |
+| Modules | Created for all active projects at various stations |
+| Worker Shifts | Today's attendance (~85% rate) |
+| QC Records | Inspection records for active modules |
+| Tasks, RFIs, Submittals | PM work items for each project |
+| Announcements | System announcements |
+| Feature Flags | Enabled features |
+
+**Target Factory:** NWBS (Northwest Building Systems)
+
+### 15.2 Running the Demo Data
+
+**Order of Execution:**
+
+```bash
+# 1. Run the new comprehensive demo data (migrations folder)
+# This creates users, customers, quotes, projects, workers, modules
+supabase/migrations/20260120_comprehensive_demo_data.sql
+
+# 2. Run the directory contacts fix (demo folder)
+# This populates all 311 Sunbelt employee contacts
+supabase/demo/FIX_DIRECTORY_CONTACTS.sql
+```
+
+### 15.3 Department-Based Worker Organization
+
+Workers are now organized by department (not just by station):
+
+| Department | Workers | Lead |
+|------------|---------|------|
+| Framing | 3 | Yes (Mike Johnson) |
+| Rough Carpentry | 3 | Yes (James Chen) |
+| Electrical | 2 | No |
+| Plumbing | 2 | No |
+| HVAC | 2 | No |
+| Interior Rough | 2 | No |
+| Interior Finish | 3 | Yes (Lisa Anderson) |
+| Inspection | 2 | Yes (Jennifer Davis) |
+| Staging | 3 | Yes (David Martinez) |
+| QC | 2 | Yes (Kevin Thompson) |
+| Material Handling | 4 | No |
+
+### 15.4 Key Schema Learnings Applied
+
+1. **sales_customers:** Uses `company_name` (NOT `name`)
+2. **sales_quotes:** Uses `pm_flagged`, `pm_flagged_reason` (NOT `pm_flag_notes`)
+3. **workers:** Now includes `department` column for grouping
+4. **Projects:** Created standalone (not from quote conversion) due to schema complexity
+
+### 15.5 Directory Contacts Integration
+
+The `FIX_DIRECTORY_CONTACTS.sql` file contains all 311 contacts from the Sunbelt Directory:
+
+| Factory Code | Contact Count |
+|--------------|---------------|
+| SNB (Corporate) | 72 |
+| NWBS | 20 |
+| PMI | 22 |
+| IBI | 22 |
+| PRM | 24 |
+| SMM | 17 |
+| SSI | 17 |
+| AMT | 19 |
+| BUSA | 17 |
+| C&B | 11 |
+| MRS | 10 |
+| WM-EAST | 18 |
+| WM-EVERGREEN | 10 |
+| WM-SOUTH | 26 |
+| WM-ROCHESTER | 11 |
+
+---
+
 ## CHANGELOG
 
 | Date | Version | Changes |
@@ -611,3 +702,4 @@ After running demo data SQL:
 | 2026-01-16 | 1.0 | Initial document |
 | 2026-01-17 | 2.0 | Complete rewrite for all features (PM, PGM, PWA, Sales, IT, VP/Director) |
 | 2026-01-17 | 2.1 | COMPREHENSIVE_DEMO_DATA.sql verified working; schema compatibility fixes documented |
+| 2026-01-20 | 3.0 | New migration `20260120_comprehensive_demo_data.sql` with department-based workers, schema fixes, and directory contacts reference |

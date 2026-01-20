@@ -228,7 +228,7 @@ function WorkerRow({
         padding: '8px 12px',
         borderRight: '2px solid var(--border-color)',
         borderBottom: '1px solid var(--border-color)',
-        backgroundColor: 'var(--bg-tertiary)',
+        backgroundColor: worker.is_lead ? 'rgba(245, 158, 11, 0.08)' : 'var(--bg-tertiary)',
         position: 'sticky',
         left: 0,
         zIndex: 1,
@@ -239,22 +239,37 @@ function WorkerRow({
             width: '32px',
             height: '32px',
             borderRadius: '50%',
-            backgroundColor: 'rgba(59, 130, 246, 0.15)',
+            backgroundColor: worker.is_lead ? 'rgba(245, 158, 11, 0.2)' : 'rgba(59, 130, 246, 0.15)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '12px',
             fontWeight: '600',
-            color: '#3b82f6'
+            color: worker.is_lead ? '#f59e0b' : '#3b82f6',
+            border: worker.is_lead ? '2px solid #f59e0b' : 'none'
           }}>
             {worker.first_name?.[0]}{worker.last_name?.[0]}
           </div>
           <div>
-            <div style={{ fontWeight: '500', fontSize: '13px', color: 'var(--text-primary)' }}>
+            <div style={{ fontWeight: '500', fontSize: '13px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
               {worker.first_name} {worker.last_name}
+              {worker.is_lead && (
+                <span style={{
+                  fontSize: '9px',
+                  fontWeight: '600',
+                  padding: '1px 6px',
+                  backgroundColor: '#f59e0b',
+                  color: 'white',
+                  borderRadius: '8px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  Lead
+                </span>
+              )}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-              {worker.role || worker.skill_level || 'Worker'}
+              {worker.title || worker.role || worker.skill_level || 'Worker'}
             </div>
           </div>
         </div>
@@ -352,7 +367,7 @@ export default function CrewScheduleView({
   onWeekChange,
   onCellClick,
   onAddShift,
-  groupBy = 'crew', // 'crew', 'station', 'none'
+  groupBy = 'department', // 'department', 'crew', 'station', 'none'
   showTotals = true,
   compact = false
 }) {
@@ -370,17 +385,38 @@ export default function CrewScheduleView({
     [currentWeekStart]
   );
 
+  // Department sort order for consistent display
+  const DEPARTMENT_ORDER = [
+    'Framing', 'Rough Carpentry', 'Electrical', 'Plumbing', 'HVAC',
+    'Interior Rough', 'Interior Finish', 'Inspection', 'Staging', 'QC', 'Material Handling'
+  ];
+
   // Group workers
   const groupedWorkers = useMemo(() => {
     if (groupBy === 'none') {
-      return [{ name: 'All Workers', workers }];
+      // Even for 'none', sort with leads first
+      const sortedWorkers = [...workers].sort((a, b) => {
+        // Leads first
+        if (a.is_lead && !b.is_lead) return -1;
+        if (!a.is_lead && b.is_lead) return 1;
+        // Then alphabetically
+        const nameA = `${a.first_name} ${a.last_name}`;
+        const nameB = `${b.first_name} ${b.last_name}`;
+        return nameA.localeCompare(nameB);
+      });
+      return [{ name: 'All Workers', workers: sortedWorkers }];
     }
 
     const groups = {};
     workers.forEach(worker => {
-      const groupKey = groupBy === 'crew'
-        ? (worker.crew_name || worker.assigned_crew || 'Unassigned')
-        : (worker.station_name || worker.primary_station || 'Unassigned');
+      let groupKey;
+      if (groupBy === 'department') {
+        groupKey = worker.department || 'Unassigned';
+      } else if (groupBy === 'crew') {
+        groupKey = worker.crew_name || worker.assigned_crew || 'Unassigned';
+      } else {
+        groupKey = worker.station_name || worker.primary_station || 'Unassigned';
+      }
 
       if (!groups[groupKey]) {
         groups[groupKey] = [];
@@ -388,9 +424,35 @@ export default function CrewScheduleView({
       groups[groupKey].push(worker);
     });
 
+    // Sort workers within each group: leads first, then alphabetically
+    Object.keys(groups).forEach(key => {
+      groups[key].sort((a, b) => {
+        // Leads first
+        if (a.is_lead && !b.is_lead) return -1;
+        if (!a.is_lead && b.is_lead) return 1;
+        // Then alphabetically
+        const nameA = `${a.first_name} ${a.last_name}`;
+        const nameB = `${b.first_name} ${b.last_name}`;
+        return nameA.localeCompare(nameB);
+      });
+    });
+
     return Object.entries(groups)
       .map(([name, workers]) => ({ name, workers }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => {
+        // For department groupBy, use defined order
+        if (groupBy === 'department') {
+          const orderA = DEPARTMENT_ORDER.indexOf(a.name);
+          const orderB = DEPARTMENT_ORDER.indexOf(b.name);
+          // Unassigned goes last
+          if (orderA === -1 && orderB === -1) return a.name.localeCompare(b.name);
+          if (orderA === -1) return 1;
+          if (orderB === -1) return -1;
+          return orderA - orderB;
+        }
+        // Other groupBy options: alphabetically
+        return a.name.localeCompare(b.name);
+      });
   }, [workers, groupBy]);
 
   // Map shifts by worker

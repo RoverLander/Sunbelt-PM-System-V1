@@ -84,9 +84,12 @@ function ErrorTracking() {
   // DATA FETCHING
   // ============================================================================
   useEffect(() => {
-    fetchCurrentUserRole();
-    fetchTickets();
-    fetchITUsers();
+    // Parallel fetch - these are independent operations
+    Promise.all([
+      fetchCurrentUserRole(),
+      fetchTickets(),
+      fetchITUsers()
+    ]);
   }, []);
 
   const fetchCurrentUserRole = async () => {

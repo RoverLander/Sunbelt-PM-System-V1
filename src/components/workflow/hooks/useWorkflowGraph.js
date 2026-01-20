@@ -18,7 +18,9 @@ import { supabase } from '../../../utils/supabaseClient';
 import {
   calculateStationStatus,
   getStationDeadline,
-  getDaysUntilDeadline
+  getDaysUntilDeadline,
+  calculateProductionStatus,
+  formatProductionProgress
 } from '../../../utils/workflowUtils';
 
 // ============================================================================
@@ -49,6 +51,7 @@ export function useWorkflowGraph(projectId, options = {}) {
   const [stations, setStations] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [rfis, setRfis] = useState([]);
+  const [modules, setModules] = useState([]); // For production status tracking
 
   // =========================================================================
   // DATA FETCHING
@@ -64,7 +67,7 @@ export function useWorkflowGraph(projectId, options = {}) {
 
     try {
       // Fetch all data in parallel
-      const [stationsRes, tasksRes, rfisRes] = await Promise.all([
+      const [stationsRes, tasksRes, rfisRes, modulesRes] = await Promise.all([
         supabase
           .from('workflow_stations')
           .select('*')
@@ -77,16 +80,24 @@ export function useWorkflowGraph(projectId, options = {}) {
         supabase
           .from('rfis')
           .select('*')
+          .eq('project_id', projectId),
+        // Fetch modules for production status tracking
+        supabase
+          .from('modules')
+          .select('id, status, sequence_number')
           .eq('project_id', projectId)
       ]);
 
       if (stationsRes.error) throw stationsRes.error;
       if (tasksRes.error) throw tasksRes.error;
       if (rfisRes.error) throw rfisRes.error;
+      // Don't throw for modules - project may not have any yet
+      if (modulesRes.error) console.warn('Error fetching modules:', modulesRes.error);
 
       setStations(stationsRes.data || []);
       setTasks(tasksRes.data || []);
       setRfis(rfisRes.data || []);
+      setModules(modulesRes.data || []);
     } catch (err) {
       console.error('Error fetching workflow data:', err);
       setError(err.message);
@@ -125,22 +136,41 @@ export function useWorkflowGraph(projectId, options = {}) {
   // COMPUTED VALUES
   // =========================================================================
 
+  // Calculate production status from modules (for 'production' station)
+  const productionStatusData = useMemo(() => {
+    return calculateProductionStatus(modules);
+  }, [modules]);
+
   // Calculate station statuses based on linked tasks
   const stationStatuses = useMemo(() => {
     const statuses = {};
 
     stations.forEach(station => {
       const stationTasks = tasks.filter(t => t.workflow_station_key === station.station_key);
-      statuses[station.station_key] = {
-        status: calculateStationStatus(stationTasks),
-        deadline: getStationDeadline(stationTasks),
-        taskCount: stationTasks.length,
-        tasks: stationTasks
-      };
+
+      // Special handling for 'production' station - derive status from modules
+      if (station.station_key === 'production') {
+        statuses[station.station_key] = {
+          status: productionStatusData.status,
+          deadline: getStationDeadline(stationTasks),
+          taskCount: stationTasks.length,
+          tasks: stationTasks,
+          // Production-specific data for display
+          productionProgress: productionStatusData,
+          progressLabel: formatProductionProgress(productionStatusData)
+        };
+      } else {
+        statuses[station.station_key] = {
+          status: calculateStationStatus(stationTasks),
+          deadline: getStationDeadline(stationTasks),
+          taskCount: stationTasks.length,
+          tasks: stationTasks
+        };
+      }
     });
 
     return statuses;
-  }, [stations, tasks]);
+  }, [stations, tasks, productionStatusData]);
 
   // Calculate RFI counts per station
   const stationRfiCounts = useMemo(() => {
@@ -197,7 +227,10 @@ export function useWorkflowGraph(projectId, options = {}) {
             progress: calculateProgress(statusData.tasks || []),
             isOverdue: daysUntil !== null && daysUntil < 0,
             stationKey: station.station_key,
-            description: station.description
+            description: station.description,
+            // Production-specific data (for 'production' station)
+            progressLabel: statusData.progressLabel || null,
+            productionProgress: statusData.productionProgress || null
           },
           draggable: true
         });
