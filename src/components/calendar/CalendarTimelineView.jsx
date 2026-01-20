@@ -235,244 +235,229 @@ function CalendarTimelineView({
       <div
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
           alignItems: 'center',
-          padding: 'var(--space-md) var(--space-lg)',
+          padding: '8px 12px',
           borderBottom: '1px solid var(--border-color)',
           background: 'var(--bg-tertiary)',
-          flexWrap: 'wrap',
-          gap: 'var(--space-md)',
+          gap: '8px',
           flexShrink: 0,
-          minHeight: '56px'
+          minHeight: '48px',
+          overflowX: 'auto'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-          <Calendar size={24} style={{ color: 'var(--sunbelt-orange)' }} />
-          <h2
-            style={{
-              fontSize: '1.25rem',
-              fontWeight: '700',
-              color: 'var(--text-primary)',
-              margin: 0
-            }}
-          >
-            Production Timeline
-          </h2>
+        {/* Title */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          <Calendar size={20} style={{ color: 'var(--sunbelt-orange)' }} />
           <span
             style={{
               fontSize: '0.875rem',
-              color: 'var(--text-secondary)',
-              fontWeight: '500'
+              fontWeight: '600',
+              color: 'var(--text-primary)',
+              whiteSpace: 'nowrap'
             }}
           >
-            {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            Timeline
           </span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-          {/* Zoom Controls */}
-          <div
+        {/* Divider */}
+        <div style={{ width: '1px', height: '24px', background: 'var(--border-color)', flexShrink: 0 }} />
+
+        {/* Zoom Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+          <button
+            onClick={zoomOut}
+            disabled={zoomLevel === 'month'}
+            title="Zoom out"
             style={{
+              padding: '6px 8px',
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-sm)',
+              cursor: zoomLevel === 'month' ? 'not-allowed' : 'pointer',
+              color: zoomLevel === 'month' ? 'var(--text-tertiary)' : 'var(--text-secondary)',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
-              padding: '4px',
-              background: 'var(--bg-tertiary)',
-              borderRadius: 'var(--radius-md)'
+              fontSize: '0.75rem'
             }}
           >
-            <button
-              onClick={zoomOut}
-              disabled={zoomLevel === 'month'}
-              style={{
-                padding: '6px',
-                background: 'transparent',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                cursor: zoomLevel === 'month' ? 'not-allowed' : 'pointer',
-                color: zoomLevel === 'month' ? 'var(--text-tertiary)' : 'var(--text-secondary)',
-                display: 'flex'
-              }}
-            >
-              <ZoomOut size={16} />
-            </button>
-            <span
-              style={{
-                padding: '4px 8px',
-                fontSize: '0.75rem',
-                fontWeight: '600',
-                color: 'var(--text-primary)',
-                minWidth: '50px',
-                textAlign: 'center'
-              }}
-            >
-              {ZOOM_LEVELS[zoomLevel].label}
-            </span>
-            <button
-              onClick={zoomIn}
-              disabled={zoomLevel === 'day'}
-              style={{
-                padding: '6px',
-                background: 'transparent',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                cursor: zoomLevel === 'day' ? 'not-allowed' : 'pointer',
-                color: zoomLevel === 'day' ? 'var(--text-tertiary)' : 'var(--text-secondary)',
-                display: 'flex'
-              }}
-            >
-              <ZoomIn size={16} />
-            </button>
-          </div>
-
-          {/* Today Button */}
-          <button
-            onClick={goToToday}
+            <ZoomOut size={14} />
+          </button>
+          <span
             style={{
-              padding: '8px 14px',
+              padding: '4px 8px',
+              fontSize: '0.75rem',
+              fontWeight: '600',
+              color: 'var(--text-primary)',
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-sm)'
+            }}
+          >
+            {ZOOM_LEVELS[zoomLevel].label}
+          </span>
+          <button
+            onClick={zoomIn}
+            disabled={zoomLevel === 'day'}
+            title="Zoom in"
+            style={{
+              padding: '6px 8px',
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-sm)',
+              cursor: zoomLevel === 'day' ? 'not-allowed' : 'pointer',
+              color: zoomLevel === 'day' ? 'var(--text-tertiary)' : 'var(--text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '0.75rem'
+            }}
+          >
+            <ZoomIn size={14} />
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: '1px', height: '24px', background: 'var(--border-color)', flexShrink: 0 }} />
+
+        {/* Navigation */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+          <button
+            onClick={() => navigateTimeline(-1)}
+            title="Previous"
+            style={{
+              padding: '6px',
               background: 'var(--bg-primary)',
               border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius-sm)',
               color: 'var(--text-secondary)',
-              fontSize: '0.875rem',
+              cursor: 'pointer',
+              display: 'flex'
+            }}
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            onClick={goToToday}
+            style={{
+              padding: '6px 10px',
+              background: 'var(--sunbelt-orange)',
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              color: 'white',
+              fontSize: '0.75rem',
               fontWeight: '600',
               cursor: 'pointer'
             }}
           >
             Today
           </button>
-
-          {/* Navigation */}
-          <div style={{ display: 'flex', gap: '4px' }}>
-            <button
-              onClick={() => navigateTimeline(-1)}
-              style={{
-                padding: '8px',
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                display: 'flex'
-              }}
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <button
-              onClick={() => navigateTimeline(1)}
-              style={{
-                padding: '8px',
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                display: 'flex'
-              }}
-            >
-              <ChevronRight size={20} />
-            </button>
-          </div>
-
-          {/* View Switcher */}
-          {onViewChange && !isPopout && (
-            <select
-              onChange={(e) => onViewChange(e.target.value)}
-              defaultValue="timeline"
-              style={{
-                padding: '8px 14px',
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="month">Month</option>
-              <option value="week">Week</option>
-              <option value="day">Day</option>
-              <option value="timeline">Timeline</option>
-              <option value="station">Station</option>
-            </select>
-          )}
-
-          {/* Compact Mode Toggle */}
           <button
-            onClick={toggleCompact}
-            title={compactLeftPanel ? 'Expand sidebar' : 'Compact sidebar'}
+            onClick={() => navigateTimeline(1)}
+            title="Next"
             style={{
-              padding: '8px',
-              background: compactLeftPanel ? 'var(--sunbelt-orange)' : 'var(--bg-primary)',
+              padding: '6px',
+              background: 'var(--bg-primary)',
               border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius-sm)',
-              color: compactLeftPanel ? 'white' : 'var(--text-secondary)',
+              color: 'var(--text-secondary)',
               cursor: 'pointer',
               display: 'flex'
             }}
           >
-            {compactLeftPanel ? <Maximize2 size={18} /> : <Minimize2 size={18} />}
+            <ChevronRight size={16} />
           </button>
-
-          {/* Expand/Fullscreen Toggle */}
-          {!isPopout && (
-            <button
-              onClick={toggleExpanded}
-              title={isExpanded ? 'Exit fullscreen' : 'Fullscreen'}
-              style={{
-                padding: '8px',
-                background: isExpanded ? 'var(--sunbelt-orange)' : 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                color: isExpanded ? 'white' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                display: 'flex'
-              }}
-            >
-              <Maximize2 size={18} />
-            </button>
-          )}
-
-          {/* Pop-out Button */}
-          {!isPopout && (
-            <button
-              onClick={handlePopout}
-              title="Open in new window"
-              style={{
-                padding: '8px',
-                background: 'var(--bg-primary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                display: 'flex'
-              }}
-            >
-              <ExternalLink size={18} />
-            </button>
-          )}
-
-          {/* Close button for popout */}
-          {isPopout && onPopoutClose && (
-            <button
-              onClick={onPopoutClose}
-              title="Close"
-              style={{
-                padding: '8px 14px',
-                background: 'var(--danger)',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                color: 'white',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                fontWeight: '600'
-              }}
-            >
-              Close
-            </button>
-          )}
         </div>
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* View Switcher */}
+        {onViewChange && !isPopout && (
+          <select
+            onChange={(e) => onViewChange(e.target.value)}
+            defaultValue="timeline"
+            style={{
+              padding: '6px 10px',
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text-primary)',
+              fontSize: '0.75rem',
+              fontWeight: '600',
+              cursor: 'pointer',
+              flexShrink: 0
+            }}
+          >
+            <option value="month">Month</option>
+            <option value="week">Week</option>
+            <option value="day">Day</option>
+            <option value="timeline">Timeline</option>
+            <option value="station">Station</option>
+          </select>
+        )}
+
+        {/* Fullscreen Toggle */}
+        {!isPopout && (
+          <button
+            onClick={toggleExpanded}
+            title={isExpanded ? 'Exit fullscreen' : 'Fullscreen'}
+            style={{
+              padding: '6px',
+              background: isExpanded ? 'var(--sunbelt-orange)' : 'var(--bg-primary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-sm)',
+              color: isExpanded ? 'white' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              flexShrink: 0
+            }}
+          >
+            <Maximize2 size={16} />
+          </button>
+        )}
+
+        {/* Pop-out Button */}
+        {!isPopout && (
+          <button
+            onClick={handlePopout}
+            title="Open in new window"
+            style={{
+              padding: '6px',
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              flexShrink: 0
+            }}
+          >
+            <ExternalLink size={16} />
+          </button>
+        )}
+
+        {/* Close button for popout */}
+        {isPopout && onPopoutClose && (
+          <button
+            onClick={onPopoutClose}
+            title="Close"
+            style={{
+              padding: '6px 12px',
+              background: 'var(--danger)',
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '0.75rem',
+              fontWeight: '600',
+              flexShrink: 0
+            }}
+          >
+            Close
+          </button>
+        )}
       </div>
 
       {/* Main Content Area */}
