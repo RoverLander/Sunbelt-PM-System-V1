@@ -148,10 +148,37 @@ export function useWorkflowGraph(projectId, options = {}) {
     stations.forEach(station => {
       const stationTasks = tasks.filter(t => t.workflow_station_key === station.station_key);
 
-      // Special handling for 'production' station - derive status from modules
+      // Special handling for 'production' station - derive status from modules AND tasks
       if (station.station_key === 'production') {
+        // Get status from modules
+        const moduleStatus = productionStatusData.status;
+        // Get status from tasks (same logic as other stations)
+        const taskStatus = calculateStationStatus(stationTasks);
+
+        // Use the "more advanced" status - if either shows in_progress, use that
+        // Priority: in_progress > awaiting_response > not_started
+        // But completed only if BOTH are completed or one is completed and other is not_started
+        let finalStatus = moduleStatus;
+
+        // If tasks show activity but modules don't, use task status
+        if (taskStatus === 'in_progress' || taskStatus === 'awaiting_response') {
+          finalStatus = taskStatus;
+        }
+        // If modules show activity, use module status
+        else if (moduleStatus === 'in_progress') {
+          finalStatus = moduleStatus;
+        }
+        // If both are completed, station is completed
+        else if (moduleStatus === 'completed' && (taskStatus === 'completed' || stationTasks.length === 0)) {
+          finalStatus = 'completed';
+        }
+        // If tasks are in progress but no modules yet
+        else if (stationTasks.length > 0 && taskStatus !== 'not_started') {
+          finalStatus = taskStatus;
+        }
+
         statuses[station.station_key] = {
-          status: productionStatusData.status,
+          status: finalStatus,
           deadline: getStationDeadline(stationTasks),
           taskCount: stationTasks.length,
           tasks: stationTasks,

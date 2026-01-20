@@ -66,6 +66,34 @@ function CalendarTimelineView({
   const dragStartRef = useRef({ x: 0, scrollLeft: 0 });
   const isDraggingRef = useRef(false);
 
+  // Total stations for progress calculation (standard production line has 12 stations)
+  const totalStations = 12;
+
+  // Calculate progress from station order number
+  const calculateModuleProgress = useCallback((module) => {
+    // If module has explicit progress, use it
+    if (module.progress && module.progress > 0) {
+      return module.progress;
+    }
+
+    // Calculate from station position
+    const stationOrder = module.current_station?.order_num || 0;
+
+    // Completed/Shipped modules are 100%
+    if (module.status === 'Completed' || module.status === 'Shipped') {
+      return 100;
+    }
+
+    // Not Started modules are 0%
+    if (module.status === 'Not Started' || !module.current_station_id) {
+      return 0;
+    }
+
+    // Calculate percentage based on station position (order_num starts at 1)
+    // Progress = (current station / total stations) * 100
+    return Math.round((stationOrder / totalStations) * 100);
+  }, [totalStations]);
+
   // Calculate timeline range (3 months)
   const timelineRange = useMemo(() => {
     const start = addDays(currentDate, -30);
@@ -121,43 +149,59 @@ function CalendarTimelineView({
     setCompactLeftPanel(!compactLeftPanel);
   }, [compactLeftPanel]);
 
-  // Drag-to-pan handlers
-  const handleMouseDown = (e) => {
+  // Drag-to-pan handlers using window events for reliability
+  useEffect(() => {
+    const handleGlobalMouseMove = (e) => {
+      if (!isDraggingRef.current || !timelineRef.current) return;
+
+      // Calculate movement delta
+      const dx = e.clientX - dragStartRef.current.x;
+      // Apply scroll (drag left = scroll right, drag right = scroll left)
+      timelineRef.current.scrollLeft = dragStartRef.current.scrollLeft - dx;
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        setIsDragging(false);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    };
+
+    // Attach to window for reliable tracking even when mouse leaves the element
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, []);
+
+  const handleTimelineMouseDown = (e) => {
     // Only start drag if clicking on the timeline background, not on a module bar
     if (e.target.closest('[data-module-bar]')) return;
 
     // Only left mouse button
     if (e.button !== 0) return;
 
+    // Prevent text selection during drag
+    e.preventDefault();
+
+    // Set up drag state
     isDraggingRef.current = true;
     setIsDragging(true);
+
+    // Store initial position using clientX for consistency
     dragStartRef.current = {
-      x: e.pageX,
+      x: e.clientX,
       scrollLeft: timelineRef.current?.scrollLeft || 0
     };
-  };
 
-  const handleMouseMove = (e) => {
-    if (!isDraggingRef.current || !timelineRef.current) return;
-
-    // Calculate how far we've moved
-    const dx = e.pageX - dragStartRef.current.x;
-    // Drag right = scroll left (move content right, showing earlier dates)
-    // Drag left = scroll right (move content left, showing later dates)
-    const newScrollLeft = dragStartRef.current.scrollLeft - dx;
-    timelineRef.current.scrollLeft = newScrollLeft;
-  };
-
-  const handleMouseUp = () => {
-    isDraggingRef.current = false;
-    setIsDragging(false);
-  };
-
-  const handleMouseLeave = () => {
-    if (isDraggingRef.current) {
-      isDraggingRef.current = false;
-      setIsDragging(false);
-    }
+    // Set cursor on body to maintain grabbing cursor even outside element
+    document.body.style.cursor = 'grabbing';
+    document.body.style.userSelect = 'none';
   };
 
   // Sort modules by start date, then by rush status
@@ -617,17 +661,17 @@ function CalendarTimelineView({
         <div
           ref={timelineRef}
           onScroll={handleScroll}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
+          onMouseDown={handleTimelineMouseDown}
           style={{
             flex: 1,
             overflowX: 'auto',
             overflowY: 'auto',
             position: 'relative',
             cursor: isDragging ? 'grabbing' : 'grab',
-            userSelect: isDragging ? 'none' : 'auto'
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none'
           }}
         >
           {/* Timeline Header */}
@@ -640,12 +684,25 @@ function CalendarTimelineView({
 
           {/* Timeline Body */}
           <div
+            data-timeline-body="true"
             style={{
               position: 'relative',
               width: totalWidth,
               minHeight: Math.max(sortedModules.length * rowHeight, 400)
             }}
           >
+            {/* Drag-to-pan capture layer - fills entire timeline body */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                zIndex: 0
+              }}
+            />
+
             {/* Grid Lines - Background layer */}
             <div
               style={{
@@ -655,7 +712,7 @@ function CalendarTimelineView({
                 width: totalWidth,
                 height: '100%',
                 pointerEvents: 'none',
-                zIndex: 0
+                zIndex: 1
               }}
             >
               {headers.map((header, index) => (
@@ -679,9 +736,13 @@ function CalendarTimelineView({
             </div>
 
             {/* Module Rows with Bars */}
-            <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{ position: 'relative', zIndex: 2 }}>
               {sortedModules.map((module, index) => {
                 const barPos = calculateBarPosition(module, timelineRange.start, zoomLevel);
+                // Calculate progress from station position
+                const moduleProgress = calculateModuleProgress(module);
+                // Create enhanced module with calculated progress
+                const enhancedModule = { ...module, progress: moduleProgress };
 
                 return (
                   <div
@@ -693,7 +754,7 @@ function CalendarTimelineView({
                     }}
                   >
                     <TimelineBar
-                      module={module}
+                      module={enhancedModule}
                       left={barPos.left}
                       width={barPos.width}
                       draggable={canEdit}
