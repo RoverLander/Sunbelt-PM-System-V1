@@ -1045,7 +1045,7 @@ function VPDashboard() {
 
           {/* PM View: PMs as top level with their Factories underneath */}
           {teamViewTab === 'pm' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '240px', overflowY: 'auto' }}>
               {Object.values(executiveMetrics.factoriesByPM || {})
                 .filter(data => data.totalProjects > 0) // Only show PMs with projects
                 .sort((a, b) => b.totalProjects - a.totalProjects) // Sort by project count descending
@@ -1135,7 +1135,7 @@ function VPDashboard() {
 
           {/* Production View: Factory Breakdown with Production Staff */}
           {teamViewTab === 'production' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '240px', overflowY: 'auto' }}>
               {Object.entries(executiveMetrics.productionByFactory || {}).map(([factory, data]) => (
                 <div
                   key={factory}
