@@ -286,8 +286,10 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
     const taskCompleted = tasks.filter(t => t.status === 'Completed').length;
     const taskTotal = tasks.length;
     const rfiOpen = rfis.filter(r => r.status === 'Open' || r.status === 'Draft').length;
+    const rfiTotal = rfis.length;
     const subPending = submittals.filter(s => !['Approved', 'Approved as Noted', 'Rejected'].includes(s.status)).length;
-    return { taskCompleted, taskTotal, rfiOpen, subPending };
+    const subTotal = submittals.length;
+    return { taskCompleted, taskTotal, rfiOpen, rfiTotal, subPending, subTotal };
   }, [tasks, rfis, submittals]);
 
   const filteredTasks = useMemo(() => {
@@ -400,10 +402,20 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           let badge = null;
-          
+          let alertBadge = null; // Secondary badge for open/pending items
+
+          // Tasks: show completed/total
           if (tab.id === 'tasks' && stats.taskTotal > 0) badge = `${stats.taskCompleted}/${stats.taskTotal}`;
-          if (tab.id === 'rfis' && stats.rfiOpen > 0) badge = stats.rfiOpen;
-          if (tab.id === 'submittals' && stats.subPending > 0) badge = stats.subPending;
+          // RFIs: show total count, with open count as alert badge
+          if (tab.id === 'rfis' && stats.rfiTotal > 0) {
+            badge = stats.rfiTotal;
+            if (stats.rfiOpen > 0) alertBadge = stats.rfiOpen;
+          }
+          // Submittals: show total count, with pending count as alert badge
+          if (tab.id === 'submittals' && stats.subTotal > 0) {
+            badge = stats.subTotal;
+            if (stats.subPending > 0) alertBadge = stats.subPending;
+          }
 
           return (
             <button
@@ -421,6 +433,7 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
             >
               <Icon size={16} />
               {tab.label}
+              {/* Main count badge (total) */}
               {badge && (
                 <span style={{
                   padding: '1px 6px', borderRadius: '10px', fontSize: '0.6875rem', fontWeight: '600',
@@ -428,6 +441,17 @@ function ProjectDetails({ project: initialProject, onBack, onUpdate, initialTab 
                   color: isActive ? 'white' : 'var(--text-secondary)'
                 }}>
                   {badge}
+                </span>
+              )}
+              {/* Alert badge for open/pending items */}
+              {alertBadge && (
+                <span style={{
+                  padding: '1px 6px', borderRadius: '10px', fontSize: '0.6875rem', fontWeight: '600',
+                  background: 'var(--sunbelt-orange)',
+                  color: 'white',
+                  marginLeft: '-2px'
+                }}>
+                  {alertBadge}
                 </span>
               )}
             </button>
