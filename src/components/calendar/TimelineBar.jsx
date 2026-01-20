@@ -118,6 +118,7 @@ function TimelineBar({
 
   return (
     <div
+      data-module-bar="true"
       draggable={draggable}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
