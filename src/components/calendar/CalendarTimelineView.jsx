@@ -61,9 +61,10 @@ function CalendarTimelineView({
   const [isExpanded, setIsExpanded] = useState(false);
   const [compactLeftPanel, setCompactLeftPanel] = useState(false);
 
-  // Drag-to-pan state
+  // Drag-to-pan state (using refs to avoid stale closure issues)
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, scrollLeft: 0 });
+  const dragStartRef = useRef({ x: 0, scrollLeft: 0 });
+  const isDraggingRef = useRef(false);
 
   // Calculate timeline range (3 months)
   const timelineRange = useMemo(() => {
@@ -121,45 +122,40 @@ function CalendarTimelineView({
   }, [compactLeftPanel]);
 
   // Drag-to-pan handlers
-  const handleMouseDown = useCallback((e) => {
+  const handleMouseDown = (e) => {
     // Only start drag if clicking on the timeline background, not on a module bar
     if (e.target.closest('[data-module-bar]')) return;
 
+    // Prevent text selection during drag
+    e.preventDefault();
+
+    isDraggingRef.current = true;
     setIsDragging(true);
-    setDragStart({
+    dragStartRef.current = {
       x: e.clientX,
       scrollLeft: timelineRef.current?.scrollLeft || 0
-    });
+    };
+  };
 
-    // Change cursor
-    if (timelineRef.current) {
-      timelineRef.current.style.cursor = 'grabbing';
-    }
-  }, []);
-
-  const handleMouseMove = useCallback((e) => {
-    if (!isDragging || !timelineRef.current) return;
+  const handleMouseMove = (e) => {
+    if (!isDraggingRef.current || !timelineRef.current) return;
 
     e.preventDefault();
-    const dx = e.clientX - dragStart.x;
-    timelineRef.current.scrollLeft = dragStart.scrollLeft - dx;
-  }, [isDragging, dragStart]);
+    const dx = e.clientX - dragStartRef.current.x;
+    timelineRef.current.scrollLeft = dragStartRef.current.scrollLeft - dx;
+  };
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = () => {
+    isDraggingRef.current = false;
     setIsDragging(false);
-    if (timelineRef.current) {
-      timelineRef.current.style.cursor = 'grab';
-    }
-  }, []);
+  };
 
-  const handleMouseLeave = useCallback(() => {
-    if (isDragging) {
+  const handleMouseLeave = () => {
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
       setIsDragging(false);
-      if (timelineRef.current) {
-        timelineRef.current.style.cursor = 'grab';
-      }
     }
-  }, [isDragging]);
+  };
 
   // Sort modules by start date, then by rush status
   const sortedModules = useMemo(() => {
