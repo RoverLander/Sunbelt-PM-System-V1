@@ -126,13 +126,13 @@ function CalendarTimelineView({
     // Only start drag if clicking on the timeline background, not on a module bar
     if (e.target.closest('[data-module-bar]')) return;
 
-    // Prevent text selection during drag
-    e.preventDefault();
+    // Only left mouse button
+    if (e.button !== 0) return;
 
     isDraggingRef.current = true;
     setIsDragging(true);
     dragStartRef.current = {
-      x: e.clientX,
+      x: e.pageX,
       scrollLeft: timelineRef.current?.scrollLeft || 0
     };
   };
@@ -140,9 +140,12 @@ function CalendarTimelineView({
   const handleMouseMove = (e) => {
     if (!isDraggingRef.current || !timelineRef.current) return;
 
-    e.preventDefault();
-    const dx = e.clientX - dragStartRef.current.x;
-    timelineRef.current.scrollLeft = dragStartRef.current.scrollLeft - dx;
+    // Calculate how far we've moved
+    const dx = e.pageX - dragStartRef.current.x;
+    // Drag right = scroll left (move content right, showing earlier dates)
+    // Drag left = scroll right (move content left, showing later dates)
+    const newScrollLeft = dragStartRef.current.scrollLeft - dx;
+    timelineRef.current.scrollLeft = newScrollLeft;
   };
 
   const handleMouseUp = () => {
@@ -176,8 +179,9 @@ function CalendarTimelineView({
     if (timelineRef.current) {
       const todayIndex = headers.findIndex(h => isSameDay(h.date, new Date()));
       if (todayIndex !== -1) {
-        const containerWidth = containerRef.current?.offsetWidth || 800;
-        const targetScroll = todayIndex * dayWidth - containerWidth / 2 + dayWidth / 2;
+        // Use the timeline scroll container's width, not the outer container
+        const scrollContainerWidth = timelineRef.current.offsetWidth || 800;
+        const targetScroll = todayIndex * dayWidth - scrollContainerWidth / 2 + dayWidth / 2;
         timelineRef.current.scrollLeft = Math.max(0, targetScroll);
       }
     }
