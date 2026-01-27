@@ -21,7 +21,9 @@ import { searchModules, getModuleById, getModuleStatusColor } from '../../servic
  * @returns {JSX.Element}
  */
 export default function ModuleLookup({ onModuleSelect }) {
-  const { factoryId } = useWorkerAuth();
+  const { factoryId, worker } = useWorkerAuth();
+
+  console.log('[ModuleLookup] factoryId:', factoryId, 'worker:', worker);
 
   // Search state
   const [query, setQuery] = useState('');

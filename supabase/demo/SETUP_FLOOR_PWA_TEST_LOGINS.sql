@@ -6,71 +6,101 @@
 -- This script sets up test workers with known PINs for testing the Floor PWA.
 --
 -- TEST CREDENTIALS:
---   Shift Lead: Mike Johnson (EMP001) - PIN: 1234
---   Worker: Sarah Williams (EMP007) - PIN: 5678
+--   Framing Lead: Marcus Johnson (FRM-001) - PIN: 1234
+--   Framing Worker: Alex Rivera (FRM-002) - PIN: 5678
+--   Interior Finish Lead: Jennifer Lopez (FIN-001) - PIN: 1111
+--   Interior Finish Worker: Jessica Lewis (FIN-002) - PIN: 2222
+--   Exterior Siding Lead: Carlos Mendez (EXT-001) - PIN: 3333
+--   Exterior Siding Worker: Ramon Gutierrez (EXT-002) - PIN: 4444
+--   QC Lead: Patricia Young (QC-001) - PIN: 9999
 --
 -- The PINs are hashed using bcrypt via PostgreSQL's pgcrypto extension.
 -- This is compatible with Deno's bcrypt library used in the Edge Function.
 --
--- Run this AFTER COMPREHENSIVE_DEMO_DATA.sql
+-- Run this AFTER 20260120_comprehensive_demo_data.sql
 -- ============================================================================
 
 -- Enable pgcrypto extension (available in Supabase)
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- ============================================================================
--- UPDATE SHIFT LEAD: Mike Johnson (EMP001) - PIN: 1234
+-- FRAMING DEPARTMENT
 -- ============================================================================
 
+-- Lead: Marcus Johnson (FRM-001) - PIN: 1234
 UPDATE workers
 SET
-  -- bcrypt hash for PIN "1234" using pgcrypto
   pin_hash = crypt('1234', gen_salt('bf', 10)),
   pin_attempts = 0,
   pin_locked_until = NULL,
   is_active = true
-WHERE employee_id = 'EMP001';
+WHERE employee_id = 'FRM-001';
 
--- Verify the update
-SELECT
-  'SHIFT LEAD TEST LOGIN' AS type,
-  w.employee_id,
-  w.first_name || ' ' || w.last_name AS name,
-  f.code AS factory,
-  w.title,
-  w.is_lead,
-  '1234' AS test_pin,
-  CASE WHEN w.pin_hash IS NOT NULL THEN 'SET' ELSE 'MISSING' END AS pin_status
-FROM workers w
-LEFT JOIN factories f ON w.factory_id = f.id
-WHERE w.employee_id = 'EMP001';
-
--- ============================================================================
--- UPDATE REGULAR WORKER: Sarah Williams (EMP007) - PIN: 5678
--- ============================================================================
-
+-- Worker: Alex Rivera (FRM-002) - PIN: 5678
 UPDATE workers
 SET
-  -- bcrypt hash for PIN "5678" using pgcrypto
   pin_hash = crypt('5678', gen_salt('bf', 10)),
   pin_attempts = 0,
   pin_locked_until = NULL,
   is_active = true
-WHERE employee_id = 'EMP007';
+WHERE employee_id = 'FRM-002';
 
--- Verify the update
-SELECT
-  'WORKER TEST LOGIN' AS type,
-  w.employee_id,
-  w.first_name || ' ' || w.last_name AS name,
-  f.code AS factory,
-  w.title,
-  w.is_lead,
-  '5678' AS test_pin,
-  CASE WHEN w.pin_hash IS NOT NULL THEN 'SET' ELSE 'MISSING' END AS pin_status
-FROM workers w
-LEFT JOIN factories f ON w.factory_id = f.id
-WHERE w.employee_id = 'EMP007';
+-- ============================================================================
+-- INTERIOR FINISH DEPARTMENT
+-- ============================================================================
+
+-- Lead: Jennifer Lopez (FIN-001) - PIN: 1111
+UPDATE workers
+SET
+  pin_hash = crypt('1111', gen_salt('bf', 10)),
+  pin_attempts = 0,
+  pin_locked_until = NULL,
+  is_active = true
+WHERE employee_id = 'FIN-001';
+
+-- Worker: Jessica Lewis (FIN-002) - PIN: 2222
+UPDATE workers
+SET
+  pin_hash = crypt('2222', gen_salt('bf', 10)),
+  pin_attempts = 0,
+  pin_locked_until = NULL,
+  is_active = true
+WHERE employee_id = 'FIN-002';
+
+-- ============================================================================
+-- EXTERIOR SIDING DEPARTMENT
+-- ============================================================================
+
+-- Lead: Carlos Mendez (EXT-001) - PIN: 3333
+UPDATE workers
+SET
+  pin_hash = crypt('3333', gen_salt('bf', 10)),
+  pin_attempts = 0,
+  pin_locked_until = NULL,
+  is_active = true
+WHERE employee_id = 'EXT-001';
+
+-- Worker: Ramon Gutierrez (EXT-002) - PIN: 4444
+UPDATE workers
+SET
+  pin_hash = crypt('4444', gen_salt('bf', 10)),
+  pin_attempts = 0,
+  pin_locked_until = NULL,
+  is_active = true
+WHERE employee_id = 'EXT-002';
+
+-- ============================================================================
+-- QC DEPARTMENT
+-- ============================================================================
+
+-- Lead: Patricia Young (QC-001) - PIN: 9999
+UPDATE workers
+SET
+  pin_hash = crypt('9999', gen_salt('bf', 10)),
+  pin_attempts = 0,
+  pin_locked_until = NULL,
+  is_active = true
+WHERE employee_id = 'QC-001';
 
 -- ============================================================================
 -- VERIFICATION QUERIES
@@ -81,27 +111,44 @@ SELECT '=== FLOOR PWA TEST LOGINS ===' AS info;
 SELECT
   w.employee_id,
   w.first_name || ' ' || w.last_name AS full_name,
-  f.code AS factory,
+  w.department,
   w.title,
-  CASE WHEN w.is_lead THEN 'Shift Lead' ELSE 'Worker' END AS role,
+  CASE WHEN w.is_lead THEN 'Lead' ELSE 'Worker' END AS role,
   CASE
-    WHEN w.employee_id = 'EMP001' THEN '1234'
-    WHEN w.employee_id = 'EMP007' THEN '5678'
+    WHEN w.employee_id = 'FRM-001' THEN '1234'
+    WHEN w.employee_id = 'FRM-002' THEN '5678'
+    WHEN w.employee_id = 'FIN-001' THEN '1111'
+    WHEN w.employee_id = 'FIN-002' THEN '2222'
+    WHEN w.employee_id = 'EXT-001' THEN '3333'
+    WHEN w.employee_id = 'EXT-002' THEN '4444'
+    WHEN w.employee_id = 'QC-001' THEN '9999'
     ELSE 'unknown'
   END AS test_pin,
-  w.is_active,
-  w.pin_attempts,
-  w.pin_locked_until
+  CASE WHEN w.pin_hash IS NOT NULL THEN '✓ SET' ELSE '✗ MISSING' END AS pin_status
 FROM workers w
-LEFT JOIN factories f ON w.factory_id = f.id
-WHERE w.employee_id IN ('EMP001', 'EMP007')
-ORDER BY w.is_lead DESC, w.employee_id;
+WHERE w.employee_id IN ('FRM-001', 'FRM-002', 'FIN-001', 'FIN-002', 'EXT-001', 'EXT-002', 'QC-001')
+ORDER BY w.department, w.is_lead DESC;
 
 SELECT '=== TEST INSTRUCTIONS ===' AS info;
-SELECT 'Go to /pwa on your mobile device or browser' AS step_1;
-SELECT 'Shift Lead Login: Employee ID "EMP001", PIN "1234"' AS step_2;
-SELECT 'Worker Login: Employee ID "EMP007", PIN "5678"' AS step_3;
-SELECT 'Shift Leads can see the QC tab; regular workers cannot' AS note;
+SELECT '--------------------------------------------------------------' AS divider;
+SELECT 'FRAMING DEPARTMENT:' AS dept;
+SELECT '  Lead Login: Employee ID "FRM-001", PIN "1234" (Marcus Johnson)' AS login_1;
+SELECT '  Worker Login: Employee ID "FRM-002", PIN "5678" (Alex Rivera)' AS login_2;
+SELECT '--------------------------------------------------------------' AS divider;
+SELECT 'INTERIOR FINISH DEPARTMENT:' AS dept;
+SELECT '  Lead Login: Employee ID "FIN-001", PIN "1111" (Jennifer Lopez)' AS login_1;
+SELECT '  Worker Login: Employee ID "FIN-002", PIN "2222" (Jessica Lewis)' AS login_2;
+SELECT '--------------------------------------------------------------' AS divider;
+SELECT 'EXTERIOR SIDING DEPARTMENT:' AS dept;
+SELECT '  Lead Login: Employee ID "EXT-001", PIN "3333" (Carlos Mendez)' AS login_1;
+SELECT '  Worker Login: Employee ID "EXT-002", PIN "4444" (Ramon Gutierrez)' AS login_2;
+SELECT '--------------------------------------------------------------' AS divider;
+SELECT 'QC DEPARTMENT:' AS dept;
+SELECT '  Lead Login: Employee ID "QC-001", PIN "9999" (Patricia Young)' AS login_1;
+SELECT '--------------------------------------------------------------' AS divider;
+SELECT 'PERMISSIONS:' AS permissions;
+SELECT '  • Shift Leads can: Advance modules, access QC tab, full features' AS perm_1;
+SELECT '  • Regular Workers can: View modules, lookup info only' AS perm_2;
 
 -- ============================================================================
 -- SETUP_FLOOR_PWA_TEST_LOGINS.sql COMPLETE

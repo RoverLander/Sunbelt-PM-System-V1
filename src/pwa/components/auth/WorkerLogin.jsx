@@ -107,6 +107,13 @@ export default function WorkerLogin() {
 
         const factoryId = factory?.id || null;
 
+        // Get Interior Finish station
+        const { data: station } = await supabase
+          .from('station_templates')
+          .select('id, name, code, color')
+          .eq('name', 'Interior Finish')
+          .single();
+
         // Simulate a successful login for testing
         const mockWorker = {
           id: 'test-worker-id',
@@ -118,7 +125,8 @@ export default function WorkerLogin() {
           is_lead: true,
           factory_id: factoryId,
           factory_code: factory?.code || 'NWBS',
-          factory_name: factory?.name || 'Northwest Building Systems'
+          factory_name: factory?.name || 'Northwest Building Systems',
+          primary_station: station || { id: null, name: 'Interior Finish', code: 'INT-FIN', color: '#8B5CF6' }
         };
 
         // Store in localStorage to simulate session

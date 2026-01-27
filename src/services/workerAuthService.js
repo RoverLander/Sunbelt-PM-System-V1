@@ -9,8 +9,12 @@
 
 import { supabase } from '../utils/supabaseClient';
 
-// Edge Function URL
-const WORKER_AUTH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/worker-auth`;
+// Supabase configuration (matching supabaseClient.js)
+const SUPABASE_URL = 'https://kccdezbcnnmqodtwllya.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_j2wbR5gzztMGIEIRCJ4s6g_XsA_r2jr';
+
+// Edge Function URL (using hyper-api which has the worker-auth code deployed)
+const WORKER_AUTH_URL = `${SUPABASE_URL}/functions/v1/hyper-api`;
 
 // Local storage keys
 const TOKEN_KEY = 'worker_session_token';
@@ -39,8 +43,7 @@ export async function loginWorker(employeeId, pin, factoryCode = null, deviceInf
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         employee_id: employeeId,
@@ -103,7 +106,7 @@ export async function logoutWorker() {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+          'apikey': SUPABASE_ANON_KEY
         }
       });
     }
@@ -202,7 +205,7 @@ export async function verifySession() {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+        'apikey': SUPABASE_ANON_KEY
       }
     });
 
@@ -279,7 +282,7 @@ export async function setWorkerPin(workerId, newPin) {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+        'apikey': SUPABASE_ANON_KEY
       },
       body: JSON.stringify({
         worker_id: workerId,

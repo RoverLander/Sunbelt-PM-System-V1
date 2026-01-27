@@ -213,24 +213,22 @@ function AnnouncementBanner() {
               </div>
             </div>
 
-            {announcement.is_dismissible && (
-              <button
-                onClick={() => handleDismiss(announcement.id)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-tertiary)',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                title="Dismiss"
-              >
-                <X size={18} />
-              </button>
-            )}
+            <button
+              onClick={() => handleDismiss(announcement.id)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-tertiary)',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              title="Dismiss"
+            >
+              <X size={18} />
+            </button>
           </div>
         );
       })}

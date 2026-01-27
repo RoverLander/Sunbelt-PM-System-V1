@@ -358,6 +358,11 @@ BEGIN
     (v_factory_id, 'FIN-003', 'Amanda', 'Walker', 'Finish Carpenter', 'Interior Finish', v_station_id, false, 25.50, true, '2022-08-10'),
     (v_factory_id, 'FIN-004', 'Nicole', 'Hall', 'Painter', 'Interior Finish', v_station_id, false, 23.00, true, '2024-01-15'),
 
+    -- Exterior Siding Department
+    (v_factory_id, 'EXT-001', 'Carlos', 'Mendez', 'Lead Siding Installer', 'Exterior Siding', v_station_id, true, 30.50, true, '2019-05-20'),
+    (v_factory_id, 'EXT-002', 'Ramon', 'Gutierrez', 'Siding Installer', 'Exterior Siding', v_station_id, false, 26.00, true, '2021-09-15'),
+    (v_factory_id, 'EXT-003', 'Luis', 'Ortega', 'Siding Installer', 'Exterior Siding', v_station_id, false, 25.00, true, '2023-03-01'),
+
     -- Inspection/QC Department
     (v_factory_id, 'QC-001', 'Patricia', 'Young', 'Lead QC Inspector', 'QC', v_station_id, true, 35.00, true, '2017-09-01'),
     (v_factory_id, 'QC-002', 'Elizabeth', 'King', 'QC Inspector', 'QC', v_station_id, false, 30.00, true, '2021-02-18'),
@@ -367,7 +372,7 @@ BEGIN
     (v_factory_id, 'STG-002', 'Brian', 'Scott', 'Forklift Operator', 'Material Handling', v_station_id, false, 24.00, true, '2022-03-25'),
     (v_factory_id, 'STG-003', 'Steven', 'Green', 'Material Handler', 'Material Handling', v_station_id, false, 22.00, true, '2023-07-01');
 
-  RAISE NOTICE 'Created 28 demo workers with departments';
+  RAISE NOTICE 'Created 31 demo workers with departments';
 END $$;
 
 -- ============================================================================
