@@ -181,7 +181,7 @@ export async function getFactoryProjects(factoryCode, filters = {}) {
   try {
     let query = supabase
       .from('projects')
-      .select('id, name, project_number, status, delivery_date, owner:owner_id(name), module_count')
+      .select('id, name, project_number, status, delivery_date, delivery_city, delivery_state, delivery_lat, delivery_lng, owner:owner_id(name), module_count')
       .eq('factory', factoryCode);
 
     // Apply filters
