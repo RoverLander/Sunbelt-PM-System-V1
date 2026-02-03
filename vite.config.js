@@ -88,7 +88,7 @@ export default defineConfig({
           'vendor-icons': ['lucide-react'],
           'vendor-flow': ['@xyflow/react'],
           'vendor-excel': ['exceljs'],
-          'vendor-mapbox': ['mapbox-gl'], // Mapbox GL JS (~4.5 MB)
+          // Removed mapbox manual chunk - let Vite handle it automatically
         }
       }
     },
