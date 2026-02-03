@@ -39,8 +39,8 @@ export default defineConfig({
         ]
       },
       workbox: {
-        // Increase file size limit for precaching (default is 2 MB)
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB
+        // Increase file size limit for precaching (mapbox-gl is ~4.5 MB)
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
         // Cache strategies for different routes
         runtimeCaching: [
           {
@@ -88,6 +88,7 @@ export default defineConfig({
           'vendor-icons': ['lucide-react'],
           'vendor-flow': ['@xyflow/react'],
           'vendor-excel': ['exceljs'],
+          'vendor-mapbox': ['mapbox-gl'], // Mapbox GL JS (~4.5 MB)
         }
       }
     },
